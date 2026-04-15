@@ -127,8 +127,7 @@ export default function DashboardMitra() {
 
   // Active order (after accepting) with chat
   const [activeOrder, setActiveOrder] = useState<IncomingOrder | null>(null);
-  type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
-  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
+  const [chatMsgs, setChatMsgs] = useState<{ id: number; senderRole: string; message: string; createdAt: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -146,6 +145,16 @@ export default function DashboardMitra() {
   const [proofPhoto, setProofPhoto] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [rincianSent, setRincianSent] = useState(false);
+
+  // Bottom nav tab
+  type TabId = "beranda" | "pesanan" | "chat" | "akun";
+  const [activeTab, setActiveTab] = useState<TabId>("beranda");
+
+  // Chat history (Riwayat Pesan per order selesai)
+  type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
+  const [chatHistoryOrderId, setChatHistoryOrderId] = useState<number | null>(null);
+  const [chatHistoryMsgs, setChatHistoryMsgs] = useState<ChatMsg[]>([]);
+  const [loadingChatHistory, setLoadingChatHistory] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -340,6 +349,17 @@ export default function DashboardMitra() {
     fetchDashboard();
   };
 
+  const fetchChatHistory = async (orderId: number) => {
+    if (chatHistoryOrderId === orderId) { setChatHistoryOrderId(null); return; }
+    setLoadingChatHistory(true);
+    try {
+      const res = await fetch(`${BASE}/api/chat/${orderId}`, { credentials: "include" });
+      const d = await res.json();
+      setChatHistoryMsgs(d.messages ?? []);
+      setChatHistoryOrderId(orderId);
+    } catch { /* ignore */ } finally { setLoadingChatHistory(false); }
+  };
+
   const startJourney = async () => {
     if (!activeOrder) return;
     await updatePhase("menuju");
@@ -522,8 +542,34 @@ export default function DashboardMitra() {
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 90px" }}>
 
-        {/* Active Order card — chat dengan pengguna setelah terima */}
-        {activeOrder && (() => {
+        {/* ══ BERANDA: mini banners ══ */}
+        {activeTab === "beranda" && <>
+          {incoming && (
+            <button onClick={() => setActiveTab("pesanan")} style={{ width: "100%", marginBottom: 12, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", borderRadius: 16, padding: "12px 16px", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left" as const }}>
+              <span style={{ fontSize: 22 }}>🔔</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#fff", fontSize: 13, fontWeight: 800 }}>Pesanan Masuk!</div>
+                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 1 }}>{incoming.penggunaName} — {incoming.vehicleModel} · Konfirmasi {incomingTimer}s</div>
+              </div>
+              <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 18 }}>›</span>
+            </button>
+          )}
+          {activeOrder && (
+            <button onClick={() => setActiveTab("pesanan")} style={{ width: "100%", marginBottom: 12, background: "#f0faf7", borderRadius: 16, padding: "12px 16px", border: "2px solid #1a7a6a", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left" as const }}>
+              <span style={{ fontSize: 22 }}>{getSvcCfg(activeOrder.serviceType).emoji}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#1a2a3a", fontSize: 13, fontWeight: 800 }}>Order Aktif — {getSvcCfg(activeOrder.serviceType).header}</div>
+                <div style={{ color: "#4a5a6a", fontSize: 11, marginTop: 1 }}>
+                  {activeOrder.penggunaName} · {mitraPhase === "diterima" || mitraPhase === "chat" ? "Negosiasi" : mitraPhase === "menuju" ? "Menuju Lokasi" : mitraPhase === "tiba" ? "Sudah Tiba" : mitraPhase === "pengerjaan" ? "Sedang Dikerjakan" : "Pembayaran Final"}
+                </div>
+              </div>
+              <span style={{ color: "#1a7a6a", fontSize: 18 }}>›</span>
+            </button>
+          )}
+        </>}
+
+        {/* ══ PESANAN TAB: active order card ══ */}
+        {activeTab === "pesanan" && activeOrder && (() => {
           const svcCfg = getSvcCfg(activeOrder.serviceType);
           const badgeLabel: Record<string, string> = {
             diterima: "Diterima", chat: "Chat & Negosiasi",
@@ -851,8 +897,8 @@ export default function DashboardMitra() {
           );
         })()}
 
-        {/* Incoming Order card — inline, between toggle and stats */}
-        {incoming && (
+        {/* ══ PESANAN TAB: incoming order card ══ */}
+        {activeTab === "pesanan" && incoming && (
           <div style={{
             marginBottom: 16,
             background: "#fff",
@@ -919,6 +965,9 @@ export default function DashboardMitra() {
             </div>
           </div>
         )}
+
+        {/* ══ BERANDA: stats / grafik / platform fee ══ */}
+        {activeTab === "beranda" && <>
 
         {/* Stats 2x2 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
@@ -994,47 +1043,185 @@ export default function DashboardMitra() {
           </div>
         )}
 
-        {/* Order Terbaru */}
-        {(data?.recentOrders?.length ?? 0) > 0 && (
-          <div style={{ background: "#fff", borderRadius: 18, padding: "18px 16px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>📋 Order Terbaru</div>
-            {data!.recentOrders.map((o, i) => (
-              <div key={o.id}>
-                {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "10px 0" }} />}
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvcCfg(data?.serviceType).emoji}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{o.penggunaName}</div>
-                    <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear} · {fmtDate(o.createdAt)}</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "#ea580c" }}>{fmtRp(o.totalAmount)}</div>
-                    <div style={{ fontSize: 11, color: "#9aa5b4" }}>Fee: {fmtRp(o.platformFee)}</div>
+        </>}
+
+        {/* ══ PESANAN TAB: empty state + riwayat order ══ */}
+        {activeTab === "pesanan" && <>
+          {!activeOrder && !incoming && (
+            <div style={{ textAlign: "center", padding: "48px 24px" }}>
+              <div style={{ fontSize: 52, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Belum ada order aktif</div>
+              <div style={{ fontSize: 13, color: "#9aa5b4" }}>Aktifkan status Online untuk mulai menerima pesanan</div>
+            </div>
+          )}
+          {(data?.recentOrders?.length ?? 0) > 0 && (
+            <div style={{ background: "#fff", borderRadius: 18, padding: "18px 16px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>🗓️ Riwayat Order</div>
+              {data!.recentOrders.map((o, i) => (
+                <div key={o.id}>
+                  {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "10px 0" }} />}
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvcCfg(data?.serviceType).emoji}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{o.penggunaName}</div>
+                      <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear} · {fmtDate(o.createdAt)}</div>
+                    </div>
+                    <div style={{ textAlign: "right" as const }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#ea580c" }}>{fmtRp(o.totalAmount)}</div>
+                      <div style={{ fontSize: 11, color: "#9aa5b4" }}>Fee: {fmtRp(o.platformFee)}</div>
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </>}
+
+        {/* ══ CHAT TAB ══ */}
+        {activeTab === "chat" && <>
+          {/* Chat Aktif */}
+          <div style={{ background: "#fff", borderRadius: 18, marginBottom: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid #f0f4f8", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 18 }}>💬</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Chat Aktif</span>
+              {activeOrder && <span style={{ fontSize: 11, background: "#1a7a6a", color: "#fff", borderRadius: 10, padding: "2px 10px", fontWeight: 700 }}>Online</span>}
+            </div>
+            {activeOrder ? (
+              <>
+                <div style={{ height: 300, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, background: "#f8fafc" }}>
+                  {chatMsgs.length === 0
+                    ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#b0bec5", fontSize: 13 }}>Belum ada pesan</div>
+                    : chatMsgs.map(m => {
+                        const isMe = m.senderRole === "mitra";
+                        return (
+                          <div key={m.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                            <div style={{ maxWidth: "78%", background: isMe ? "linear-gradient(135deg, #1a3a5c, #1a7a6a)" : "#fff", color: isMe ? "#fff" : "#1a2a3a", borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "8px 12px", fontSize: 13, lineHeight: 1.4, boxShadow: "0 1px 4px rgba(0,0,0,0.08)", whiteSpace: "pre-wrap" }}>
+                              {m.message}
+                            </div>
+                          </div>
+                        );
+                      })
+                  }
+                  <div ref={chatBottomRef} />
+                </div>
+                <div style={{ padding: "10px 12px", borderTop: "1px solid #f0f4f8", display: "flex", gap: 8 }}>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendChat())}
+                    placeholder="Tulis pesan..." style={{ flex: 1, padding: "10px 14px", borderRadius: 20, border: "1.5px solid #e0e8f0", outline: "none", fontSize: 13, background: "#f8fafc" }} />
+                  <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
+                    style={{ width: 38, height: 38, borderRadius: 12, border: "none", background: chatInput.trim() ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#e0e8f0", color: "#fff", fontSize: 14, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>➤</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: "36px 24px", textAlign: "center", color: "#9aa5b4" }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>💬</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 4 }}>Tidak ada chat aktif</div>
+                <div style={{ fontSize: 12 }}>Chat akan aktif saat Anda menerima dan memproses pesanan</div>
               </div>
-            ))}
+            )}
           </div>
-        )}
+
+          {/* Riwayat Pesan */}
+          <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid #f0f4f8", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 18 }}>🗂️</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Riwayat Pesan</span>
+            </div>
+            {(data?.recentOrders?.length ?? 0) === 0 ? (
+              <div style={{ padding: "36px 24px", textAlign: "center", color: "#9aa5b4" }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🗂️</div>
+                <div style={{ fontSize: 13 }}>Belum ada riwayat percakapan</div>
+              </div>
+            ) : (
+              data!.recentOrders.map((o, i) => (
+                <div key={o.id}>
+                  {i > 0 && <div style={{ height: 1, background: "#f0f4f8" }} />}
+                  <div>
+                    <button onClick={() => fetchChatHistory(o.id)} style={{ width: "100%", padding: "14px 16px", border: "none", background: "transparent", cursor: "pointer", display: "flex", gap: 12, alignItems: "center", textAlign: "left" as const }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvcCfg(data?.serviceType).emoji}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{o.penggunaName}</div>
+                        <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} · {fmtDate(o.createdAt)}</div>
+                      </div>
+                      <span style={{ fontSize: 14, color: "#1a7a6a", fontWeight: 700 }}>{chatHistoryOrderId === o.id ? "▲" : "▼"}</span>
+                    </button>
+                    {chatHistoryOrderId === o.id && (
+                      <div style={{ background: "#f8fafc", borderTop: "1px solid #f0f4f8", padding: "10px 14px 14px", maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                        {loadingChatHistory
+                          ? <div style={{ textAlign: "center", padding: "20px", color: "#9aa5b4", fontSize: 13 }}>Memuat pesan...</div>
+                          : chatHistoryMsgs.length === 0
+                            ? <div style={{ textAlign: "center", padding: "20px", color: "#9aa5b4", fontSize: 13 }}>Tidak ada pesan tersimpan</div>
+                            : chatHistoryMsgs.map(m => {
+                                const isMe = m.senderRole === "mitra";
+                                return (
+                                  <div key={m.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                                    <div style={{ maxWidth: "78%", background: isMe ? "linear-gradient(135deg, #1a3a5c, #1a7a6a)" : "#fff", color: isMe ? "#fff" : "#1a2a3a", borderRadius: isMe ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "7px 11px", fontSize: 12, lineHeight: 1.4, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", whiteSpace: "pre-wrap" }}>
+                                      {m.message}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                        }
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>}
+
+        {/* ══ AKUN TAB ══ */}
+        {activeTab === "akun" && <>
+          <div style={{ background: "#fff", borderRadius: 20, padding: "28px 20px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", textAlign: "center" as const }}>
+            <div style={{ width: 72, height: 72, borderRadius: 24, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 800, color: "#fff", margin: "0 auto 14px" }}>
+              {(data?.name ?? "M").charAt(0).toUpperCase()}
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#1a2a3a" }}>{data?.name ?? "-"}</div>
+            <div style={{ fontSize: 13, color: "#7a8a9a", marginTop: 4 }}>{serviceLabel(data?.serviceType ?? "")}</div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 18, paddingTop: 18, borderTop: "1px solid #f0f4f8" }}>
+              <div style={{ textAlign: "center" as const }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#f5a623" }}>{data?.rating != null ? Number(data.rating).toFixed(1) : "-"}</div>
+                <div style={{ fontSize: 11, color: "#9aa5b4" }}>Rating</div>
+              </div>
+              <div style={{ width: 1, background: "#f0f4f8" }} />
+              <div style={{ textAlign: "center" as const }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#1a7a6a" }}>{data?.todayOrders ?? 0}</div>
+                <div style={{ fontSize: 11, color: "#9aa5b4" }}>Order Hari Ini</div>
+              </div>
+              <div style={{ width: 1, background: "#f0f4f8" }} />
+              <div style={{ textAlign: "center" as const }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#ea580c" }}>{fmtRp(data?.todayIncome ?? 0)}</div>
+                <div style={{ fontSize: 11, color: "#9aa5b4" }}>Pendapatan</div>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={async () => { await fetch(`${BASE}/api/auth/logout`, { method: "POST", credentials: "include" }); navigate("/"); }}
+            style={{ width: "100%", padding: "16px", borderRadius: 16, border: "1.5px solid #ea580c", background: "#fff5f0", color: "#ea580c", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
+          >
+            🚪 Keluar dari Akun
+          </button>
+        </>}
+
       </div>
 
-      {/* Bottom nav */}
+      {/* Bottom nav — functional */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #e8f0f8", display: "flex", zIndex: 200, paddingBottom: "env(safe-area-inset-bottom)" }}>
-        {[
-          { icon: "🏠", label: "Beranda", active: true },
-          { icon: "📋", label: "Pesanan", active: false },
-          { icon: "💬", label: "Chat", active: false, badge: 0 },
-          { icon: "👤", label: "Akun", active: false },
-        ].map(item => (
-          <button key={item.label} style={{ flex: 1, padding: "10px 0 6px", border: "none", background: "transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative" }}>
+        {([
+          { id: "beranda" as const, icon: "🏠", label: "Beranda", badge: 0 },
+          { id: "pesanan" as const, icon: "📋", label: "Pesanan", badge: (activeOrder ? 1 : 0) + (incoming ? 1 : 0) },
+          { id: "chat" as const, icon: "💬", label: "Chat", badge: activeOrder && chatMsgs.some(m => m.senderRole === "pengguna") ? 1 : 0 },
+          { id: "akun" as const, icon: "👤", label: "Akun", badge: 0 },
+        ]).map(item => (
+          <button key={item.id} onClick={() => setActiveTab(item.id)} style={{ flex: 1, padding: "10px 0 6px", border: "none", background: "transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative" }}>
             <div style={{ position: "relative" }}>
               <span style={{ fontSize: 22 }}>{item.icon}</span>
-              {(item.badge ?? 0) > 0 && (
-                <div style={{ position: "absolute", top: -4, right: -6, width: 16, height: 16, borderRadius: 8, background: "#ea580c", fontSize: 9, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>{item.badge}</div>
+              {item.badge > 0 && (
+                <div style={{ position: "absolute", top: -4, right: -6, minWidth: 16, height: 16, borderRadius: 8, background: "#ea580c", fontSize: 9, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{item.badge}</div>
               )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: item.active ? 700 : 500, color: item.active ? "#1a7a6a" : "#9aa5b4" }}>{item.label}</span>
-            {item.active && <div style={{ position: "absolute", bottom: 0, width: 24, height: 3, borderRadius: "3px 3px 0 0", background: "#1a7a6a" }} />}
+            <span style={{ fontSize: 10, fontWeight: activeTab === item.id ? 700 : 500, color: activeTab === item.id ? "#1a7a6a" : "#9aa5b4" }}>{item.label}</span>
+            {activeTab === item.id && <div style={{ position: "absolute", bottom: 0, width: 24, height: 3, borderRadius: "3px 3px 0 0", background: "#1a7a6a" }} />}
           </button>
         ))}
       </div>
