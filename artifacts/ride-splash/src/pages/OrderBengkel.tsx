@@ -16,6 +16,14 @@ const STEPS = [
 const KATEGORI_MOBIL = ["Mogok Total", "Ban Bocor", "Overheat", "Aki Soak", "Lampu Mati", "Lainnya"];
 const KATEGORI_MOTOR = ["Mogok Total", "Rantai Putus", "Ban Bocor", "Overheat", "Aki Soak", "Lainnya"];
 
+function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
     const res = await fetch(
@@ -106,6 +114,17 @@ export default function OrderBengkel() {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const gpsMarkerRef = useRef<L.CircleMarker | null>(null);
+
+  // Step 4 tracking
+  const [mitraTrackLat, setMitraTrackLat] = useState<number | null>(null);
+  const [mitraTrackLng, setMitraTrackLng] = useState<number | null>(null);
+  const [trackDist, setTrackDist] = useState<number | null>(null);
+  const [trackEta, setTrackEta] = useState<number | null>(null);
+  const trackMapRef = useRef<HTMLDivElement>(null);
+  const trackLeafletRef = useRef<L.Map | null>(null);
+  const trackMitraMarkerRef = useRef<L.Marker | null>(null);
+  const trackUserMarkerRef = useRef<L.Marker | null>(null);
+  const trackingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const categories = jenisKendaraan === "mobil" ? KATEGORI_MOBIL : KATEGORI_MOTOR;
   const canNext1 = merekModel.trim() && tahun && kategori.length > 0;
@@ -319,6 +338,77 @@ export default function OrderBengkel() {
     return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
   }, [orderStatus, orderId]);
 
+  // Step 4: poll mitra location for live tracking
+  useEffect(() => {
+    if (step !== 4 || !orderId || !pinLat || !pinLng) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
+        const data = await res.json();
+        const mLat: number | null = data.mitra?.lat ?? null;
+        const mLng: number | null = data.mitra?.lng ?? null;
+        if (mLat && mLng) {
+          setMitraTrackLat(mLat);
+          setMitraTrackLng(mLng);
+          const dist = haversineDist(mLat, mLng, pinLat, pinLng);
+          setTrackDist(dist);
+          setTrackEta(Math.max(1, Math.round(dist / 40 * 60)));
+        }
+      } catch { /* ignore */ }
+    };
+    poll();
+    trackingPollRef.current = setInterval(poll, 4000);
+    return () => { if (trackingPollRef.current) clearInterval(trackingPollRef.current); };
+  }, [step, orderId, pinLat, pinLng]);
+
+  // Step 4: init & update tracking Leaflet map
+  useEffect(() => {
+    if (step !== 4 || !trackMapRef.current || !pinLat || !pinLng) return;
+    if (!trackLeafletRef.current) {
+      const centerLat = mitraTrackLat ?? pinLat;
+      const centerLng = mitraTrackLng ?? pinLng;
+      const map = L.map(trackMapRef.current, { zoomControl: false, attributionControl: false })
+        .setView([centerLat, centerLng], 15);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+      // User marker
+      const userIcon = L.divIcon({ html: '<div style="width:28px;height:28px;background:#e53e3e;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;">📍</div>', iconSize: [28, 28], iconAnchor: [14, 28], className: "" });
+      trackUserMarkerRef.current = L.marker([pinLat, pinLng], { icon: userIcon }).addTo(map).bindPopup("Lokasi Anda");
+      // Mitra marker
+      const mitraIcon = L.divIcon({ html: '<div style="width:34px;height:34px;background:#1a3a5c;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:16px;">🏍️</div>', iconSize: [34, 34], iconAnchor: [17, 17], className: "" });
+      if (mitraTrackLat && mitraTrackLng) {
+        trackMitraMarkerRef.current = L.marker([mitraTrackLat, mitraTrackLng], { icon: mitraIcon }).addTo(map).bindPopup("Mitra");
+        const bounds = L.latLngBounds([[pinLat, pinLng], [mitraTrackLat, mitraTrackLng]]);
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
+      trackLeafletRef.current = map;
+    } else if (mitraTrackLat && mitraTrackLng && trackMitraMarkerRef.current) {
+      trackMitraMarkerRef.current.setLatLng([mitraTrackLat, mitraTrackLng]);
+      if (pinLat && pinLng) {
+        const bounds = L.latLngBounds([[pinLat, pinLng], [mitraTrackLat, mitraTrackLng]]);
+        trackLeafletRef.current.fitBounds(bounds, { padding: [40, 40] });
+      }
+    } else if (mitraTrackLat && mitraTrackLng && trackLeafletRef.current) {
+      const mitraIcon = L.divIcon({ html: '<div style="width:34px;height:34px;background:#1a3a5c;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:16px;">🏍️</div>', iconSize: [34, 34], iconAnchor: [17, 17], className: "" });
+      trackMitraMarkerRef.current = L.marker([mitraTrackLat, mitraTrackLng], { icon: mitraIcon }).addTo(trackLeafletRef.current).bindPopup("Mitra");
+      const bounds = L.latLngBounds([[pinLat, pinLng], [mitraTrackLat, mitraTrackLng]]);
+      trackLeafletRef.current.fitBounds(bounds, { padding: [40, 40] });
+    }
+  }, [step, mitraTrackLat, mitraTrackLng, pinLat, pinLng]);
+
+  // Cleanup tracking map on step change
+  useEffect(() => {
+    if (step !== 4 && trackLeafletRef.current) {
+      trackLeafletRef.current.remove();
+      trackLeafletRef.current = null;
+      trackMitraMarkerRef.current = null;
+      trackUserMarkerRef.current = null;
+    }
+    if (step !== 4 && trackingPollRef.current) {
+      clearInterval(trackingPollRef.current);
+      trackingPollRef.current = null;
+    }
+  }, [step]);
+
   const sendChatMessage = async () => {
     if (!chatInput.trim() || !orderId || chatSending) return;
     const msg = chatInput.trim();
@@ -356,11 +446,12 @@ export default function OrderBengkel() {
       {/* Header */}
       <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 20px 0", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          {step < 3 && (
+          {step !== 3 && (
             <button
               onClick={() => {
                 if (step === 1) { navigate("/dashboard/pengguna"); return; }
                 if (step === 2) { setStep(1); return; }
+                navigate("/dashboard/pengguna");
               }}
               style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", flexShrink: 0 }}
             >&lt;-</button>
@@ -749,50 +840,110 @@ export default function OrderBengkel() {
       {/* ── STEP 4: TRACKING ── */}
       {step === 4 && acceptedMitra && (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
-            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 20 }}>📡 Tracking Order</div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 0 100px" }}>
 
-              {/* Status progress */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 24 }}>
-                {[
-                  { label: "Pesanan Diterima", sub: `Mitra ${acceptedMitra.name} menuju lokasi`, done: true, active: false },
-                  { label: "Mitra Dalam Perjalanan", sub: `Estimasi tiba ± ${acceptedMitra.etaMin} menit`, done: false, active: true },
-                  { label: "Mitra Tiba", sub: "Mitra sudah di lokasi Anda", done: false, active: false },
-                  { label: "Pengerjaan Selesai", sub: "Kendaraan sudah diperbaiki", done: false, active: false },
-                ].map((phase, i) => (
-                  <div key={i} style={{ display: "flex", gap: 14 }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 14, flexShrink: 0,
-                        background: phase.done ? "#1a7a6a" : phase.active ? "#1a3a5c" : "#e0e8f0",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        border: phase.active ? "2px solid #1a7a6a" : "none",
-                      }}>
-                        {phase.done ? <span style={{ color: "#fff", fontSize: 13, fontWeight: 900 }}>✓</span>
-                          : phase.active ? <div style={{ width: 8, height: 8, borderRadius: 4, background: "#1a7a6a" }} />
-                          : <div style={{ width: 6, height: 6, borderRadius: 3, background: "#c0d0dc" }} />}
-                      </div>
-                      {i < 3 && <div style={{ width: 2, height: 32, background: phase.done ? "#1a7a6a" : "#e0e8f0", margin: "4px 0" }} />}
-                    </div>
-                    <div style={{ paddingBottom: 16 }}>
-                      <div style={{ fontSize: 14, fontWeight: phase.active || phase.done ? 700 : 500, color: phase.active || phase.done ? "#1a2a3a" : "#9aa5b4" }}>{phase.label}</div>
-                      <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>{phase.sub}</div>
-                    </div>
-                  </div>
-                ))}
+            {/* Live Map */}
+            <div style={{ position: "relative", width: "100%", height: 220 }}>
+              <div ref={trackMapRef} style={{ width: "100%", height: "100%" }} />
+              {/* ETA & Distance overlay */}
+              <div style={{ position: "absolute", top: 12, right: 12, zIndex: 500, display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ background: "rgba(26,58,92,0.92)", backdropFilter: "blur(6px)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 13, fontWeight: 700, textAlign: "center" }}>
+                  🕐 {trackEta != null ? `± ${trackEta} menit` : `± ${acceptedMitra.etaMin} menit`}
+                </div>
+                <div style={{ background: "rgba(26,122,106,0.9)", backdropFilter: "blur(6px)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 600, textAlign: "center" }}>
+                  📏 {trackDist != null ? (trackDist < 1 ? `${Math.round(trackDist * 1000)} m` : `${trackDist.toFixed(1)} km`) : `${acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist * 1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`}`}
+                </div>
               </div>
+              {/* "Mitra dalam perjalanan" badge */}
+              <div style={{ position: "absolute", top: 12, left: 12, zIndex: 500, background: "#1a7a6a", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                🏍️ Mitra dalam perjalanan...
+              </div>
+              {/* Legend */}
+              <div style={{ position: "absolute", bottom: 12, left: 12, zIndex: 500, display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: "#1a3a5c", display: "flex", alignItems: "center", gap: 6 }}>
+                  🏍️ Mitra
+                </div>
+                <div style={{ background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: "#e53e3e", display: "flex", alignItems: "center", gap: 6 }}>
+                  📍 Lokasi Anda
+                </div>
+              </div>
+            </div>
 
-              {/* Mitra info compact */}
-              <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+            <div style={{ padding: "16px 16px 0" }}>
+
+              {/* Mitra card */}
+              <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center", marginBottom: 16, background: "#fff" }}>
                 <div style={{ width: 48, height: 48, borderRadius: 24, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🧑‍🔧</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a" }}>{acceptedMitra.name}</div>
                   <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>
-                    {acceptedMitra.rating != null ? `⭐ ${acceptedMitra.rating}` : "⭐ Baru"} · {acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist * 1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`}
+                    ✅ Mitra Terverifikasi RIDE
+                  </div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>
+                    {acceptedMitra.rating != null ? `⭐ ${acceptedMitra.rating}` : "⭐ Baru"} · {acceptedMitra.totalOrders} order
                   </div>
                 </div>
-                <button style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>💬 Chat</button>
+                <button
+                  onClick={() => setChatOpen(o => !o)}
+                  style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                >💬 Chat</button>
+              </div>
+
+              {/* Chat panel (for step 4) */}
+              {chatOpen && (
+                <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, overflow: "hidden", marginBottom: 16 }}>
+                  <div style={{ padding: "10px 14px", background: "#f8fafc", borderBottom: "1px solid #f0f4f8" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#4a5568" }}>💬 Chat dengan {acceptedMitra.name}</div>
+                  </div>
+                  <div style={{ minHeight: 120, maxHeight: 200, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 8, background: "#fff" }}>
+                    {chatMessages.length === 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 0" }}>
+                        <span style={{ fontSize: 28, opacity: 0.3 }}>💬</span>
+                        <div style={{ fontSize: 12, color: "#b0bec5", textAlign: "center" }}>Mulai diskusi dengan mitra</div>
+                      </div>
+                    ) : chatMessages.map(m => {
+                      const isMine = m.senderRole === "pengguna";
+                      return (
+                        <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
+                          <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "linear-gradient(135deg,#1a3a5c,#1a7a6a)" : "#f0f4f8", color: isMine ? "#fff" : "#1a2a3a", fontSize: 13 }}>
+                            {m.message}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={chatBottomRef} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: "#f8fafc", borderTop: "1px solid #f0f4f8" }}>
+                    <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChatMessage()} placeholder="Ketik pesan..." style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, outline: "none", background: "#fff" }} />
+                    <button onClick={sendChatMessage} disabled={!chatInput.trim() || chatSending} style={{ width: 40, height: 40, borderRadius: 12, border: "none", background: chatInput.trim() ? "linear-gradient(135deg,#1a3a5c,#1a7a6a)" : "#e0e8f0", color: "#fff", fontSize: 16, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>➤</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Status perjalanan */}
+              <div style={{ background: "#fff", border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>📍 Status Perjalanan</div>
+                {[
+                  { label: "Mitra menuju lokasi Anda", sub: "Sekarang", done: false, active: true },
+                  { label: "Mitra sudah tiba", sub: "", done: false, active: false },
+                  { label: "Sedang pengerjaan", sub: "", done: false, active: false },
+                  { label: "Pengerjaan selesai ✅", sub: "", done: false, active: false },
+                ].map((phase, i) => (
+                  <div key={i} style={{ display: "flex", gap: 14 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 12, flexShrink: 0, background: phase.done ? "#1a7a6a" : phase.active ? "#1a3a5c" : "#e0e8f0", display: "flex", alignItems: "center", justifyContent: "center", border: phase.active ? "2px solid #1a7a6a" : "none" }}>
+                        {phase.done ? <span style={{ color: "#fff", fontSize: 11 }}>✓</span>
+                          : phase.active ? <div style={{ width: 7, height: 7, borderRadius: 4, background: "#1a7a6a" }} />
+                          : <div style={{ width: 6, height: 6, borderRadius: 3, background: "#c0d0dc" }} />}
+                      </div>
+                      {i < 3 && <div style={{ width: 2, height: 28, background: "#e0e8f0", margin: "3px 0" }} />}
+                    </div>
+                    <div style={{ paddingBottom: 14 }}>
+                      <div style={{ fontSize: 13, fontWeight: phase.active ? 700 : 500, color: phase.active ? "#1a2a3a" : "#9aa5b4" }}>{phase.label}</div>
+                      {phase.sub && <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600, marginTop: 1 }}>• {phase.sub}</div>}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Pickup address */}
@@ -806,11 +957,17 @@ export default function OrderBengkel() {
             </div>
           </div>
 
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
-            <button
-              onClick={() => setStep(5)}
-              style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
-            >Selesai & Bayar →</button>
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 20px", background: "linear-gradient(to top, #f0f4f8 90%, transparent)", zIndex: 100 }}>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => navigate("/dashboard/pengguna")}
+                style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >← Kembali</button>
+              <button
+                disabled
+                style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: "#d0d8e0", color: "#a0aab4", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}
+              >Lanjut →</button>
+            </div>
           </div>
         </>
       )}
