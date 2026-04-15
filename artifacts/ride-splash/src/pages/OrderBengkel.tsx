@@ -120,6 +120,7 @@ export default function OrderBengkel() {
   const [mitraTrackLng, setMitraTrackLng] = useState<number | null>(null);
   const [trackDist, setTrackDist] = useState<number | null>(null);
   const [trackEta, setTrackEta] = useState<number | null>(null);
+  const [trackingPhase, setTrackingPhase] = useState<string>("menuju");
   const trackMapRef = useRef<HTMLDivElement>(null);
   const trackLeafletRef = useRef<L.Map | null>(null);
   const trackMitraMarkerRef = useRef<L.Marker | null>(null);
@@ -392,6 +393,8 @@ export default function OrderBengkel() {
           setTrackDist(dist);
           setTrackEta(Math.max(1, Math.round(dist / 40 * 60)));
         }
+        if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
+        if (data.status === "done") { setOrderStatus("done"); setOrderTotal(data.totalAmount); }
       } catch { /* ignore */ }
     };
     poll();
@@ -961,12 +964,21 @@ export default function OrderBengkel() {
               {/* Status perjalanan */}
               <div style={{ background: "#fff", border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>📍 Status Perjalanan</div>
-                {[
-                  { label: "Mitra menuju lokasi Anda", sub: "Sekarang", done: false, active: true },
-                  { label: "Mitra sudah tiba", sub: "", done: false, active: false },
-                  { label: "Sedang pengerjaan", sub: "", done: false, active: false },
-                  { label: "Pengerjaan selesai ✅", sub: "", done: false, active: false },
-                ].map((phase, i) => (
+                {(() => {
+                  const phaseOrder = ["menuju", "tiba", "pengerjaan", "selesai"];
+                  const curIdx = phaseOrder.indexOf(trackingPhase);
+                  return [
+                    { label: "Mitra menuju lokasi Anda", key: "menuju" },
+                    { label: "Mitra sudah tiba", key: "tiba" },
+                    { label: "Sedang pengerjaan", key: "pengerjaan" },
+                    { label: "Pengerjaan selesai ✅", key: "selesai" },
+                  ].map((ph, i) => {
+                    const phIdx = phaseOrder.indexOf(ph.key);
+                    const done = phIdx < curIdx;
+                    const active = phIdx === curIdx;
+                    return { label: ph.label, sub: active ? "Sekarang" : done ? "Selesai" : "", done, active };
+                  });
+                })().map((phase, i) => (
                   <div key={i} style={{ display: "flex", gap: 14 }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                       <div style={{ width: 24, height: 24, borderRadius: 12, flexShrink: 0, background: phase.done ? "#1a7a6a" : phase.active ? "#1a3a5c" : "#e0e8f0", display: "flex", alignItems: "center", justifyContent: "center", border: phase.active ? "2px solid #1a7a6a" : "none" }}>

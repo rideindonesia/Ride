@@ -310,6 +310,7 @@ router.get("/orders/:id", async (req, res) => {
     id: order.id,
     orderNo: order.orderNo,
     status: order.status,
+    trackingPhase: order.trackingPhase ?? "menuju",
     pickupLat: order.pickupLat,
     pickupLng: order.pickupLng,
     pickupAddress: order.pickupAddress,

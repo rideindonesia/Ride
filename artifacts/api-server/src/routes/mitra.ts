@@ -396,6 +396,21 @@ router.patch("/orders/:id/reject", requireMitra, async (req, res) => {
   res.json({ ok: true });
 });
 
+// PATCH /api/mitra/orders/:id/phase — update tracking phase
+router.patch("/orders/:id/phase", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const orderId = parseInt(req.params.id);
+  const { phase } = req.body as { phase: string };
+  const valid = ["menuju", "tiba", "pengerjaan", "selesai"];
+  if (!valid.includes(phase)) { res.status(400).json({ error: "Phase tidak valid" }); return; }
+
+  await db.update(ordersTable)
+    .set({ trackingPhase: phase, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+
+  res.json({ ok: true });
+});
+
 // PATCH /api/mitra/orders/:id/done — mitra marks order complete
 router.patch("/orders/:id/done", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;

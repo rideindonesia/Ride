@@ -114,9 +114,15 @@ export default function DashboardMitra() {
   const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Mitra order phase: diterima → chat → menuju → tiba → pengerjaan → selesai
+  type MitraPhase = "diterima" | "chat" | "menuju" | "tiba" | "pengerjaan";
+  const [mitraPhase, setMitraPhase] = useState<MitraPhase>("diterima");
+  const [etaSecs, setEtaSecs] = useState(0);
+  const etaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -234,6 +240,23 @@ export default function DashboardMitra() {
     } catch { /* ignore */ } finally { setChatSending(false); }
   };
 
+  const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  const updatePhase = async (phase: string) => {
+    if (!activeOrder) return;
+    await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/phase`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase }),
+    });
+  };
+
   const acceptOrder = async (orderId: number) => {
     await fetch(`${BASE}/api/mitra/orders/${orderId}/accept`, { method: "PATCH" });
     const current = incoming;
@@ -241,7 +264,8 @@ export default function DashboardMitra() {
     if (current) {
       setActiveOrder(current);
       setChatMsgs([]);
-      setChatOpen(true);
+      setChatOpen(false);
+      setMitraPhase("diterima");
     }
     pushNotif({ type: "system", icon: "✅", title: "Pesanan Diterima", body: "Anda telah menerima pesanan. Segera menuju lokasi pelanggan." });
     fetchDashboard();
@@ -257,10 +281,38 @@ export default function DashboardMitra() {
     if (!activeOrder) return;
     await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/done`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
     if (chatPollRef.current) clearInterval(chatPollRef.current);
+    if (etaTimerRef.current) clearInterval(etaTimerRef.current);
     setActiveOrder(null);
     setChatMsgs([]);
+    setMitraPhase("diterima");
+    setEtaSecs(0);
     pushNotif({ type: "system", icon: "🎉", title: "Pekerjaan Selesai", body: "Pesanan telah diselesaikan." });
     fetchDashboard();
+  };
+
+  const startJourney = async () => {
+    if (!activeOrder) return;
+    await updatePhase("menuju");
+    // Hitung ETA dari mitra location → pickup location
+    // Gunakan mitra lat/lng dari data yang disimpan (data?.lat/lng) atau default estimasi 5 menit = 300 detik
+    const mitraLat = (activeOrder as any).mitraLat as number | null;
+    const mitraLng = (activeOrder as any).mitraLng as number | null;
+    const pLat = activeOrder.pickupLat;
+    const pLng = activeOrder.pickupLng;
+    let secs = 300; // default 5 menit
+    if (mitraLat && mitraLng && pLat && pLng) {
+      const km = haversineKm(mitraLat, mitraLng, pLat, pLng);
+      secs = Math.max(60, Math.round(km / 40 * 3600)); // 40 km/jam
+    }
+    setEtaSecs(secs);
+    setMitraPhase("menuju");
+    if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+    etaTimerRef.current = setInterval(() => {
+      setEtaSecs(prev => {
+        if (prev <= 1) { clearInterval(etaTimerRef.current!); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   const serviceLabel = (s: string) => {
@@ -425,92 +477,198 @@ export default function DashboardMitra() {
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 90px" }}>
 
         {/* Active Order card — chat dengan pengguna setelah terima */}
-        {activeOrder && (
-          <div style={{ marginBottom: 16, background: "#fff", borderRadius: 20, boxShadow: "0 4px 20px rgba(26,122,106,0.14)", border: "2px solid #1a7a6a", overflow: "hidden", animation: "slideDown 0.3s ease" }}>
-            {/* Header */}
-            <div style={{ background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ color: "#fff", fontSize: 13, fontWeight: 800 }}>🔧 Pesanan Aktif</div>
-                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 2 }}>{activeOrder.vehicleModel} {activeOrder.vehicleYear}</div>
-              </div>
-              <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "4px 10px" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>#{activeOrder.orderNo}</span>
-              </div>
-            </div>
-
-            <div style={{ padding: "14px 16px" }}>
-              {/* Customer + pickup */}
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 }}>
-                <span style={{ fontSize: 16 }}>👤</span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{activeOrder.penggunaName}</div>
-                  <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>{activeOrder.pickupAddress ?? "-"}</div>
-                </div>
+        {activeOrder && (() => {
+          const badgeLabel: Record<string, string> = {
+            diterima: "Diterima", chat: "Chat & Negosiasi",
+            menuju: "Menuju Lokasi", tiba: "Sudah Tiba", pengerjaan: "Sedang Dikerjakan",
+          };
+          const etaMM = String(Math.floor(etaSecs / 60)).padStart(2, "0");
+          const etaSS = String(etaSecs % 60).padStart(2, "0");
+          return (
+            <div style={{ marginBottom: 16, background: "#f0faf7", borderRadius: 20, boxShadow: "0 4px 20px rgba(26,122,106,0.14)", border: "2px solid #1a7a6a", overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px 10px" }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>🔧 Order Aktif</span>
+                <span style={{ background: "#1a7a6a", color: "#fff", borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 700 }}>
+                  {badgeLabel[mitraPhase] ?? "Aktif"}
+                </span>
               </div>
 
-              {/* Chat toggle */}
-              <button
-                onClick={() => setChatOpen(o => !o)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: "10px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: chatOpen ? "#f0f8f6" : "#f8fafc", color: chatOpen ? "#1a7a6a" : "#1a3a5c", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: chatOpen ? 10 : 0 }}
-              >
-                <span>💬</span>{chatOpen ? `Tutup Chat ∧` : `Chat dengan ${activeOrder.penggunaName}`}
-                {!chatOpen && chatMsgs.length > 0 && <span style={{ background: "#ea580c", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 11, fontWeight: 800 }}>{chatMsgs.length}</span>}
-              </button>
+              {/* Customer + vehicle */}
+              <div style={{ padding: "0 16px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 18 }}>📍</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>
+                  {activeOrder.penggunaName} · {activeOrder.vehicleModel} {activeOrder.vehicleYear}
+                </span>
+              </div>
 
-              {/* Chat panel */}
-              {chatOpen && (
-                <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
-                  <div style={{ minHeight: 120, maxHeight: 180, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 6, background: "#fafcff" }}>
-                    {chatMsgs.length === 0 ? (
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "16px 0" }}>
-                        <span style={{ fontSize: 28, opacity: 0.3 }}>💬</span>
-                        <div style={{ fontSize: 11, color: "#b0bec5" }}>Mulai diskusi dengan pelanggan</div>
-                      </div>
-                    ) : (
-                      chatMsgs.map(m => {
-                        const isMine = m.senderRole === "mitra";
-                        return (
-                          <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
-                            <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#f0f4f8", color: isMine ? "#fff" : "#1a2a3a", fontSize: 12, lineHeight: 1.4 }}>
-                              {m.message}
-                            </div>
-                            <div style={{ fontSize: 10, color: "#b0bec5", marginTop: 1 }}>
-                              {new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                    <div ref={chatBottomRef} />
-                  </div>
-                  <div style={{ display: "flex", gap: 6, padding: "8px 10px", background: "#f8fafc", borderTop: "1px solid #f0f4f8" }}>
-                    <input
-                      type="text"
-                      value={chatInput}
-                      onChange={e => setChatInput(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && sendChat()}
-                      placeholder="Ketik pesan..."
-                      style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e0e8f0", fontSize: 12, outline: "none", background: "#fff" }}
-                    />
+              <div style={{ padding: "0 16px 16px" }}>
+
+                {/* ── FASE 1: Diterima ── */}
+                {mitraPhase === "diterima" && (
+                  <>
+                    <div style={{ background: "#d4f5ec", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 16 }}>💬</span>
+                      <span style={{ fontSize: 13, color: "#1a5a4a", fontWeight: 600, lineHeight: 1.4 }}>
+                        Diskusikan biaya jasa dengan konsumen sebelum berangkat
+                      </span>
+                    </div>
                     <button
-                      onClick={sendChat}
-                      disabled={!chatInput.trim() || chatSending}
-                      style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: chatInput.trim() ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#e0e8f0", color: "#fff", fontSize: 14, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                    >➤</button>
-                  </div>
-                </div>
-              )}
+                      onClick={() => { setMitraPhase("chat"); setChatOpen(true); }}
+                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                    >
+                      💬 Chat dengan Konsumen
+                    </button>
+                  </>
+                )}
 
-              {/* Complete order button */}
-              <button
-                onClick={completeOrder}
-                style={{ width: "100%", padding: "13px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-              >
-                🏁 Tandai Selesai
-              </button>
+                {/* ── FASE 2: Chat & Negosiasi ── */}
+                {mitraPhase === "chat" && (
+                  <>
+                    {/* Chat panel */}
+                    <div style={{ border: "1.5px solid #cce8df", borderRadius: 14, overflow: "hidden", marginBottom: 12, background: "#fff" }}>
+                      <div style={{ padding: "10px 14px 6px", fontWeight: 700, fontSize: 13, color: "#1a5a4a", borderBottom: "1px solid #e8f5f1" }}>
+                        💬 Chat dengan {activeOrder.penggunaName}
+                      </div>
+                      <div style={{ minHeight: 140, maxHeight: 200, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 6, background: "#fafcff" }}>
+                        {chatMsgs.length === 0 ? (
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "16px 0" }}>
+                            <span style={{ fontSize: 28, opacity: 0.3 }}>💬</span>
+                            <div style={{ fontSize: 11, color: "#b0bec5" }}>Mulai diskusi dengan pelanggan</div>
+                          </div>
+                        ) : (
+                          chatMsgs.map(m => {
+                            const isMine = m.senderRole === "mitra";
+                            return (
+                              <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
+                                <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#f0f4f8", color: isMine ? "#fff" : "#1a2a3a", fontSize: 12, lineHeight: 1.4 }}>
+                                  {m.message}
+                                </div>
+                                <div style={{ fontSize: 10, color: "#b0bec5", marginTop: 1 }}>
+                                  {new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                        <div ref={chatBottomRef} />
+                      </div>
+                      <div style={{ display: "flex", gap: 6, padding: "8px 10px", background: "#f8fafc", borderTop: "1px solid #f0f4f8" }}>
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={e => setChatInput(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && sendChat()}
+                          placeholder="Ketik pesan..."
+                          style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e0e8f0", fontSize: 12, outline: "none", background: "#fff" }}
+                        />
+                        <button
+                          onClick={sendChat}
+                          disabled={!chatInput.trim() || chatSending}
+                          style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: chatInput.trim() ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#e0e8f0", color: "#fff", fontSize: 14, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                        >➤</button>
+                      </div>
+                    </div>
+                    {/* Hint konsumen setuju */}
+                    <div style={{ background: "#fff8e1", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 15 }}>👋</span>
+                      <span style={{ fontSize: 12, color: "#7a5a00", fontWeight: 600 }}>Konsumen setuju! Siap berangkat.</span>
+                    </div>
+                    <button
+                      onClick={startJourney}
+                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                    >
+                      🚗 Mulai Perjalanan
+                    </button>
+                  </>
+                )}
+
+                {/* ── FASE 3: Menuju Lokasi ── */}
+                {mitraPhase === "menuju" && (
+                  <>
+                    <div style={{ background: "#fff", borderRadius: 16, padding: "14px", marginBottom: 12, border: "1.5px solid #d4ede5" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: "#7a8a9a", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                            ⏱ Estimasi Tiba
+                          </div>
+                          <div style={{ fontSize: 30, fontWeight: 800, color: "#1a7a6a", marginTop: 4 }}>
+                            {etaMM}:{etaSS}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            onClick={() => {
+                              const lat = activeOrder.pickupLat;
+                              const lng = activeOrder.pickupLng;
+                              if (lat && lng) window.open(`https://maps.google.com/?daddr=${lat},${lng}`, "_blank");
+                            }}
+                            style={{ padding: "8px 14px", borderRadius: 12, border: "none", background: "#16a34a", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+                          >
+                            🗺️ Maps
+                          </button>
+                          <button
+                            onClick={() => {
+                              const lat = activeOrder.pickupLat;
+                              const lng = activeOrder.pickupLng;
+                              if (lat && lng) window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, "_blank");
+                            }}
+                            style={{ padding: "8px 14px", borderRadius: 12, border: "none", background: "#0077cc", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                          >
+                            Waze
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await updatePhase("tiba");
+                        if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+                        setMitraPhase("tiba");
+                      }}
+                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                    >
+                      📍 Sudah Tiba
+                    </button>
+                  </>
+                )}
+
+                {/* ── FASE 4: Sudah Tiba ── */}
+                {mitraPhase === "tiba" && (
+                  <>
+                    <div style={{ background: "#d4f5ec", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 18 }}>✅</span>
+                      <span style={{ fontSize: 13, color: "#1a5a4a", fontWeight: 600 }}>Anda sudah tiba di lokasi konsumen</span>
+                    </div>
+                    <button
+                      onClick={async () => { await updatePhase("pengerjaan"); setMitraPhase("pengerjaan"); }}
+                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                    >
+                      🔧 Mulai Pengerjaan
+                    </button>
+                  </>
+                )}
+
+                {/* ── FASE 5: Sedang Dikerjakan ── */}
+                {mitraPhase === "pengerjaan" && (
+                  <>
+                    <div style={{ background: "#fff8e1", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 18 }}>⚙️</span>
+                      <span style={{ fontSize: 13, color: "#7a5a00", fontWeight: 600 }}>Sedang mengerjakan kendaraan konsumen...</span>
+                    </div>
+                    <button
+                      onClick={completeOrder}
+                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                    >
+                      🏁 Tandai Selesai
+                    </button>
+                  </>
+                )}
+
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Incoming Order card — inline, between toggle and stats */}
         {incoming && (
