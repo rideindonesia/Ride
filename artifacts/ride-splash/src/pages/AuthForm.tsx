@@ -85,7 +85,7 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
       >
         <button
           onClick={() => navigate(isLogin ? "/login" : "/register")}
-          style={{ position: "absolute", top: 56, left: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(30,50,70,0.7)", border: "none", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px" }}
+          style={{ position: "absolute", top: 56, left: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px", backdropFilter: "blur(4px)" }}
         >&lt;-</button>
         <svg width="80" height="90" viewBox="0 0 120 134" fill="none" xmlns="http://www.w3.org/2000/svg">
           <polygon points="60,4 112,33 112,101 60,130 8,101 8,33" stroke="rgba(100,200,200,0.7)" strokeWidth="3" fill="none" />

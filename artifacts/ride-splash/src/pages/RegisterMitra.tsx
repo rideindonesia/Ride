@@ -102,7 +102,7 @@ function Header({ step, onBack }: { step: Step; onBack?: () => void }) {
       {onBack && (
         <button
           onClick={onBack}
-          style={{ position: "absolute", top: 48, left: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(30,50,70,0.7)", border: "none", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px" }}
+          style={{ position: "absolute", top: 48, left: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px", backdropFilter: "blur(4px)" }}
         >&lt;-</button>
       )}
       <svg width="52" height="58" viewBox="0 0 120 134" fill="none">
