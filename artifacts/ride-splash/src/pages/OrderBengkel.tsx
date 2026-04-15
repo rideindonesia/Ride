@@ -564,7 +564,7 @@ export default function OrderBengkel() {
 
               {/* Accepted — mitra card + chat */}
               {orderStatus === "accepted" && acceptedMitra && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {/* Banner */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "#e8f8f2", borderRadius: 14, border: "1.5px solid #b2e8d4" }}>
                     <span style={{ fontSize: 22 }}>✅</span>
@@ -573,8 +573,9 @@ export default function OrderBengkel() {
 
                   {/* Mitra card */}
                   <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "18px 16px", background: "#fff" }}>
+                    {/* Avatar + name row */}
                     <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
-                      <div style={{ width: 60, height: 60, borderRadius: 16, background: "#e8f4f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, flexShrink: 0 }}>🧑‍🔧</div>
+                      <div style={{ width: 56, height: 56, borderRadius: 14, background: "#e8f4f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>🧑‍🔧</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 3 }}>{acceptedMitra.name}</div>
                         <div style={{ fontSize: 13, color: "#f5a623", fontWeight: 700, marginBottom: 3 }}>
@@ -586,17 +587,20 @@ export default function OrderBengkel() {
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 14px" }}>
+                    {/* Biaya | Est. Tiba — side by side with divider */}
+                    <div style={{ display: "flex", marginBottom: 14, borderTop: "1px solid #f0f4f8", paddingTop: 14 }}>
+                      <div style={{ flex: 1, paddingRight: 14 }}>
                         <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>Biaya Panggilan</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>Rp {acceptedMitra.callFee.toLocaleString("id-ID")}</div>
                       </div>
-                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 14px" }}>
+                      <div style={{ width: 1, background: "#e0e8f0", margin: "0 14px 0 0" }} />
+                      <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>Est. Tiba</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>± {acceptedMitra.etaMin} menit</div>
                       </div>
                     </div>
 
+                    {/* Tip */}
                     <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "rgba(245,166,35,0.08)", borderRadius: 12, border: "1px solid rgba(245,166,35,0.2)" }}>
                       <span style={{ fontSize: 15 }}>💡</span>
                       <div>
@@ -606,13 +610,13 @@ export default function OrderBengkel() {
                     </div>
                   </div>
 
-                  {/* Chat & Negosiasi button */}
+                  {/* Chat & Negosiasi toggle */}
                   <button
                     onClick={() => setChatOpen(o => !o)}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "16px", borderRadius: 16, border: "none", background: chatOpen ? "#f0f8f6" : "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: chatOpen ? "#1a7a6a" : "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", boxShadow: chatOpen ? "none" : "0 4px 14px rgba(26,58,92,0.3)" }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "15px", borderRadius: 14, border: "none", background: chatOpen ? "#1a3a5c" : "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
                   >
-                    <span style={{ fontSize: 18 }}>💬</span>
-                    {chatOpen ? "Tutup Chat ∧" : "Chat & Negosiasi"}
+                    <span style={{ fontSize: 17 }}>💬</span>
+                    Chat & Negosiasi {chatOpen ? "∧" : "∨"}
                   </button>
 
                   {/* Chat panel */}
@@ -670,6 +674,29 @@ export default function OrderBengkel() {
                       </div>
                     </div>
                   )}
+
+                  {/* Setuju & Panggil Mitra */}
+                  <button
+                    onClick={() => setStep(4)}
+                    style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #2e7d32, #43a047)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                  >
+                    ✅ Setuju &amp; Panggil Mitra
+                  </button>
+
+                  {/* Cari Mitra Lain */}
+                  <button
+                    onClick={async () => {
+                      if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
+                      if (orderPollRef.current) clearInterval(orderPollRef.current);
+                      if (chatPollRef.current) clearInterval(chatPollRef.current);
+                      setOrderId(null); setOrderNo(""); setOrderStatus("creating");
+                      setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false);
+                      setStep(2); setTimeout(() => setStep(3), 50);
+                    }}
+                    style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                  >
+                    🔄 Cari Mitra Lain
+                  </button>
                 </div>
               )}
 
@@ -689,19 +716,12 @@ export default function OrderBengkel() {
             {orderStatus === "accepted" ? (
               <div style={{ display: "flex", gap: 12 }}>
                 <button
-                  onClick={async () => {
-                    if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
-                    if (orderPollRef.current) clearInterval(orderPollRef.current);
-                    if (chatPollRef.current) clearInterval(chatPollRef.current);
-                    setOrderId(null); setOrderNo(""); setOrderStatus("creating");
-                    setAcceptedMitra(null); setChatMessages([]); setChatInput("");
-                    setStep(2);
-                  }}
-                  style={{ flex: 1, padding: "16px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
+                  onClick={() => setStep(2)}
+                  style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
                 >← Kembali</button>
                 <button
-                  onClick={() => setStep(4)}
-                  style={{ flex: 2, padding: "16px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", boxShadow: "0 4px 14px rgba(26,58,92,0.3)" }}
+                  disabled
+                  style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: "#d0d8e0", color: "#a0aab4", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}
                 >Lanjut →</button>
               </div>
             ) : (
