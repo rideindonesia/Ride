@@ -96,6 +96,7 @@ export default function OrderBengkel() {
   // Chat state
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
   const [chatOpen, setChatOpen] = useState(false);
+  const [mitraConfirmed, setMitraConfirmed] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -355,19 +356,15 @@ export default function OrderBengkel() {
       {/* Header */}
       <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 20px 0", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <button
-            onClick={async () => {
-              if (step === 1) { navigate("/dashboard/pengguna"); return; }
-              if (step === 2) { setStep(1); return; }
-              if (step >= 3) {
-                // cancel order if exists
-                if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" });
-                if (orderPollRef.current) clearInterval(orderPollRef.current);
-                navigate("/dashboard/pengguna");
-              }
-            }}
-            style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", flexShrink: 0 }}
-          >&lt;-</button>
+          {step < 3 && (
+            <button
+              onClick={() => {
+                if (step === 1) { navigate("/dashboard/pengguna"); return; }
+                if (step === 2) { setStep(1); return; }
+              }}
+              style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", flexShrink: 0 }}
+            >&lt;-</button>
+          )}
           <div>
             <div style={{ color: "#fff", fontSize: 17, fontWeight: 700 }}>🔧 Bengkel Panggilan</div>
             <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 2 }}>Pesan layanan sekarang</div>
@@ -680,26 +677,30 @@ export default function OrderBengkel() {
 
                   {/* Setuju & Panggil Mitra */}
                   <button
-                    onClick={() => setStep(4)}
-                    style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #2e7d32, #43a047)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                    onClick={() => setMitraConfirmed(true)}
+                    disabled={mitraConfirmed}
+                    style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: mitraConfirmed ? "#a5d6a7" : "linear-gradient(135deg, #2e7d32, #43a047)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                   >
-                    ✅ Setuju &amp; Panggil Mitra
+                    {mitraConfirmed ? "✅ Mitra Dikonfirmasi" : "✅ Setuju & Panggil Mitra"}
                   </button>
 
                   {/* Cari Mitra Lain */}
-                  <button
-                    onClick={async () => {
-                      if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
-                      if (orderPollRef.current) clearInterval(orderPollRef.current);
-                      if (chatPollRef.current) clearInterval(chatPollRef.current);
-                      setOrderId(null); setOrderNo(""); setOrderStatus("creating");
-                      setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false);
-                      setStep(2); setTimeout(() => setStep(3), 50);
-                    }}
-                    style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                  >
-                    🔄 Cari Mitra Lain
-                  </button>
+                  {!mitraConfirmed && (
+                    <button
+                      onClick={async () => {
+                        if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
+                        if (orderPollRef.current) clearInterval(orderPollRef.current);
+                        if (chatPollRef.current) clearInterval(chatPollRef.current);
+                        setOrderId(null); setOrderNo(""); setOrderStatus("creating");
+                        setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false);
+                        setMitraConfirmed(false);
+                        setStep(2); setTimeout(() => setStep(3), 50);
+                      }}
+                      style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                    >
+                      🔄 Cari Mitra Lain
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -719,12 +720,18 @@ export default function OrderBengkel() {
             {orderStatus === "accepted" ? (
               <div style={{ display: "flex", gap: 12 }}>
                 <button
-                  onClick={() => setStep(2)}
-                  style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
-                >← Kembali</button>
+                  onClick={async () => {
+                    if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
+                    if (orderPollRef.current) clearInterval(orderPollRef.current);
+                    if (chatPollRef.current) clearInterval(chatPollRef.current);
+                    navigate("/dashboard/pengguna");
+                  }}
+                  style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e8a0a0", background: "#fff5f5", color: "#c0392b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >✕ Batalkan</button>
                 <button
-                  disabled
-                  style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: "#d0d8e0", color: "#a0aab4", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}
+                  onClick={() => mitraConfirmed && setStep(4)}
+                  disabled={!mitraConfirmed}
+                  style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: mitraConfirmed ? "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)" : "#d0d8e0", color: mitraConfirmed ? "#fff" : "#a0aab4", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "pointer" : "not-allowed", boxShadow: mitraConfirmed ? "0 4px 14px rgba(26,58,92,0.3)" : "none", transition: "all 0.3s ease" }}
                 >Lanjut →</button>
               </div>
             ) : (
