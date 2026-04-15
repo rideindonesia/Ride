@@ -123,8 +123,11 @@ export default function DashboardMitra() {
   const [mitraPhase, setMitraPhase] = useState<MitraPhase>("diterima");
   const [etaSecs, setEtaSecs] = useState(0);
   const etaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [paymentModal, setPaymentModal] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState("");
+  const [biayaJasa, setBiayaJasa] = useState("");
+  const [biayaSparepart, setBiayaSparepart] = useState("0");
+  const [paymentMethod, setPaymentMethod] = useState<"cash"|"transfer"|"qris">("cash");
+  const [proofPhoto, setProofPhoto] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -288,6 +291,8 @@ export default function DashboardMitra() {
     setChatMsgs([]);
     setMitraPhase("diterima");
     setEtaSecs(0);
+    setBiayaJasa(""); setBiayaSparepart("0"); setPaymentMethod("cash");
+    setProofPhoto(null); setProofPreview(null);
     pushNotif({ type: "system", icon: "🎉", title: "Pekerjaan Selesai", body: "Pesanan telah diselesaikan." });
     fetchDashboard();
   };
@@ -482,7 +487,7 @@ export default function DashboardMitra() {
         {activeOrder && (() => {
           const badgeLabel: Record<string, string> = {
             diterima: "Diterima", chat: "Chat & Negosiasi",
-            menuju: "Menuju Lokasi", tiba: "Sudah Tiba", pengerjaan: "Pengerjaan", selesai: "Selesai",
+            menuju: "Menuju Lokasi", tiba: "Sudah Tiba", pengerjaan: "Pengerjaan", selesai: "Pembayaran",
           };
           const etaMM = String(Math.floor(etaSecs / 60)).padStart(2, "0");
           const etaSS = String(etaSecs % 60).padStart(2, "0");
@@ -655,15 +660,123 @@ export default function DashboardMitra() {
                   </button>
                 )}
 
-                {/* ── FASE 6: Selesai — isi pembayaran ── */}
-                {mitraPhase === "selesai" && (
-                  <button
-                    onClick={() => setPaymentModal(true)}
-                    style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #ea8c00, #f59e0b)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                  >
-                    💳 Isi Pembayaran
-                  </button>
-                )}
+                {/* ── FASE 6: Pembayaran Final (inline form) ── */}
+                {mitraPhase === "selesai" && (() => {
+                  const jasa = Number(biayaJasa) || 0;
+                  const spare = Number(biayaSparepart) || 0;
+                  const total = jasa + spare;
+                  const platformFee = activeOrder.platformFee ?? Math.round((activeOrder.totalAmount ?? 0) * 0.2);
+                  const canSubmit = proofPhoto && jasa > 0;
+                  return (
+                    <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #e0e8f0", padding: "16px", display: "flex", flexDirection: "column", gap: 14 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a", display: "flex", alignItems: "center", gap: 8 }}>
+                        💳 Data Pembayaran Final
+                      </div>
+
+                      {/* Foto Bukti */}
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 8 }}>
+                          📸 Foto Bukti Perbaikan <span style={{ color: "#dc2626" }}>*wajib</span>
+                        </div>
+                        <label style={{ display: "block", cursor: "pointer" }}>
+                          <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                            onChange={e => {
+                              const f = e.target.files?.[0] ?? null;
+                              setProofPhoto(f);
+                              if (f) {
+                                const reader = new FileReader();
+                                reader.onload = ev => setProofPreview(ev.target?.result as string);
+                                reader.readAsDataURL(f);
+                              } else { setProofPreview(null); }
+                            }}
+                          />
+                          <div style={{ border: "2px dashed #c8ddd5", borderRadius: 14, background: "#f8fdfb", minHeight: 110, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, overflow: "hidden" }}>
+                            {proofPreview ? (
+                              <img src={proofPreview} alt="bukti" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 12 }} />
+                            ) : (
+                              <>
+                                <span style={{ fontSize: 32 }}>📷</span>
+                                <span style={{ fontSize: 12, color: "#9aa5b4" }}>Foto Bukti Perbaikan</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Biaya Jasa + Sparepart */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        {[
+                          { label: "Biaya Jasa", val: biayaJasa, set: setBiayaJasa },
+                          { label: "Biaya Sparepart", val: biayaSparepart, set: setBiayaSparepart },
+                        ].map(({ label, val, set }) => (
+                          <div key={label}>
+                            <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 6 }}>{label}</div>
+                            <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                              <span style={{ padding: "0 10px", fontSize: 12, color: "#9aa5b4", background: "#f8fafc", borderRight: "1px solid #e0e8f0", alignSelf: "stretch", display: "flex", alignItems: "center" }}>Rp</span>
+                              <input
+                                type="number" inputMode="numeric" value={val}
+                                onChange={e => set(e.target.value)}
+                                style={{ flex: 1, padding: "10px 8px", border: "none", outline: "none", fontSize: 14, fontWeight: 700, color: "#1a2a3a", width: 0 }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Total */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f0faf7", borderRadius: 12, padding: "12px 14px" }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Total Tagihan</span>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a" }}>
+                          {total.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+
+                      {/* Metode Bayar */}
+                      <div>
+                        <div style={{ fontSize: 13, color: "#7a8a9a", marginBottom: 8 }}>Metode Bayar Konsumen</div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {(["cash", "transfer", "qris"] as const).map(m => (
+                            <button key={m} onClick={() => setPaymentMethod(m)}
+                              style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: paymentMethod === m ? "2px solid #ea580c" : "1.5px solid #e0e8f0", background: paymentMethod === m ? "#fff5f0" : "#fff", color: paymentMethod === m ? "#ea580c" : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer", textTransform: "capitalize" as const }}>
+                              {m === "cash" ? "Cash" : m === "transfer" ? "Transfer" : "QRIS"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Platform fee info */}
+                      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e" }}>
+                          Platform Fee 20% (dari Biaya Panggilan): {(platformFee ?? 0).toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#92400e", marginTop: 3 }}>*Biaya jasa & sparepart 100% milik mitra</div>
+                      </div>
+
+                      {/* Submit */}
+                      <button
+                        disabled={!canSubmit}
+                        onClick={async () => {
+                          if (!activeOrder) return;
+                          await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/done`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ totalAmount: total, paymentMethod }),
+                          });
+                          if (chatPollRef.current) clearInterval(chatPollRef.current);
+                          if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+                          setActiveOrder(null); setChatMsgs([]); setMitraPhase("diterima"); setEtaSecs(0);
+                          setBiayaJasa(""); setBiayaSparepart("0"); setPaymentMethod("cash");
+                          setProofPhoto(null); setProofPreview(null);
+                          pushNotif({ type: "system", icon: "🎉", title: "Pembayaran Selesai", body: `Total: ${total.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}` });
+                          fetchDashboard();
+                        }}
+                        style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: canSubmit ? "linear-gradient(135deg, #1a3a5c, #1a7a6a)" : "#e0e8f0", color: canSubmit ? "#fff" : "#9aa5b4", fontWeight: 700, fontSize: 15, cursor: canSubmit ? "pointer" : "default" }}
+                      >
+                        ✅ Konfirmasi Pembayaran Selesai
+                      </button>
+                    </div>
+                  );
+                })()}
 
               </div>
             </div>
@@ -836,64 +949,6 @@ export default function DashboardMitra() {
           </div>
         )}
       </div>
-
-      {/* ── Modal Isi Pembayaran ── */}
-      {paymentModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500, display: "flex", alignItems: "flex-end" }}
-          onClick={e => { if (e.target === e.currentTarget) setPaymentModal(false); }}>
-          <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px 40px", width: "100%" }}>
-            <div style={{ width: 40, height: 4, background: "#e0e8f0", borderRadius: 2, margin: "0 auto 20px" }} />
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", marginBottom: 6 }}>💳 Isi Pembayaran</div>
-            <div style={{ fontSize: 13, color: "#7a8a9a", marginBottom: 20 }}>
-              Masukkan total biaya yang disepakati dengan {activeOrder?.penggunaName}
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Total Biaya Jasa (Rp)</div>
-              <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
-                <span style={{ padding: "0 14px", fontSize: 14, fontWeight: 700, color: "#7a8a9a", background: "#f8fafc", borderRight: "1.5px solid #e0e8f0", alignSelf: "stretch", display: "flex", alignItems: "center" }}>Rp</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={paymentAmount}
-                  onChange={e => setPaymentAmount(e.target.value)}
-                  placeholder="150000"
-                  style={{ flex: 1, padding: "13px 14px", border: "none", outline: "none", fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}
-                />
-              </div>
-              {paymentAmount && (
-                <div style={{ fontSize: 13, color: "#1a7a6a", fontWeight: 600, marginTop: 6 }}>
-                  {Number(paymentAmount).toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}
-                </div>
-              )}
-            </div>
-            <button
-              disabled={!paymentAmount || Number(paymentAmount) <= 0}
-              onClick={async () => {
-                if (!activeOrder) return;
-                const amt = Number(paymentAmount);
-                await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/done`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ totalAmount: amt }),
-                });
-                if (chatPollRef.current) clearInterval(chatPollRef.current);
-                if (etaTimerRef.current) clearInterval(etaTimerRef.current);
-                setPaymentModal(false);
-                setPaymentAmount("");
-                setActiveOrder(null);
-                setChatMsgs([]);
-                setMitraPhase("diterima");
-                setEtaSecs(0);
-                pushNotif({ type: "system", icon: "🎉", title: "Pekerjaan Selesai", body: `Order selesai. Total: Rp ${amt.toLocaleString("id-ID")}` });
-                fetchDashboard();
-              }}
-              style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: paymentAmount && Number(paymentAmount) > 0 ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#e0e8f0", color: paymentAmount && Number(paymentAmount) > 0 ? "#fff" : "#9aa5b4", fontWeight: 700, fontSize: 15, cursor: paymentAmount && Number(paymentAmount) > 0 ? "pointer" : "default" }}
-            >
-              ✅ Konfirmasi Selesai
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Bottom nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #e8f0f8", display: "flex", zIndex: 200, paddingBottom: "env(safe-area-inset-bottom)" }}>
