@@ -3,13 +3,15 @@ import { useLocation } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function fmt(n: number) {
+function fmt(n: number | null | undefined) {
+  if (n == null) return "0";
   if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "jt";
   if (n >= 1000) return Math.round(n / 1000) + "rb";
   return n.toString();
 }
 
-function fmtRp(n: number) {
+function fmtRp(n: number | null | undefined) {
+  if (n == null) return "Rp 0";
   return "Rp " + n.toLocaleString("id-ID");
 }
 
