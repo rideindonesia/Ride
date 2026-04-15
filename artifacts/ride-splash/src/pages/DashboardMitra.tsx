@@ -106,6 +106,16 @@ export default function DashboardMitra() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Active order (after accepting) with chat
+  const [activeOrder, setActiveOrder] = useState<IncomingOrder | null>(null);
+  type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
+  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
+  const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
   const fetchDashboard = useCallback(async () => {
     try {
       const res = await fetch(`${BASE}/api/mitra/dashboard`);
@@ -191,9 +201,46 @@ export default function DashboardMitra() {
 
   const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
 
+  // Poll chat messages when active order accepted
+  useEffect(() => {
+    if (!activeOrder) return;
+    const fetchMsgs = async () => {
+      try {
+        const res = await fetch(`${BASE}/api/chat/${activeOrder.id}`, { credentials: "include" });
+        const data = await res.json();
+        setChatMsgs(data.messages ?? []);
+        setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      } catch { /* ignore */ }
+    };
+    fetchMsgs();
+    chatPollRef.current = setInterval(fetchMsgs, 3000);
+    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
+  }, [activeOrder?.id]);
+
+  const sendChat = async () => {
+    if (!chatInput.trim() || !activeOrder || chatSending) return;
+    const msg = chatInput.trim();
+    setChatInput("");
+    setChatSending(true);
+    try {
+      await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ message: msg }),
+      });
+    } catch { /* ignore */ } finally { setChatSending(false); }
+  };
+
   const acceptOrder = async (orderId: number) => {
     await fetch(`${BASE}/api/mitra/orders/${orderId}/accept`, { method: "PATCH" });
+    const current = incoming;
     setIncoming(null);
+    if (current) {
+      setActiveOrder(current);
+      setChatMsgs([]);
+      setChatOpen(true);
+    }
     pushNotif({ type: "system", icon: "✅", title: "Pesanan Diterima", body: "Anda telah menerima pesanan. Segera menuju lokasi pelanggan." });
     fetchDashboard();
   };
@@ -202,6 +249,16 @@ export default function DashboardMitra() {
     await fetch(`${BASE}/api/mitra/orders/${orderId}/reject`, { method: "PATCH" });
     setIncoming(null);
     pushNotif({ type: "system", icon: "❌", title: "Pesanan Ditolak", body: "Pesanan telah ditolak dan dikembalikan ke antrian." });
+  };
+
+  const completeOrder = async () => {
+    if (!activeOrder) return;
+    await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/done`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+    if (chatPollRef.current) clearInterval(chatPollRef.current);
+    setActiveOrder(null);
+    setChatMsgs([]);
+    pushNotif({ type: "system", icon: "🎉", title: "Pekerjaan Selesai", body: "Pesanan telah diselesaikan." });
+    fetchDashboard();
   };
 
   const serviceLabel = (s: string) => {
@@ -364,6 +421,94 @@ export default function DashboardMitra() {
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 90px" }}>
+
+        {/* Active Order card — chat dengan pengguna setelah terima */}
+        {activeOrder && (
+          <div style={{ marginBottom: 16, background: "#fff", borderRadius: 20, boxShadow: "0 4px 20px rgba(26,122,106,0.14)", border: "2px solid #1a7a6a", overflow: "hidden", animation: "slideDown 0.3s ease" }}>
+            {/* Header */}
+            <div style={{ background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ color: "#fff", fontSize: 13, fontWeight: 800 }}>🔧 Pesanan Aktif</div>
+                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 2 }}>{activeOrder.vehicleModel} {activeOrder.vehicleYear}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "4px 10px" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>#{activeOrder.orderNo}</span>
+              </div>
+            </div>
+
+            <div style={{ padding: "14px 16px" }}>
+              {/* Customer + pickup */}
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 }}>
+                <span style={{ fontSize: 16 }}>👤</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{activeOrder.penggunaName}</div>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>{activeOrder.pickupAddress ?? "-"}</div>
+                </div>
+              </div>
+
+              {/* Chat toggle */}
+              <button
+                onClick={() => setChatOpen(o => !o)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: "10px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: chatOpen ? "#f0f8f6" : "#f8fafc", color: chatOpen ? "#1a7a6a" : "#1a3a5c", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: chatOpen ? 10 : 0 }}
+              >
+                <span>💬</span>{chatOpen ? `Tutup Chat ∧` : `Chat dengan ${activeOrder.penggunaName}`}
+                {!chatOpen && chatMsgs.length > 0 && <span style={{ background: "#ea580c", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 11, fontWeight: 800 }}>{chatMsgs.length}</span>}
+              </button>
+
+              {/* Chat panel */}
+              {chatOpen && (
+                <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
+                  <div style={{ minHeight: 120, maxHeight: 180, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 6, background: "#fafcff" }}>
+                    {chatMsgs.length === 0 ? (
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "16px 0" }}>
+                        <span style={{ fontSize: 28, opacity: 0.3 }}>💬</span>
+                        <div style={{ fontSize: 11, color: "#b0bec5" }}>Mulai diskusi dengan pelanggan</div>
+                      </div>
+                    ) : (
+                      chatMsgs.map(m => {
+                        const isMine = m.senderRole === "mitra";
+                        return (
+                          <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
+                            <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#f0f4f8", color: isMine ? "#fff" : "#1a2a3a", fontSize: 12, lineHeight: 1.4 }}>
+                              {m.message}
+                            </div>
+                            <div style={{ fontSize: 10, color: "#b0bec5", marginTop: 1 }}>
+                              {new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={chatBottomRef} />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, padding: "8px 10px", background: "#f8fafc", borderTop: "1px solid #f0f4f8" }}>
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && sendChat()}
+                      placeholder="Ketik pesan..."
+                      style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e0e8f0", fontSize: 12, outline: "none", background: "#fff" }}
+                    />
+                    <button
+                      onClick={sendChat}
+                      disabled={!chatInput.trim() || chatSending}
+                      style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: chatInput.trim() ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#e0e8f0", color: "#fff", fontSize: 14, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                    >➤</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Complete order button */}
+              <button
+                onClick={completeOrder}
+                style={{ width: "100%", padding: "13px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >
+                🏁 Tandai Selesai
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Incoming Order card — inline, between toggle and stats */}
         {incoming && (

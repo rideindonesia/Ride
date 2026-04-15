@@ -93,6 +93,15 @@ export default function OrderBengkel() {
   const [createError, setCreateError] = useState<string | null>(null);
   const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Chat state
+  type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
+  const [chatOpen, setChatOpen] = useState(true);
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const gpsMarkerRef = useRef<L.CircleMarker | null>(null);
@@ -280,6 +289,40 @@ export default function OrderBengkel() {
 
     return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); };
   }, [step]);
+
+  // Poll chat messages when order accepted
+  useEffect(() => {
+    if (orderStatus !== "accepted" || !orderId) return;
+    const fetchMsgs = async () => {
+      try {
+        const res = await fetch(`/api/chat/${orderId}`, { credentials: "include" });
+        const data = await res.json();
+        setChatMessages(data.messages ?? []);
+        // Auto-scroll to bottom
+        setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      } catch { /* ignore */ }
+    };
+    fetchMsgs();
+    chatPollRef.current = setInterval(fetchMsgs, 3000);
+    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
+  }, [orderStatus, orderId]);
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || !orderId || chatSending) return;
+    const msg = chatInput.trim();
+    setChatInput("");
+    setChatSending(true);
+    try {
+      await fetch(`/api/chat/${orderId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ message: msg }),
+      });
+    } catch { /* ignore */ } finally {
+      setChatSending(false);
+    }
+  };
 
   const snapToGps = useCallback(() => {
     if (!leafletMapRef.current || userLat === null || userLng === null) return;
@@ -511,70 +554,120 @@ export default function OrderBengkel() {
                 </div>
               )}
 
-              {/* Accepted — show real mitra card */}
+              {/* Accepted — mitra card + chat */}
               {orderStatus === "accepted" && acceptedMitra && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {/* Banner */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "rgba(26,122,106,0.08)", borderRadius: 14, border: "1.5px solid rgba(26,122,106,0.25)" }}>
                     <span style={{ fontSize: 22 }}>✅</span>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#1a7a6a" }}>Mitra Ditemukan!</div>
-                      <div style={{ fontSize: 12, color: "#4a5568" }}>Mitra sedang bersiap menuju lokasi Anda</div>
+                      <div style={{ fontSize: 12, color: "#4a5568" }}>Diskusikan harga & detail sebelum memanggil</div>
                     </div>
                   </div>
 
-                  {/* Mitra info card */}
+                  {/* Mitra card */}
                   <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "18px 16px" }}>
                     <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
-                      <div style={{ width: 58, height: 58, borderRadius: 29, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>🧑‍🔧</div>
+                      <div style={{ width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🧑‍🔧</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 3 }}>{acceptedMitra.name}</div>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 2 }}>{acceptedMitra.name}</div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           {acceptedMitra.rating != null
                             ? <span style={{ fontSize: 12, color: "#f5a623", fontWeight: 700 }}>⭐ {acceptedMitra.rating}</span>
-                            : <span style={{ fontSize: 12, color: "#9aa5b4" }}>⭐ Baru</span>}
+                            : <span style={{ fontSize: 12, color: "#9aa5b4" }}>⭐ –</span>}
                           {acceptedMitra.totalOrders > 0 && <span style={{ fontSize: 12, color: "#7a8a9a" }}>· {acceptedMitra.totalOrders} order</span>}
                         </div>
-                        <div style={{ fontSize: 12, color: "#1a7a6a", fontWeight: 600, marginTop: 3 }}>
+                        <div style={{ fontSize: 12, color: "#1a7a6a", fontWeight: 600, marginTop: 2 }}>
                           {acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist * 1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`} · Est. {acceptedMitra.etaMin} menit
                         </div>
                       </div>
                     </div>
 
-                    {/* Biaya Panggilan + ETA */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
                       <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 3 }}>Biaya Panggilan</div>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 2 }}>Biaya Panggilan</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>Rp {acceptedMitra.callFee.toLocaleString("id-ID")}</div>
                       </div>
                       <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 3 }}>Est. Tiba</div>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 2 }}>Est. Tiba</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>± {acceptedMitra.etaMin} menit</div>
                       </div>
                     </div>
 
-                    {/* Hint */}
                     <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "rgba(245,166,35,0.08)", borderRadius: 12, border: "1px solid rgba(245,166,35,0.2)" }}>
-                      <span style={{ fontSize: 16 }}>💡</span>
+                      <span style={{ fontSize: 15 }}>💡</span>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309" }}>Diskusikan dulu biaya jasa & sparepart</div>
-                        <div style={{ fontSize: 11, color: "#92400e", marginTop: 2 }}>Chat dengan mitra sebelum memulai pekerjaan</div>
+                        <div style={{ fontSize: 11, color: "#92400e", marginTop: 1 }}>Chat dengan mitra sebelum memanggil</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Chat button */}
-                  <button style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-                    💬 Chat & Negosiasi
+                  {/* Chat toggle button */}
+                  <button
+                    onClick={() => setChatOpen(o => !o)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: chatOpen ? "#f0f8f6" : "#f8fafc", color: chatOpen ? "#1a7a6a" : "#1a3a5c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    <span style={{ fontSize: 16 }}>💬</span>
+                    {chatOpen ? `Tutup Chat ∧` : `Chat dengan ${acceptedMitra.name}`}
                   </button>
 
-                  {/* Cancel */}
-                  <button
-                    onClick={async () => {
-                      if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" });
-                      navigate("/dashboard/pengguna");
-                    }}
-                    style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                  >✕ Batalkan Pesanan</button>
+                  {/* Chat panel */}
+                  {chatOpen && (
+                    <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, overflow: "hidden" }}>
+                      {/* Chat header */}
+                      <div style={{ padding: "10px 14px", background: "#f8fafc", borderBottom: "1px solid #f0f4f8" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#4a5568" }}>💬 Chat dengan {acceptedMitra.name}</div>
+                      </div>
+
+                      {/* Messages area */}
+                      <div style={{ minHeight: 160, maxHeight: 220, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 8, background: "#fff" }}>
+                        {chatMessages.length === 0 ? (
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "20px 0" }}>
+                            <span style={{ fontSize: 32, opacity: 0.3 }}>💬</span>
+                            <div style={{ fontSize: 12, color: "#b0bec5", textAlign: "center" }}>Mulai diskusi dengan mitra</div>
+                          </div>
+                        ) : (
+                          chatMessages.map(m => {
+                            const isMine = m.senderRole === "pengguna";
+                            return (
+                              <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
+                                <div style={{
+                                  maxWidth: "78%", padding: "9px 13px", borderRadius: isMine ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                                  background: isMine ? "linear-gradient(135deg, #1a3a5c, #1a7a6a)" : "#f0f4f8",
+                                  color: isMine ? "#fff" : "#1a2a3a", fontSize: 13, lineHeight: 1.4,
+                                }}>
+                                  {m.message}
+                                </div>
+                                <div style={{ fontSize: 10, color: "#b0bec5", marginTop: 2 }}>
+                                  {new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                        <div ref={chatBottomRef} />
+                      </div>
+
+                      {/* Chat input */}
+                      <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: "#f8fafc", borderTop: "1px solid #f0f4f8" }}>
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={e => setChatInput(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && sendChatMessage()}
+                          placeholder="Ketik pesan..."
+                          style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, outline: "none", background: "#fff" }}
+                        />
+                        <button
+                          onClick={sendChatMessage}
+                          disabled={!chatInput.trim() || chatSending}
+                          style={{ width: 40, height: 40, borderRadius: 12, border: "none", background: chatInput.trim() ? "linear-gradient(135deg, #1a3a5c, #1a7a6a)" : "#e0e8f0", color: "#fff", fontSize: 16, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                        >➤</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -589,20 +682,45 @@ export default function OrderBengkel() {
             </div>
           </div>
 
-          {/* Bottom: Lanjut ke Tracking (only when accepted) */}
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
-            <button
-              disabled={orderStatus !== "accepted"}
-              onClick={() => setStep(4)}
-              style={{
-                width: "100%", padding: "17px", borderRadius: 16, border: "none",
-                background: orderStatus === "accepted" ? "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)" : "#c0d0dc",
-                color: "#fff", fontWeight: 700, fontSize: 16,
-                cursor: orderStatus === "accepted" ? "pointer" : "not-allowed",
-              }}
-            >
-              {orderStatus === "accepted" ? "Lanjut ke Tracking →" : "Menunggu Mitra Menerima..."}
-            </button>
+          {/* Bottom: Setuju & Panggil / Cari Mitra Lain */}
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 20px", background: "linear-gradient(to top, #f0f4f8 90%, transparent)", zIndex: 100 }}>
+            {orderStatus === "accepted" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button
+                  onClick={() => setStep(4)}
+                  style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a7a6a 0%, #1a3a5c 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                >
+                  ✅ Setuju & Panggil Mitra
+                </button>
+                <button
+                  onClick={async () => {
+                    if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" });
+                    if (orderPollRef.current) clearInterval(orderPollRef.current);
+                    if (chatPollRef.current) clearInterval(chatPollRef.current);
+                    // Reset to re-search
+                    setOrderId(null);
+                    setOrderNo("");
+                    setOrderStatus("creating");
+                    setAcceptedMitra(null);
+                    setChatMessages([]);
+                    setChatInput("");
+                    // Trigger new order creation by resetting step to 3
+                    setStep(2);
+                    setTimeout(() => setStep(3), 50);
+                  }}
+                  style={{ width: "100%", padding: "14px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                >
+                  🔄 Cari Mitra Lain
+                </button>
+              </div>
+            ) : (
+              <button
+                disabled
+                style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "#c0d0dc", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "not-allowed" }}
+              >
+                {orderStatus === "creating" ? "Membuat pesanan..." : "Menunggu Mitra Menerima..."}
+              </button>
+            )}
           </div>
         </>
       )}
