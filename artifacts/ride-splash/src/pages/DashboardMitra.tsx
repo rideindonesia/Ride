@@ -70,6 +70,25 @@ interface IncomingOrder {
   penggunaName: string; createdAt: string;
 }
 
+interface Notif {
+  id: string;
+  type: "order" | "chat" | "system";
+  icon: string;
+  title: string;
+  body: string;
+  time: Date;
+  read: boolean;
+  orderId?: number;
+}
+
+function timeAgo(d: Date) {
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return "Baru saja";
+  if (s < 3600) return Math.floor(s / 60) + " mnt lalu";
+  if (s < 86400) return Math.floor(s / 3600) + " jam lalu";
+  return Math.floor(s / 86400) + " hari lalu";
+}
+
 export default function DashboardMitra() {
   const [, navigate] = useLocation();
   const [data, setData] = useState<DashData | null>(null);
@@ -79,6 +98,9 @@ export default function DashboardMitra() {
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [incoming, setIncoming] = useState<IncomingOrder | null>(null);
   const [incomingTimer, setIncomingTimer] = useState(30);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifs, setNotifs] = useState<Notif[]>([]);
+  const seenOrderIds = useRef<Set<number>>(new Set());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -93,17 +115,29 @@ export default function DashboardMitra() {
     finally { setLoading(false); }
   }, [navigate]);
 
+  const pushNotif = useCallback((n: Omit<Notif, "id" | "time" | "read">) => {
+    setNotifs(prev => [{ ...n, id: Date.now().toString(), time: new Date(), read: false }, ...prev].slice(0, 50));
+  }, []);
+
   const fetchIncoming = useCallback(async () => {
     try {
       const res = await fetch(`${BASE}/api/mitra/incoming-orders`);
       if (!res.ok) return;
       const d = await res.json();
-      if (d.incoming && (!incoming || d.incoming.id !== incoming.id)) {
+      if (d.incoming && !seenOrderIds.current.has(d.incoming.id)) {
+        seenOrderIds.current.add(d.incoming.id);
         setIncoming(d.incoming);
         setIncomingTimer(30);
+        pushNotif({
+          type: "order",
+          icon: "🔧",
+          title: "Pesanan Masuk!",
+          body: `${d.incoming.penggunaName} — ${d.incoming.vehicleModel} ${d.incoming.vehicleYear}`,
+          orderId: d.incoming.id,
+        });
       }
     } catch { /* ignore */ }
-  }, [incoming]);
+  }, [pushNotif]);
 
   useEffect(() => {
     fetchDashboard();
@@ -141,15 +175,21 @@ export default function DashboardMitra() {
     finally { setTogglingOnline(false); }
   };
 
+  const unreadCount = notifs.filter(n => !n.read).length;
+
+  const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+
   const acceptOrder = async (orderId: number) => {
     await fetch(`${BASE}/api/mitra/orders/${orderId}/accept`, { method: "PATCH" });
     setIncoming(null);
+    pushNotif({ type: "system", icon: "✅", title: "Pesanan Diterima", body: "Anda telah menerima pesanan. Segera menuju lokasi pelanggan." });
     fetchDashboard();
   };
 
   const rejectOrder = async (orderId: number) => {
     await fetch(`${BASE}/api/mitra/orders/${orderId}/reject`, { method: "PATCH" });
     setIncoming(null);
+    pushNotif({ type: "system", icon: "❌", title: "Pesanan Ditolak", body: "Pesanan telah ditolak dan dikembalikan ke antrian." });
   };
 
   const serviceLabel = (s: string) => {
@@ -189,11 +229,16 @@ export default function DashboardMitra() {
           </div>
           {/* Bell */}
           <div style={{ position: "relative" }}>
-            <button style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, cursor: "pointer" }}>
+            <button
+              onClick={() => { setShowNotif(v => !v); if (!showNotif) markAllRead(); }}
+              style={{ width: 44, height: 44, borderRadius: 14, background: showNotif ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, cursor: "pointer" }}
+            >
               🔔
             </button>
-            {incoming && (
-              <div style={{ position: "absolute", top: -4, right: -4, width: 18, height: 18, borderRadius: 9, background: "#ea580c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff" }}>1</div>
+            {unreadCount > 0 && (
+              <div style={{ position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, background: "#ea580c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", padding: "0 4px" }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </div>
             )}
           </div>
         </div>
@@ -227,6 +272,83 @@ export default function DashboardMitra() {
           </div>
         </div>
       </div>
+
+      {/* Notification Panel Overlay */}
+      {showNotif && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400 }} onClick={() => setShowNotif(false)}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, background: "#fff", borderRadius: "0 0 24px 24px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+          >
+            {/* Panel header */}
+            <div style={{ background: "linear-gradient(135deg, #0d2137, #1a3a5c)", padding: "50px 20px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <div>
+                <div style={{ color: "#fff", fontSize: 16, fontWeight: 800 }}>🔔 Notifikasi</div>
+                <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 2 }}>
+                  {notifs.length === 0 ? "Tidak ada notifikasi" : `${notifs.length} notifikasi`}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {notifs.length > 0 && (
+                  <button
+                    onClick={() => { setNotifs([]); }}
+                    style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}
+                  >
+                    Hapus semua
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowNotif(false)}
+                  style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Notif list */}
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {notifs.length === 0 ? (
+                <div style={{ padding: "40px 20px", textAlign: "center" }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🔕</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 4 }}>Belum ada notifikasi</div>
+                  <div style={{ fontSize: 13, color: "#9aa5b4" }}>Notifikasi pesanan & chat akan muncul di sini</div>
+                </div>
+              ) : (
+                notifs.map((n, i) => (
+                  <div key={n.id}>
+                    {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "0 16px" }} />}
+                    <div style={{ display: "flex", gap: 12, padding: "14px 16px", background: n.read ? "#fff" : "rgba(26,122,106,0.04)", alignItems: "flex-start" }}>
+                      {/* Icon bubble */}
+                      <div style={{ width: 44, height: 44, borderRadius: 14, background: n.type === "order" ? "rgba(234,88,12,0.1)" : n.type === "chat" ? "rgba(59,130,246,0.1)" : "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+                        {n.icon}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{n.title}</div>
+                          {!n.read && <div style={{ width: 8, height: 8, borderRadius: 4, background: "#ea580c", flexShrink: 0, marginTop: 4 }} />}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#4a5568", marginTop: 3, lineHeight: 1.4 }}>{n.body}</div>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 4 }}>{timeAgo(n.time)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Bottom categories hint */}
+            <div style={{ padding: "12px 16px", borderTop: "1px solid #f0f4f8", display: "flex", gap: 8, flexShrink: 0 }}>
+              {[{ icon: "🔧", label: "Order", color: "#ea580c" }, { icon: "💬", label: "Chat", color: "#3b82f6" }, { icon: "📢", label: "Info", color: "#1a7a6a" }].map(c => (
+                <div key={c.label} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", background: "#f8fafc", borderRadius: 20, border: "1px solid #e8f0f8" }}>
+                  <span style={{ fontSize: 12 }}>{c.icon}</span>
+                  <span style={{ fontSize: 11, color: c.color, fontWeight: 600 }}>{c.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 90px" }}>
@@ -326,7 +448,7 @@ export default function DashboardMitra() {
         {[
           { icon: "🏠", label: "Beranda", active: true },
           { icon: "📋", label: "Pesanan", active: false },
-          { icon: "💬", label: "Chat", active: false, badge: incoming ? 1 : 0 },
+          { icon: "💬", label: "Chat", active: false, badge: 0 },
           { icon: "👤", label: "Akun", active: false },
         ].map(item => (
           <button key={item.label} style={{ flex: 1, padding: "10px 0 6px", border: "none", background: "transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative" }}>

@@ -146,4 +146,36 @@ router.post("/orders", async (_req, res) => {
   res.json({ message: "Orders berhasil di-seed", count: inserted });
 });
 
+// Seed 1 pending/incoming order for Budi to test notification
+router.post("/incoming", async (_req, res) => {
+  const allUsers = await db.select({ id: usersTable.id, phone: usersTable.phone }).from(usersTable);
+  const userMap = Object.fromEntries(allUsers.map(u => [u.phone, u.id]));
+  const budiId = userMap["+6281234567890"];
+  const demoId = userMap["+6281355446677"];
+
+  if (!budiId || !demoId) {
+    res.status(400).json({ error: "Run /api/seed/demo first" });
+    return;
+  }
+
+  const orderNo = "ORD" + Date.now().toString().slice(-8) + "INC";
+  await db.insert(ordersTable).values({
+    orderNo,
+    penggunaId: demoId,
+    mitraId: budiId,
+    serviceType: "bengkel",
+    vehicleType: "mobil",
+    vehicleModel: "Toyota Avanza",
+    vehicleYear: "2022",
+    damageCategories: ["Mogok Total", "Aki Soak"],
+    pickupAddress: "Jl. Jenderal Sudirman, Balikpapan",
+    detailAlamat: "Depan Indomaret, dekat lampu merah",
+    status: "pending",
+    totalAmount: 275000,
+    platformFee: 41250,
+  });
+
+  res.json({ message: "Incoming order berhasil dibuat", orderNo });
+});
+
 export default router;
