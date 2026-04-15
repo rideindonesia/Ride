@@ -196,10 +196,14 @@ router.get("/dashboard", requireMitra, async (req, res) => {
   const recentOrders = await db.select({
     id: ordersTable.id,
     orderNo: ordersTable.orderNo,
+    serviceType: ordersTable.serviceType,
     vehicleModel: ordersTable.vehicleModel,
     vehicleYear: ordersTable.vehicleYear,
+    damageCategories: ordersTable.damageCategories,
+    pickupAddress: ordersTable.pickupAddress,
     totalAmount: ordersTable.totalAmount,
     platformFee: ordersTable.platformFee,
+    paymentData: ordersTable.paymentData,
     penggunaName: usersTable.name,
     createdAt: ordersTable.createdAt,
   }).from(ordersTable)

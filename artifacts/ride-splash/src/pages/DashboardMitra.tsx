@@ -58,8 +58,10 @@ interface DashData {
   weeklyBest: number;
   monthlyChart: ChartBar[];
   recentOrders: {
-    id: number; orderNo: string; vehicleModel: string; vehicleYear: string;
+    id: number; orderNo: string; serviceType: string; vehicleModel: string; vehicleYear: string;
+    damageCategories: string[] | null; pickupAddress: string | null;
     totalAmount: number; platformFee: number; penggunaName: string; createdAt: string;
+    paymentData: { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string } | null;
   }[];
   platformFeeHistory: {
     weekStart: string; weekEnd: string; omset: number; fee: number; isPaid: boolean;
@@ -149,6 +151,10 @@ export default function DashboardMitra() {
   // Bottom nav tab
   type TabId = "beranda" | "pesanan" | "chat" | "akun";
   const [activeTab, setActiveTab] = useState<TabId>("beranda");
+
+  // Pesanan sub-tab
+  const [pesananSubTab, setPesananSubTab] = useState<"aktif" | "riwayat">("aktif");
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
   // Chat history (Riwayat Pesan per order selesai)
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
@@ -568,8 +574,24 @@ export default function DashboardMitra() {
           )}
         </>}
 
+        {/* ══ PESANAN TAB: sub-tab header ══ */}
+        {activeTab === "pesanan" && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            {([
+              { id: "aktif" as const, label: "Order Aktif", count: (activeOrder ? 1 : 0) + (incoming ? 1 : 0) },
+              { id: "riwayat" as const, label: "Riwayat Order", count: data?.recentOrders?.length ?? 0 },
+            ]).map(tab => (
+              <button key={tab.id} onClick={() => setPesananSubTab(tab.id)}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 24, border: pesananSubTab === tab.id ? "none" : "1.5px solid #d0dce8", background: pesananSubTab === tab.id ? "#1a3a5c" : "#fff", color: pesananSubTab === tab.id ? "#fff" : "#7a8a9a", fontWeight: pesananSubTab === tab.id ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                {tab.label}
+                <span style={{ minWidth: 20, height: 20, borderRadius: 10, background: pesananSubTab === tab.id ? "rgba(255,255,255,0.25)" : "#e8f0f8", color: pesananSubTab === tab.id ? "#fff" : "#4a5a6a", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ══ PESANAN TAB: active order card ══ */}
-        {activeTab === "pesanan" && activeOrder && (() => {
+        {activeTab === "pesanan" && pesananSubTab === "aktif" && activeOrder && (() => {
           const svcCfg = getSvcCfg(activeOrder.serviceType);
           const badgeLabel: Record<string, string> = {
             diterima: "Diterima", chat: "Chat & Negosiasi",
@@ -898,7 +920,7 @@ export default function DashboardMitra() {
         })()}
 
         {/* ══ PESANAN TAB: incoming order card ══ */}
-        {activeTab === "pesanan" && incoming && (
+        {activeTab === "pesanan" && pesananSubTab === "aktif" && incoming && (
           <div style={{
             marginBottom: 16,
             background: "#fff",
@@ -1045,37 +1067,125 @@ export default function DashboardMitra() {
 
         </>}
 
-        {/* ══ PESANAN TAB: empty state + riwayat order ══ */}
-        {activeTab === "pesanan" && <>
-          {!activeOrder && !incoming && (
-            <div style={{ textAlign: "center", padding: "48px 24px" }}>
-              <div style={{ fontSize: 52, marginBottom: 12 }}>📋</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Belum ada order aktif</div>
-              <div style={{ fontSize: 13, color: "#9aa5b4" }}>Aktifkan status Online untuk mulai menerima pesanan</div>
+        {/* ══ PESANAN TAB: Order Aktif — empty state ══ */}
+        {activeTab === "pesanan" && pesananSubTab === "aktif" && !activeOrder && !incoming && (
+          <div style={{ textAlign: "center", padding: "56px 24px" }}>
+            <div style={{ fontSize: 52, marginBottom: 12 }}>📋</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Belum ada order aktif</div>
+            <div style={{ fontSize: 13, color: "#9aa5b4" }}>Aktifkan status Online untuk mulai menerima pesanan</div>
+          </div>
+        )}
+
+        {/* ══ PESANAN TAB: Riwayat Order (accordion) ══ */}
+        {activeTab === "pesanan" && pesananSubTab === "riwayat" && (
+          (data?.recentOrders?.length ?? 0) === 0 ? (
+            <div style={{ textAlign: "center", padding: "56px 24px" }}>
+              <div style={{ fontSize: 52, marginBottom: 12 }}>🗓️</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Belum ada riwayat</div>
+              <div style={{ fontSize: 13, color: "#9aa5b4" }}>Order yang sudah selesai akan tampil di sini</div>
             </div>
-          )}
-          {(data?.recentOrders?.length ?? 0) > 0 && (
-            <div style={{ background: "#fff", borderRadius: 18, padding: "18px 16px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>🗓️ Riwayat Order</div>
-              {data!.recentOrders.map((o, i) => (
-                <div key={o.id}>
-                  {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "10px 0" }} />}
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvcCfg(data?.serviceType).emoji}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{o.penggunaName}</div>
-                      <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear} · {fmtDate(o.createdAt)}</div>
-                    </div>
-                    <div style={{ textAlign: "right" as const }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#ea580c" }}>{fmtRp(o.totalAmount)}</div>
-                      <div style={{ fontSize: 11, color: "#9aa5b4" }}>Fee: {fmtRp(o.platformFee)}</div>
-                    </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {data!.recentOrders.map(o => {
+                const cfg = getSvcCfg(o.serviceType);
+                const isOpen = expandedOrderId === o.id;
+                const pd = o.paymentData;
+                const dt = new Date(o.createdAt);
+                const dtStr = dt.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) + " · " + dt.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
+                const keluhan = Array.isArray(o.damageCategories) ? o.damageCategories.join(", ") : "-";
+                return (
+                  <div key={o.id} style={{ background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 2px 10px rgba(0,0,0,0.07)" }}>
+                    {/* Card header */}
+                    <button onClick={() => setExpandedOrderId(isOpen ? null : o.id)} style={{ width: "100%", padding: "14px 16px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left" as const }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 46, height: 46, borderRadius: 16, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{cfg.emoji}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>{o.penggunaName}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#1a7a6a", background: "rgba(26,122,106,0.1)", borderRadius: 20, padding: "2px 8px" }}>✓ Selesai</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear}</div>
+                          <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>🕐 {dtStr}</div>
+                        </div>
+                        <div style={{ textAlign: "right" as const, flexShrink: 0 }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#1a7a6a" }}>+{fmtRp(o.totalAmount)}</div>
+                          <div style={{ fontSize: 18, color: "#b0bec5", marginTop: 4 }}>{isOpen ? "▲" : "▼"}</div>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isOpen && (
+                      <div style={{ borderTop: "1px solid #f0f4f8" }}>
+                        {/* DETAIL ORDER */}
+                        <div style={{ padding: "14px 16px" }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>DETAIL ORDER</div>
+                          {[
+                            { label: "No. Order", val: o.orderNo },
+                            { label: "Layanan", val: cfg.header },
+                            { label: "Pelanggan", val: o.penggunaName },
+                          ].map(row => (
+                            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                              <span style={{ fontSize: 13, color: "#7a8a9a" }}>{row.label}</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a", textAlign: "right" as const, maxWidth: "60%" }}>{row.val}</span>
+                            </div>
+                          ))}
+                          {keluhan !== "-" && (
+                            <div style={{ marginBottom: 8 }}>
+                              <span style={{ fontSize: 13, color: "#7a8a9a" }}>Keluhan: </span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>{keluhan}</span>
+                            </div>
+                          )}
+                          {o.pickupAddress && (
+                            <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 8 }}>
+                              <span style={{ fontSize: 13 }}>📍</span>
+                              <span style={{ fontSize: 13, color: "#1a3a5c" }}>{o.pickupAddress}</span>
+                            </div>
+                          )}
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 0 }}>
+                            <span style={{ fontSize: 13, color: "#7a8a9a" }}>Metode Bayar</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>{pd?.paymentMethod ? pd.paymentMethod.toUpperCase() : "-"}</span>
+                          </div>
+                        </div>
+
+                        {/* RINCIAN PENDAPATAN */}
+                        {pd && (
+                          <div style={{ background: "#f8fafc", borderTop: "1px solid #f0f4f8", padding: "14px 16px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>RINCIAN PENDAPATAN</div>
+                            {[
+                              { label: cfg.jasaLabel, val: pd.biayaJasa },
+                              ...(cfg.showSparepart && pd.biayaSparepart > 0 ? [{ label: cfg.sparepartLabel, val: pd.biayaSparepart }] : []),
+                              { label: "Biaya Panggilan", val: pd.biayaPanggilan },
+                              { label: "Biaya Layanan & Admin", val: pd.biayaLayanan },
+                            ].map(row => (
+                              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                                <span style={{ fontSize: 13, color: "#4a5a6a" }}>{row.label}</span>
+                                <span style={{ fontSize: 13, color: "#4a5a6a" }}>{fmtRp(row.val)}</span>
+                              </div>
+                            ))}
+                            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 0", borderTop: "1px solid #e0e8f0", marginTop: 4 }}>
+                              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total Diterima</span>
+                              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a7a6a" }}>{fmtRp(pd.total)}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* PLATFORM FEE */}
+                        <div style={{ background: "#fff8f0", borderTop: "1px solid #f0f4f8", padding: "14px 16px" }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>PLATFORM FEE KE RIDE</div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 13, color: "#7a8a9a" }}>Platform Fee (20%)</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(o.platformFee)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          )}
-        </>}
+          )
+        )}
 
         {/* ══ CHAT TAB ══ */}
         {activeTab === "chat" && <>
