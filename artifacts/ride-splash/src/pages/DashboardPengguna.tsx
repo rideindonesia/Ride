@@ -324,7 +324,7 @@ export default function DashboardPengguna() {
           {/* Active order card */}
           {activeOrder && (
             <div
-              onClick={() => navigate("/order/bengkel")}
+              onClick={() => navigate(`/order/bengkel?resume=${activeOrder.id}`)}
               style={{ borderRadius: 16, background: "linear-gradient(135deg, #0d2137 0%, #1a3a5c 100%)", padding: 16, cursor: "pointer", border: "1.5px solid rgba(26,122,106,0.4)", boxShadow: "0 4px 16px rgba(26,58,92,0.25)" }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
