@@ -95,7 +95,7 @@ export default function OrderBengkel() {
 
   // Chat state
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -306,8 +306,11 @@ export default function OrderBengkel() {
         const res = await fetch(`/api/chat/${orderId}`, { credentials: "include" });
         const data = await res.json();
         setChatMessages(data.messages ?? []);
-        // Auto-scroll to bottom
-        setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        // Scroll within messages container only (not the whole page)
+        setTimeout(() => {
+          const el = chatBottomRef.current?.parentElement;
+          if (el) el.scrollTop = el.scrollHeight;
+        }, 50);
       } catch { /* ignore */ }
     };
     fetchMsgs();
