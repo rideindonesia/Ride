@@ -1,15 +1,32 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { useGetMe } from "@workspace/api-client-react";
 
 export default function SplashScreen() {
   const [, navigate] = useLocation();
 
+  const { data, isError, isSuccess } = useGetMe({
+    query: {
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  });
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigate("/login");
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [navigate]);
+    if (isSuccess && data) {
+      const timer = setTimeout(() => {
+        navigate("/login");
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+
+    if (isError) {
+      const timer = setTimeout(() => {
+        navigate("/login");
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [isSuccess, isError, data, navigate]);
 
   return (
     <div
@@ -25,7 +42,6 @@ export default function SplashScreen() {
         overflow: "hidden",
       }}
     >
-      {/* Decorative circle top right */}
       <div
         style={{
           position: "absolute",
@@ -38,7 +54,6 @@ export default function SplashScreen() {
           pointerEvents: "none",
         }}
       />
-      {/* Decorative circle bottom left */}
       <div
         style={{
           position: "absolute",
@@ -52,7 +67,6 @@ export default function SplashScreen() {
         }}
       />
 
-      {/* Center content */}
       <div
         style={{
           display: "flex",
@@ -61,10 +75,8 @@ export default function SplashScreen() {
           gap: 0,
         }}
       >
-        {/* Hexagon logo */}
         <HexagonLogo />
 
-        {/* RIDE title */}
         <div
           style={{
             marginTop: 40,
@@ -78,7 +90,6 @@ export default function SplashScreen() {
           RIDE
         </div>
 
-        {/* Subtitle */}
         <div
           style={{
             marginTop: 14,
@@ -93,7 +104,6 @@ export default function SplashScreen() {
         </div>
       </div>
 
-      {/* Page indicator dots at bottom */}
       <div
         style={{
           position: "absolute",
