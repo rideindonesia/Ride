@@ -93,6 +93,23 @@ function timeAgo(d: Date) {
   return Math.floor(s / 86400) + " hari lalu";
 }
 
+const SERVICE_CONFIG: Record<string, {
+  emoji: string; header: string; mulai: string; selesai: string;
+  foto: string; jasaLabel: string; jasaSub: string;
+  showSparepart: boolean; sparepartLabel: string; sparepartSub: string;
+}> = {
+  bengkel:    { emoji: "🔧", header: "Bengkel Panggilan", mulai: "🔧 Mulai Perbaikan",  selesai: "✅ Perbaikan Selesai", foto: "Foto Bukti Perbaikan", jasaLabel: "Biaya Jasa Bengkel",      jasaSub: "Ongkos perbaikan",            showSparepart: true,  sparepartLabel: "Biaya Sparepart",  sparepartSub: "Suku cadang yang diganti" },
+  elektronik: { emoji: "💡", header: "Service Elektronik", mulai: "💡 Mulai Servis",    selesai: "✅ Servis Selesai",    foto: "Foto Bukti Servis",    jasaLabel: "Biaya Jasa Servis",        jasaSub: "Ongkos perbaikan elektronik", showSparepart: true,  sparepartLabel: "Biaya Komponen",   sparepartSub: "Part/komponen yang diganti" },
+  cuci:       { emoji: "🚿", header: "Cuci Kendaraan",     mulai: "🚿 Mulai Cuci",      selesai: "✅ Cuci Selesai",      foto: "Foto Hasil Cuci",       jasaLabel: "Biaya Jasa Cuci",          jasaSub: "Ongkos cuci kendaraan",       showSparepart: true,  sparepartLabel: "Biaya Produk",     sparepartSub: "Sabun/wax/poles (opsional)" },
+  barber:     { emoji: "✂️", header: "Pangkas Rambut",     mulai: "✂️ Mulai Pangkas",   selesai: "✅ Pangkas Selesai",   foto: "Foto Hasil Pangkas",    jasaLabel: "Biaya Jasa Pangkas",       jasaSub: "Ongkos pangkas rambut",       showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
+  inspeksi:   { emoji: "🔍", header: "Inspeksi Kendaraan", mulai: "🔍 Mulai Inspeksi",  selesai: "✅ Inspeksi Selesai",  foto: "Foto Hasil Inspeksi",   jasaLabel: "Biaya Laporan Inspeksi",   jasaSub: "Ongkos inspeksi kendaraan",   showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
+  towing:     { emoji: "🚐", header: "Towing / Derek",     mulai: "🚐 Mulai Derek",     selesai: "✅ Kendaraan Tiba",    foto: "Foto Bukti Derek",      jasaLabel: "Biaya Jasa Derek",         jasaSub: "Tarif derek kendaraan",       showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
+};
+
+function getSvcCfg(serviceType?: string | null) {
+  return SERVICE_CONFIG[serviceType ?? "bengkel"] ?? SERVICE_CONFIG["bengkel"];
+}
+
 export default function DashboardMitra() {
   const [, navigate] = useLocation();
   const [data, setData] = useState<DashData | null>(null);
@@ -180,7 +197,7 @@ export default function DashboardMitra() {
         setIncomingTimer(30);
         pushNotif({
           type: "order",
-          icon: "🔧",
+          icon: getSvcCfg(d.incoming.serviceType).emoji,
           title: "Pesanan Masuk!",
           body: `${d.incoming.penggunaName} — ${d.incoming.vehicleModel} ${d.incoming.vehicleYear}`,
           orderId: d.incoming.id,
@@ -349,12 +366,8 @@ export default function DashboardMitra() {
   };
 
   const serviceLabel = (s: string) => {
-    const map: Record<string, string> = {
-      bengkel: "🔧 Bengkel Panggilan", etowing: "🚛 E-Towing",
-      elektronik: "⚡ Servis Elektronik", pangkas: "✂️ Pangkas Rambut",
-      cuci_kendaraan: "🚿 Cuci Kendaraan", inspeksi: "🔍 Inspeksi Kendaraan",
-    };
-    return map[s] ?? s;
+    const cfg = getSvcCfg(s);
+    return `${cfg.emoji} ${cfg.header}`;
   };
 
   const chartData = chartMode === "minggu" ? (data?.weeklyChart ?? []) : (data?.monthlyChart ?? []);
@@ -511,6 +524,7 @@ export default function DashboardMitra() {
 
         {/* Active Order card — chat dengan pengguna setelah terima */}
         {activeOrder && (() => {
+          const svcCfg = getSvcCfg(activeOrder.serviceType);
           const badgeLabel: Record<string, string> = {
             diterima: "Diterima", chat: "Chat & Negosiasi",
             menuju: "Menuju Lokasi", tiba: "Sudah Tiba", pengerjaan: "Pengerjaan", selesai: "Pembayaran",
@@ -521,7 +535,7 @@ export default function DashboardMitra() {
             <div style={{ marginBottom: 16, background: "#f0faf7", borderRadius: 20, boxShadow: "0 4px 20px rgba(26,122,106,0.14)", border: "2px solid #1a7a6a", overflow: "hidden" }}>
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px 10px" }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>🔧 Order Aktif</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>{svcCfg.emoji} Order Aktif — {svcCfg.header}</span>
                 <span style={{ background: "#1a7a6a", color: "#fff", borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 700 }}>
                   {badgeLabel[mitraPhase] ?? "Aktif"}
                 </span>
@@ -672,7 +686,7 @@ export default function DashboardMitra() {
                     onClick={async () => { await updatePhase("pengerjaan"); setMitraPhase("pengerjaan"); }}
                     style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                   >
-                    🔧 Mulai Perbaikan
+                    {svcCfg.mulai}
                   </button>
                 )}
 
@@ -682,14 +696,14 @@ export default function DashboardMitra() {
                     onClick={async () => { await updatePhase("selesai"); setMitraPhase("selesai"); }}
                     style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                   >
-                    ✅ Perbaikan Selesai
+                    {svcCfg.selesai}
                   </button>
                 )}
 
                 {/* ── FASE 6: Pembayaran Final (inline form) ── */}
                 {mitraPhase === "selesai" && (() => {
                   const jasa = Number(biayaJasa) || 0;
-                  const spare = Number(biayaSparepart) || 0;
+                  const spare = svcCfg.showSparepart ? (Number(biayaSparepart) || 0) : 0;
                   const biayaPanggilan = activeOrder.totalAmount ?? 0;
                   const biayaLayanan = Math.round(jasa * 0.05 / 1000) * 1000;
                   const total = jasa + spare + biayaPanggilan + biayaLayanan;
@@ -707,7 +721,8 @@ export default function DashboardMitra() {
                       });
                       if (!r.ok) throw new Error("Gagal simpan");
                       // Kirim juga notifikasi via chat
-                      const msg = `📋 Rincian Biaya:\n• Biaya Jasa: ${fmtIdr(jasa)}\n• Biaya Sparepart: ${fmtIdr(spare)}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
+                      const spareLine = svcCfg.showSparepart && spare > 0 ? `\n• ${svcCfg.sparepartLabel}: ${fmtIdr(spare)}` : "";
+                      const msg = `📋 Rincian Biaya:\n• ${svcCfg.jasaLabel}: ${fmtIdr(jasa)}${spareLine}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
                       await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
                         method: "POST", headers: { "Content-Type": "application/json" },
                         credentials: "include", body: JSON.stringify({ message: msg }),
@@ -741,7 +756,7 @@ export default function DashboardMitra() {
                       {/* Foto Bukti (opsional) */}
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 8 }}>
-                          📸 Foto Bukti Perbaikan <span style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 500 }}>(opsional)</span>
+                          📸 {svcCfg.foto} <span style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 500 }}>(opsional)</span>
                         </div>
                         <label style={{ display: "block", cursor: "pointer" }}>
                           <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
@@ -755,17 +770,17 @@ export default function DashboardMitra() {
                           <div style={{ border: "2px dashed #d0dde8", borderRadius: 14, background: "#f5f9fc", minHeight: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, overflow: "hidden" }}>
                             {proofPreview
                               ? <img src={proofPreview} alt="bukti" style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 12 }} />
-                              : <><span style={{ fontSize: 28, opacity: 0.4 }}>📷</span><span style={{ fontSize: 12, color: "#b0bec5" }}>Foto Bukti Perbaikan</span></>}
+                              : <><span style={{ fontSize: 28, opacity: 0.4 }}>📷</span><span style={{ fontSize: 12, color: "#b0bec5" }}>{svcCfg.foto}</span></>}
                           </div>
                         </label>
                       </div>
 
                       {/* Biaya inputs */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: svcCfg.showSparepart ? "1fr 1fr" : "1fr", gap: 12 }}>
                         {[
-                          { label: "Biaya Jasa Bengkel", sub: "Ongkos perbaikan kendaraan", val: biayaJasa, set: setBiayaJasa },
-                          { label: "Biaya Sparepart", sub: "Suku cadang yang diganti", val: biayaSparepart, set: setBiayaSparepart },
-                        ].map(({ label, sub, val, set }) => (
+                          { label: svcCfg.jasaLabel, sub: svcCfg.jasaSub, val: biayaJasa, set: setBiayaJasa, show: true },
+                          { label: svcCfg.sparepartLabel, sub: svcCfg.sparepartSub, val: biayaSparepart, set: setBiayaSparepart, show: svcCfg.showSparepart },
+                        ].filter(f => f.show).map(({ label, sub, val, set }) => (
                           <div key={label}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a", marginBottom: 2 }}>{label}</div>
                             <div style={{ fontSize: 10, color: "#9aa5b4", marginBottom: 6 }}>{sub}</div>
@@ -781,7 +796,8 @@ export default function DashboardMitra() {
                       {/* Breakdown */}
                       <div style={{ borderRadius: 12, border: "1px solid #eef2f7", overflow: "hidden" }}>
                         {[
-                          { label: "Biaya Jasa Bengkel", val: jasa },
+                          { label: svcCfg.jasaLabel, val: jasa },
+                          ...(svcCfg.showSparepart && spare > 0 ? [{ label: svcCfg.sparepartLabel, val: spare }] : []),
                           { label: "Biaya Panggilan", val: biayaPanggilan },
                           { label: "Biaya Layanan & Admin", val: biayaLayanan },
                         ].map(row => (
@@ -986,7 +1002,7 @@ export default function DashboardMitra() {
               <div key={o.id}>
                 {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "10px 0" }} />}
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🔧</div>
+                  <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvcCfg(data?.serviceType).emoji}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{o.penggunaName}</div>
                     <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear} · {fmtDate(o.createdAt)}</div>
