@@ -44,7 +44,7 @@ function StepProgress({ step }: { step: number }) {
                 border: isActive ? "none" : "2px solid rgba(255,255,255,0.3)",
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: isActive ? 18 : 14,
               }}>
-                {isDone ? <span style={{ color: "#1a7a6a", fontSize: 16, fontWeight: 800 }}>✓</span> : <span>{s.emoji}</span>}
+                {isDone ? <span style={{ color: "#f5a623", fontSize: 16, fontWeight: 900 }}>✓</span> : <span>{s.emoji}</span>}
               </div>
               <div style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: isActive ? 700 : 400, whiteSpace: "nowrap" }}>{s.label}</div>
             </div>
