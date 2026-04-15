@@ -60,13 +60,29 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 - `/login` — Pilih peran untuk masuk
 - `/register` — Pilih peran untuk daftar
 - `/login/form?role=pengguna|mitra` — Form login
-- `/register/form?role=pengguna|mitra` — Form daftar
+- `/register/form?role=pengguna` — Form daftar Pengguna (3 langkah: form → OTP → sukses)
+- `/register/form?role=mitra` — Form daftar Mitra (5 langkah: data diri → pilih layanan → dokumen → area operasi → sukses)
 
 ### API Endpoints yang Sudah Ada
 - `GET  /api/healthz` — health check
-- `POST /api/auth/register` — daftar akun baru
+- `POST /api/auth/register` — daftar akun baru (generic)
 - `POST /api/auth/login` — masuk
 - `GET  /api/auth/me` — cek sesi aktif
 - `POST /api/auth/logout` — keluar
+- `POST /api/pengguna/register` — daftar pengguna step 1 (kirim OTP)
+- `POST /api/pengguna/verify-otp` — verifikasi OTP + buat akun pengguna
+- `POST /api/pengguna/resend-otp` — kirim ulang OTP
+- `POST /api/mitra/apply` — daftar mitra (multipart/form-data dengan file upload KTP, selfie, SIM, sertifikat)
+
+### Tabel Database
+- `users` — akun pengguna (id, name, email, phone, password_hash, role, created_at)
+- `otp_codes` — kode OTP pendaftaran pengguna (phone, code, pending_data jsonb, expires_at, used)
+- `mitra_applications` — pengajuan mitra (name, phone, email, password_hash, service_type, ktp_path, selfie_ktp_path, sim_path, cert_path, operating_city, status: pending/approved/rejected)
+
+### Catatan Teknis
+- File upload mitra disimpan di `artifacts/api-server/uploads/mitra/` menggunakan multer
+- Daftar kota/kabupaten Indonesia (514 kota) ada di `artifacts/ride-splash/src/data/indonesian-cities.ts`
+- OTP berlaku 5 menit, kode OTP dikembalikan di response (mode dev — ganti dengan SMS production)
+- Password di-hash SHA256 + SESSION_SECRET
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

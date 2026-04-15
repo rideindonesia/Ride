@@ -4,6 +4,7 @@ import SplashScreen from "@/pages/SplashScreen";
 import RoleSelect from "@/pages/RoleSelect";
 import AuthForm from "@/pages/AuthForm";
 import RegisterPengguna from "@/pages/RegisterPengguna";
+import RegisterMitra from "@/pages/RegisterMitra";
 
 const queryClient = new QueryClient();
 
@@ -11,6 +12,7 @@ function RegisterFormRouter() {
   const search = typeof window !== "undefined" ? window.location.search : "";
   const role = new URLSearchParams(search).get("role");
   if (role === "pengguna") return <RegisterPengguna />;
+  if (role === "mitra") return <RegisterMitra />;
   return <AuthForm mode="register" />;
 }
 
