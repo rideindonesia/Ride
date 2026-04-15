@@ -80,6 +80,13 @@ export default function OrderBengkel() {
   const [detailAlamat, setDetailAlamat] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
 
+  // Step 3
+  type FoundMitra = { id: number; userId: number; name: string; lat: number; lng: number; serviceType: string; dist: number };
+  const [searchStatus, setSearchStatus] = useState<"searching" | "found" | "unavailable">("searching");
+  const [foundMitra, setFoundMitra] = useState<FoundMitra | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const gpsMarkerRef = useRef<L.CircleMarker | null>(null);
@@ -181,6 +188,58 @@ export default function OrderBengkel() {
       }
     };
   }, [step]);
+
+  // Haversine distance (km)
+  function calcDist(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Step 3: search mitra on enter, retry with interval
+  useEffect(() => {
+    if (step !== 3) return;
+    setSearchStatus("searching");
+    setFoundMitra(null);
+    setSearchAttempt(0);
+
+    let attempt = 0;
+    const MAX_ATTEMPTS = 4;
+    const INTERVAL = 8000;
+
+    const doSearch = async () => {
+      attempt++;
+      setSearchAttempt(attempt);
+      const lat = pinLat ?? userLat ?? -1.2654;
+      const lng = pinLng ?? userLng ?? 116.8312;
+      try {
+        const res = await fetch(`/api/pengguna/mitra-online?lat=${lat}&lng=${lng}`);
+        const data = await res.json();
+        const list = (data.mitra ?? []) as Array<{ id: number; userId: number; name: string; lat: number; lng: number; serviceType: string }>;
+        if (list.length > 0) {
+          // Pick closest mitra
+          const withDist = list.map(m => ({ ...m, dist: calcDist(lat, lng, m.lat, m.lng) }));
+          withDist.sort((a, b) => a.dist - b.dist);
+          setFoundMitra(withDist[0]);
+          setSearchStatus("found");
+          return;
+        }
+      } catch { /* continue */ }
+      if (attempt >= MAX_ATTEMPTS) {
+        setSearchStatus("unavailable");
+      } else {
+        searchTimerRef.current = setTimeout(doSearch, INTERVAL);
+      }
+    };
+
+    doSearch();
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [step, pinLat, pinLng, userLat, userLng]);
 
   const snapToGps = useCallback(() => {
     if (!leafletMapRef.current || userLat === null || userLng === null) return;
@@ -336,9 +395,138 @@ export default function OrderBengkel() {
               ← Kembali
             </button>
             <button
+              onClick={() => {
+                if (leafletMapRef.current) {
+                  leafletMapRef.current.remove();
+                  leafletMapRef.current = null;
+                  gpsMarkerRef.current = null;
+                }
+                setStep(3);
+              }}
               style={{ flex: 2, padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
             >
               Lanjut →
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ── STEP 3 ── */}
+      {step === 3 && (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 24 }}>🔧 Cari Mitra</div>
+
+              {/* Searching state */}
+              {searchStatus === "searching" && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "32px 0 24px" }}>
+                  <span style={{ fontSize: 56 }}>🔍</span>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 56, height: 56 }}>
+                    <div className="search-pulse" />
+                    <div className="search-spinner" />
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Mitra Terdekat...</div>
+                    <div style={{ fontSize: 13, color: "#7a8a9a" }}>
+                      {searchAttempt <= 1 && "Menghubungi mitra di sekitar lokasi Anda"}
+                      {searchAttempt === 2 && "Memperluas radius pencarian"}
+                      {searchAttempt >= 3 && "Mencoba menghubungi semua mitra tersedia"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate("/dashboard/pengguna")}
+                    style={{ marginTop: 8, padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    ✕ Batalkan
+                  </button>
+                </div>
+              )}
+
+              {/* Found state */}
+              {searchStatus === "found" && foundMitra && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "rgba(26,122,106,0.08)", borderRadius: 14, border: "1.5px solid rgba(26,122,106,0.25)" }}>
+                    <span style={{ fontSize: 22 }}>✅</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a7a6a" }}>Mitra Ditemukan!</div>
+                      <div style={{ fontSize: 12, color: "#4a5568" }}>Mitra siap menuju lokasi Anda</div>
+                    </div>
+                  </div>
+
+                  {/* Mitra card */}
+                  <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "20px 16px", display: "flex", gap: 14, alignItems: "center" }}>
+                    <div style={{ width: 58, height: 58, borderRadius: 29, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>
+                      🧑‍🔧
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 4 }}>{foundMitra.name}</div>
+                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                        <span style={{ fontSize: 12, color: "#7a8a9a" }}>⭐ 4.8</span>
+                        <span style={{ fontSize: 12, color: "#7a8a9a" }}>•</span>
+                        <span style={{ fontSize: 12, color: "#1a7a6a", fontWeight: 600 }}>
+                          {foundMitra.dist < 1
+                            ? `${Math.round(foundMitra.dist * 1000)} m`
+                            : `${foundMitra.dist.toFixed(1)} km`} dari lokasi Anda
+                        </span>
+                      </div>
+                      <div style={{ marginTop: 6, display: "inline-block", background: "rgba(26,122,106,0.1)", borderRadius: 8, padding: "3px 10px" }}>
+                        <span style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600 }}>🔧 {foundMitra.serviceType}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => navigate("/dashboard/pengguna")}
+                    style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    ✕ Batalkan Pesanan
+                  </button>
+                </div>
+              )}
+
+              {/* Unavailable state */}
+              {searchStatus === "unavailable" && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "24px 0" }}>
+                  <span style={{ fontSize: 52 }}>😔</span>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Tidak Ada Mitra Tersedia</div>
+                    <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Semua mitra sedang sibuk atau di luar jangkauan. Coba lagi beberapa saat.</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSearchStatus("searching");
+                      setFoundMitra(null);
+                      setSearchAttempt(0);
+                      setStep(3);
+                    }}
+                    style={{ padding: "14px 32px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    🔄 Cari Lagi
+                  </button>
+                  <button
+                    onClick={() => navigate("/dashboard/pengguna")}
+                    style={{ padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    ✕ Batalkan
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom: only Lanjut, enabled when found */}
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
+            <button
+              disabled={searchStatus !== "found"}
+              style={{
+                width: "100%", padding: "17px", borderRadius: 16, border: "none",
+                background: searchStatus === "found" ? "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)" : "#c0d0dc",
+                color: "#fff", fontWeight: 700, fontSize: 16,
+                cursor: searchStatus === "found" ? "pointer" : "not-allowed",
+              }}
+            >
+              {searchStatus === "found" ? "Konfirmasi Mitra →" : "Menunggu Mitra..."}
             </button>
           </div>
         </>

@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.search-spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid #e0e8f0;
+  border-top-color: #1a7a6a;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.search-pulse {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(26,122,106,0.15);
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;
