@@ -5,6 +5,10 @@ import "leaflet/dist/leaflet.css";
 
 const SERVICE_ROUTES: Record<string, string> = {
   ride_auto: "/order/bengkel",
+  ride_service: "/order/elektronik",
+  ride_wash: "/order/cuci",
+  ride_barber: "/order/barber",
+  ride_inspection: "/order/inspeksi",
 };
 
 // Fix leaflet default icon paths

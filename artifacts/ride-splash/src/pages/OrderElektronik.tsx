@@ -1,0 +1,745 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+
+const STEPS = [
+  { label: "Perangkat", emoji: "💡" },
+  { label: "Lokasi", emoji: "📍" },
+  { label: "Teknisi", emoji: "🔧" },
+  { label: "Tracking", emoji: "📡" },
+  { label: "Bayar", emoji: "💳" },
+];
+
+const JENIS_PERANGKAT = ["AC", "TV", "Kulkas", "Mesin Cuci", "Kipas Angin", "Water Heater", "Pompa Air", "Microwave"];
+
+const MASALAH_PER_PERANGKAT: Record<string, string[]> = {
+  "AC":           ["Tidak Dingin", "Bocor Air", "Berisik", "Mati Total", "Bau Tidak Sedap"],
+  "TV":           ["Tidak Menyala", "Layar Rusak", "Suara Buruk", "Remote Rusak", "Gambar Buram"],
+  "Kulkas":       ["Tidak Dingin", "Bocor Air", "Berisik", "Mati Total", "Pintu Rusak"],
+  "Mesin Cuci":   ["Tidak Berputar", "Bocor Air", "Berisik", "Mati Total", "Tidak Menguras"],
+  "Kipas Angin":  ["Tidak Berputar", "Berisik", "Mati Total", "Baling Rusak"],
+  "Water Heater": ["Air Tidak Panas", "Bocor", "Mati Total", "Tekanan Lemah"],
+  "Pompa Air":    ["Tidak Menyedot", "Berisik", "Tekanan Lemah", "Mati Total"],
+  "Microwave":    ["Tidak Panas", "Tidak Menyala", "Bunyi Aneh", "Pintu Rusak"],
+};
+
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=id`,
+      { headers: { "Accept-Language": "id" } }
+    );
+    const data = await res.json();
+    const addr = data.address;
+    const parts = [addr.road || addr.pedestrian, addr.suburb || addr.neighbourhood, addr.city || addr.town].filter(Boolean);
+    return parts.join(", ") || data.display_name?.split(",").slice(0, 3).join(",") || "";
+  } catch { return ""; }
+}
+
+function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function StepProgress({ step }: { step: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center" }}>
+      {STEPS.map((s, i) => {
+        const isActive = i + 1 === step;
+        const isDone = i + 1 < step;
+        return (
+          <div key={s.label} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 18, background: isActive ? "#fff" : isDone ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)", border: isActive ? "none" : "2px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: isActive ? 18 : 14 }}>
+                {isDone ? <span style={{ color: "#f5a623", fontSize: 16, fontWeight: 900 }}>✓</span> : <span>{s.emoji}</span>}
+              </div>
+              <div style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: isActive ? 700 : 400, whiteSpace: "nowrap" }}>{s.label}</div>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div style={{ flex: 1, height: 2, background: isDone ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.2)", margin: "0 4px", marginBottom: 16 }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function OrderElektronik() {
+  const [, navigate] = useLocation();
+  const [step, setStep] = useState(1);
+
+  // Step 1 — Elektronik
+  const [jenisPerangkat, setJenisPerangkat] = useState("");
+  const [masalah, setMasalah] = useState<string[]>([]);
+  const [merekPerangkat, setMerekPerangkat] = useState("");
+  const [deskripsi, setDeskripsi] = useState("");
+
+  const masalahOptions = jenisPerangkat ? (MASALAH_PER_PERANGKAT[jenisPerangkat] ?? []) : [];
+  const canNext1 = jenisPerangkat !== "" && merekPerangkat.trim() !== "" && masalah.length > 0;
+
+  const handleJenisChange = (j: string) => { setJenisPerangkat(j); setMasalah([]); };
+  const toggleMasalah = (m: string) => setMasalah(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
+
+  // Step 2
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLng, setUserLng] = useState<number | null>(null);
+  const [pinLat, setPinLat] = useState<number | null>(null);
+  const [pinLng, setPinLng] = useState<number | null>(null);
+  const [autoAddress, setAutoAddress] = useState("");
+  const [detailAlamat, setDetailAlamat] = useState("");
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
+  // Step 3
+  type AcceptedMitra = { id: number; name: string; lat: number; lng: number; serviceType: string; rating: number | null; totalOrders: number; dist: number; callFee: number; etaMin: number; };
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const [orderNo, setOrderNo] = useState("");
+  const [orderStatus, setOrderStatus] = useState<"creating" | "pending" | "accepted" | "done" | "cancelled">("creating");
+  const [acceptedMitra, setAcceptedMitra] = useState<AcceptedMitra | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
+  const [chatOpen, setChatOpen] = useState(false);
+  const [mitraConfirmed, setMitraConfirmed] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const gpsMarkerRef = useRef<L.CircleMarker | null>(null);
+
+  // Step 4
+  const [mitraTrackLat, setMitraTrackLat] = useState<number | null>(null);
+  const [mitraTrackLng, setMitraTrackLng] = useState<number | null>(null);
+  const [trackDist, setTrackDist] = useState<number | null>(null);
+  const [trackEta, setTrackEta] = useState<number | null>(null);
+  const [trackingPhase, setTrackingPhase] = useState<string>("menuju");
+  type PaymentData = { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string };
+  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [voucherCode, setVoucherCode] = useState("");
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
+  const trackMapRef = useRef<HTMLDivElement>(null);
+  const trackLeafletRef = useRef<L.Map | null>(null);
+  const trackMitraMarkerRef = useRef<L.Marker | null>(null);
+  const trackUserMarkerRef = useRef<L.Marker | null>(null);
+  const trackingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // GPS watch
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      pos => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+
+  // Resume
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const resumeId = params.get("resume");
+    if (!resumeId) return;
+    fetch(`/api/pengguna/orders/${resumeId}`, { credentials: "include" })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status !== "accepted" || !data.mitra) return;
+        const pLat: number = data.pickupLat ?? 0;
+        const pLng: number = data.pickupLng ?? 0;
+        const dist = haversineDist(data.mitra.lat, data.mitra.lng, pLat, pLng);
+        setOrderId(data.id); setOrderNo(data.orderNo); setOrderStatus("accepted");
+        setPinLat(pLat); setPinLng(pLng); setAutoAddress(data.pickupAddress || "");
+        setMerekPerangkat(data.vehicleModel || "");
+        setAcceptedMitra({ id: data.mitra.id, name: data.mitra.name, lat: data.mitra.lat, lng: data.mitra.lng, serviceType: data.mitra.serviceType || "", rating: data.mitra.rating ?? null, totalOrders: data.mitra.totalOrders ?? 0, dist, callFee: data.totalAmount ?? 0, etaMin: Math.max(1, Math.round(dist / 40 * 60)) });
+        setMitraConfirmed(true);
+        if (data.trackingPhase === "selesai") { if (data.paymentData) setPaymentData(data.paymentData); setStep(5); } else { setStep(4); }
+      }).catch(() => {});
+  }, []);
+
+  // Map step 2
+  useEffect(() => {
+    if (step !== 2 || !mapRef.current || leafletMapRef.current) return;
+    const lat = userLat ?? -1.2654, lng = userLng ?? 116.8312;
+    const map = L.map(mapRef.current, { center: [lat, lng], zoom: 16, zoomControl: false, attributionControl: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    if (userLat !== null && userLng !== null) {
+      gpsMarkerRef.current = L.circleMarker([userLat, userLng], { radius: 8, color: "#3b82f6", fillColor: "#60a5fa", fillOpacity: 1, weight: 3 }).addTo(map);
+    }
+    setPinLat(lat); setPinLng(lng);
+    setIsGeocoding(true);
+    reverseGeocode(lat, lng).then(addr => { setAutoAddress(addr); setIsGeocoding(false); });
+    map.on("moveend", () => {
+      const c = map.getCenter(); setPinLat(c.lat); setPinLng(c.lng); setIsGeocoding(true);
+      reverseGeocode(c.lat, c.lng).then(addr => { setAutoAddress(addr); setIsGeocoding(false); });
+    });
+    leafletMapRef.current = map;
+  }, [step, userLat, userLng]);
+
+  useEffect(() => {
+    if (!leafletMapRef.current || userLat === null || userLng === null) return;
+    if (gpsMarkerRef.current) gpsMarkerRef.current.setLatLng([userLat, userLng]);
+    else gpsMarkerRef.current = L.circleMarker([userLat, userLng], { radius: 8, color: "#3b82f6", fillColor: "#60a5fa", fillOpacity: 1, weight: 3 }).addTo(leafletMapRef.current!);
+  }, [userLat, userLng]);
+
+  useEffect(() => {
+    return () => {
+      if (step === 2 && leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; gpsMarkerRef.current = null; }
+    };
+  }, [step]);
+
+  function calcDist(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // Create order
+  useEffect(() => {
+    if (step !== 3 || orderId) return;
+    setOrderStatus("creating"); setAcceptedMitra(null); setCreateError(null);
+    fetch("/api/pengguna/orders", {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({
+        vehicleType: jenisPerangkat, vehicleModel: merekPerangkat, vehicleYear: "",
+        damageCategories: masalah, description: deskripsi,
+        pickupAddress: autoAddress || "Lokasi yang dipilih", detailAlamat,
+        pickupLat: pinLat ?? userLat ?? 0, pickupLng: pinLng ?? userLng ?? 0,
+        serviceType: "elektronik",
+      }),
+    }).then(r => r.json()).then(d => {
+      if (!d.orderId) { setCreateError("Gagal membuat pesanan. Coba lagi."); return; }
+      setOrderId(d.orderId); setOrderNo(d.orderNo); setOrderStatus("pending");
+    }).catch(() => setCreateError("Koneksi gagal. Coba lagi."));
+  }, [step, orderId]);
+
+  // Poll order status
+  useEffect(() => {
+    if (step !== 3 || !orderId || orderStatus !== "pending") return;
+    const lat = pinLat ?? userLat ?? 0, lng = pinLng ?? userLng ?? 0;
+    const doPoll = async () => {
+      try {
+        const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
+        if (!res.ok) return;
+        const od = await res.json();
+        if (od.status === "accepted" && od.mitra) {
+          if (orderPollRef.current) clearInterval(orderPollRef.current);
+          const mitraLat = od.mitra.lat ?? 0, mitraLng = od.mitra.lng ?? 0;
+          const dist = calcDist(lat, lng, mitraLat, mitraLng);
+          setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: mitraLat, lng: mitraLng, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: Math.round((dist*2000+10000)/500)*500, etaMin: Math.max(5, Math.round(dist*2+5)) });
+          setOrderStatus("accepted");
+        } else if (od.status === "cancelled") {
+          if (orderPollRef.current) clearInterval(orderPollRef.current);
+          setOrderStatus("cancelled");
+        }
+      } catch { }
+    };
+    doPoll();
+    orderPollRef.current = setInterval(doPoll, 3000);
+    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); };
+  }, [step, orderId, orderStatus, pinLat, pinLng, userLat, userLng]);
+
+  // Chat polling
+  const sendChatMessage = useCallback(async () => {
+    if (!chatInput.trim() || !orderId || chatSending) return;
+    setChatSending(true);
+    try {
+      await fetch(`/api/chat/${orderId}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ message: chatInput.trim() }) });
+      setChatInput("");
+    } catch { } finally { setChatSending(false); }
+  }, [chatInput, orderId, chatSending]);
+
+  useEffect(() => {
+    if ((orderStatus !== "accepted" && step !== 4) || !orderId) return;
+    const fetchMsgs = async () => {
+      try {
+        const res = await fetch(`/api/chat/${orderId}`, { credentials: "include" });
+        if (!res.ok) return;
+        const d = await res.json();
+        setChatMessages(d.messages ?? []);
+        setTimeout(() => { const el = chatBottomRef.current?.parentElement; if (el) el.scrollTop = el.scrollHeight; }, 50);
+      } catch { }
+    };
+    fetchMsgs();
+    chatPollRef.current = setInterval(fetchMsgs, 3000);
+    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
+  }, [orderStatus, orderId]);
+
+  // Step 4 poll
+  useEffect(() => {
+    if (step !== 4 || !orderId || !pinLat || !pinLng) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
+        const data = await res.json();
+        const mLat: number | null = data.mitra?.lat ?? null, mLng: number | null = data.mitra?.lng ?? null;
+        if (mLat && mLng) { setMitraTrackLat(mLat); setMitraTrackLng(mLng); const dist = haversineDist(mLat, mLng, pinLat, pinLng); setTrackDist(dist); setTrackEta(Math.max(1, Math.round(dist/40*60))); }
+        if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
+        if (data.paymentData) setPaymentData(data.paymentData);
+        if (data.trackingPhase === "selesai") setStep(5);
+        if (data.status === "done") { setOrderStatus("done"); }
+      } catch { }
+    };
+    poll();
+    trackingPollRef.current = setInterval(poll, 4000);
+    return () => { if (trackingPollRef.current) clearInterval(trackingPollRef.current); };
+  }, [step, orderId, pinLat, pinLng]);
+
+  // Step 5 poll
+  const step5PollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (step !== 5 || !orderId) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/pengguna/orders/${orderId}?t=${Date.now()}`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.paymentData) setPaymentData(data.paymentData);
+        if (data.status === "done") setOrderStatus("done");
+      } catch { }
+    };
+    poll();
+    step5PollRef.current = setInterval(poll, 3000);
+    return () => { if (step5PollRef.current) clearInterval(step5PollRef.current); };
+  }, [step, orderId]);
+
+  // Tracking map
+  useEffect(() => {
+    if (step !== 4 || !trackMapRef.current || !pinLat || !pinLng) return;
+    if (!trackLeafletRef.current) {
+      const map = L.map(trackMapRef.current, { zoomControl: false, attributionControl: false }).setView([mitraTrackLat ?? pinLat, mitraTrackLng ?? pinLng], 15);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+      const userIcon = L.divIcon({ html: '<div style="width:28px;height:28px;background:#e53e3e;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;">📍</div>', iconSize: [28,28], iconAnchor: [14,28], className: "" });
+      trackUserMarkerRef.current = L.marker([pinLat, pinLng], { icon: userIcon }).addTo(map).bindPopup("Lokasi Anda");
+      const mitraIcon = L.divIcon({ html: '<div style="width:34px;height:34px;background:#1a3a5c;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:16px;">🏍️</div>', iconSize: [34,34], iconAnchor: [17,17], className: "" });
+      if (mitraTrackLat && mitraTrackLng) {
+        trackMitraMarkerRef.current = L.marker([mitraTrackLat, mitraTrackLng], { icon: mitraIcon }).addTo(map).bindPopup("Teknisi");
+        map.fitBounds(L.latLngBounds([[pinLat,pinLng],[mitraTrackLat,mitraTrackLng]]), { padding: [40,40] });
+      }
+      trackLeafletRef.current = map;
+    } else if (mitraTrackLat && mitraTrackLng && trackMitraMarkerRef.current) {
+      trackMitraMarkerRef.current.setLatLng([mitraTrackLat, mitraTrackLng]);
+      if (pinLat && pinLng) trackLeafletRef.current!.fitBounds(L.latLngBounds([[pinLat,pinLng],[mitraTrackLat,mitraTrackLng]]), { padding: [40,40] });
+    }
+  }, [step, pinLat, pinLng, mitraTrackLat, mitraTrackLng]);
+
+  useEffect(() => {
+    return () => {
+      if (step === 4 && trackLeafletRef.current) { trackLeafletRef.current.remove(); trackLeafletRef.current = null; trackMitraMarkerRef.current = null; trackUserMarkerRef.current = null; }
+    };
+  }, [step]);
+
+  const snapToGps = useCallback(() => {
+    if (!leafletMapRef.current || userLat === null || userLng === null) return;
+    leafletMapRef.current.setView([userLat, userLng], 16, { animate: true });
+  }, [userLat, userLng]);
+
+  const goToStep2 = () => {
+    if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; gpsMarkerRef.current = null; }
+    setStep(2);
+  };
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", overflow: "hidden" }}>
+
+      {/* Header */}
+      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #2a3a7c 100%)", padding: "52px 14px 0", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          {step !== 3 && (
+            <button onClick={() => { if (step === 1) navigate("/dashboard/pengguna"); else if (step === 2) setStep(1); else navigate("/dashboard/pengguna"); }}
+              style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", flexShrink: 0 }}>&lt;-</button>
+          )}
+          <div>
+            <div style={{ color: "#fff", fontSize: 17, fontWeight: 700 }}>💡 Service Elektronik</div>
+            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 2 }}>Pesan layanan sekarang</div>
+          </div>
+        </div>
+        <StepProgress step={step} />
+      </div>
+
+      {/* STEP 1 */}
+      {step === 1 && (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "22px 16px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 20 }}>💡 Pilih Perangkat</div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 10 }}>Jenis Perangkat</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {JENIS_PERANGKAT.map(j => (
+                    <button key={j} onClick={() => handleJenisChange(j)}
+                      style={{ padding: "8px 16px", borderRadius: 20, border: jenisPerangkat === j ? "2px solid #2a3a7c" : "1.5px solid #d0dce8", background: jenisPerangkat === j ? "rgba(42,58,124,0.1)" : "#f8fafc", color: jenisPerangkat === j ? "#2a3a7c" : "#4a5568", fontWeight: jenisPerangkat === j ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                      {j}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {jenisPerangkat && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 10 }}>Masalah / Kerusakan</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {masalahOptions.map(m => (
+                      <button key={m} onClick={() => toggleMasalah(m)}
+                        style={{ padding: "8px 16px", borderRadius: 20, border: masalah.includes(m) ? "2px solid #ea580c" : "1.5px solid #d0dce8", background: masalah.includes(m) ? "rgba(234,88,12,0.08)" : "#f8fafc", color: masalah.includes(m) ? "#ea580c" : "#4a5568", fontWeight: masalah.includes(m) ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 8 }}>Merek Perangkat</label>
+                <input type="text" value={merekPerangkat} onChange={e => setMerekPerangkat(e.target.value)}
+                  placeholder="Contoh: Samsung, LG, Panasonic"
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", fontSize: 15, color: "#1a2a3a", background: "#f8fafc", outline: "none" }} />
+              </div>
+
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 8 }}>Deskripsi Masalah <span style={{ color: "#9aa5b4", fontWeight: 400 }}>(opsional)</span></label>
+                <textarea value={deskripsi} onChange={e => setDeskripsi(e.target.value)}
+                  placeholder="Jelaskan masalah lebih detail..."
+                  rows={3}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", fontSize: 15, color: "#1a2a3a", background: "#f8fafc", outline: "none", resize: "none", lineHeight: 1.5 }} />
+              </div>
+            </div>
+          </div>
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
+            <button disabled={!canNext1} onClick={goToStep2}
+              style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: canNext1 ? "linear-gradient(135deg, #1a3a5c 0%, #2a3a7c 100%)" : "#c0d0dc", color: "#fff", fontWeight: 700, fontSize: 16, cursor: canNext1 ? "pointer" : "not-allowed" }}>
+              Lanjut →
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* STEP 2 */}
+      {step === 2 && (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 14px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 16 }}>📍 Pilih Lokasi</div>
+              <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", marginBottom: 20, height: 260 }}>
+                <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
+                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -100%)", pointerEvents: "none", zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ background: "#fff", borderRadius: 8, padding: "4px 10px", marginBottom: 4, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#1a2a3a", whiteSpace: "nowrap" }}>{isGeocoding ? "Memuat..." : "Posisi Anda"}</div>
+                    {!isGeocoding && <div style={{ fontSize: 10, color: "#7a8a9a", whiteSpace: "nowrap" }}>Geser untuk sesuaikan</div>}
+                  </div>
+                  <span style={{ fontSize: 32, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }}>📍</span>
+                </div>
+                <button onClick={snapToGps} style={{ position: "absolute", bottom: 12, right: 12, zIndex: 1000, width: 42, height: 42, borderRadius: 12, background: "#fff", border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.18)", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1 }}>
+                  <span style={{ fontSize: 16 }}>🎯</span>
+                  <span style={{ fontSize: 8, fontWeight: 800, color: "#1a3a5c", letterSpacing: 0.5 }}>GPS</span>
+                </button>
+              </div>
+              {autoAddress && (
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 14px", background: "rgba(26,122,106,0.07)", borderRadius: 12, marginBottom: 16, border: "1px solid rgba(26,122,106,0.2)" }}>
+                  <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>📍</span>
+                  <span style={{ fontSize: 13, color: "#1a3a5c", lineHeight: 1.4 }}>{autoAddress}</span>
+                </div>
+              )}
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 8 }}>Detail Alamat</label>
+                <textarea value={detailAlamat} onChange={e => setDetailAlamat(e.target.value)} placeholder="Depan Indomaret, lantai 2, blok A..." rows={3}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", fontSize: 15, color: "#1a2a3a", background: "#f8fafc", outline: "none", resize: "none", lineHeight: 1.5 }} />
+              </div>
+            </div>
+          </div>
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100, display: "flex", gap: 12 }}>
+            <button onClick={() => setStep(1)} style={{ flex: 1, padding: "17px", borderRadius: 16, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>← Kembali</button>
+            <button onClick={() => { if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; gpsMarkerRef.current = null; } setStep(3); }}
+              style={{ flex: 2, padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #2a3a7c 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>Lanjut →</button>
+          </div>
+        </>
+      )}
+
+      {/* STEP 3 */}
+      {step === 3 && (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "22px 16px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 24 }}>🔧 Cari Teknisi</div>
+              {(orderStatus === "creating" || createError) && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "32px 0 24px" }}>
+                  {createError ? (
+                    <><span style={{ fontSize: 48 }}>⚠️</span><div style={{ fontSize: 14, color: "#ea580c", fontWeight: 600, textAlign: "center" }}>{createError}</div><button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali</button></>
+                  ) : (
+                    <><div style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}><div className="search-pulse" /><div className="search-spinner" /></div><div style={{ fontSize: 14, color: "#7a8a9a" }}>Membuat pesanan...</div></>
+                  )}
+                </div>
+              )}
+              {orderStatus === "pending" && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "24px 0 16px" }}>
+                  <div style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}><div className="search-pulse" /><div className="search-spinner" /></div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Teknisi Terdekat...</div>
+                    <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Menghubungi teknisi di sekitar lokasi Anda.</div>
+                  </div>
+                  {orderNo && <div style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</div>}
+                  <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }); if (orderPollRef.current) clearInterval(orderPollRef.current); navigate("/dashboard/pengguna"); }}
+                    style={{ marginTop: 8, padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✕ Batalkan</button>
+                </div>
+              )}
+              {orderStatus === "accepted" && acceptedMitra && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "#e8f8f2", borderRadius: 14, border: "1.5px solid #b2e8d4" }}>
+                    <span style={{ fontSize: 22 }}>✅</span>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#1a7a6a" }}>Teknisi Ditemukan!</div>
+                  </div>
+                  <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "18px 16px", background: "#fff" }}>
+                    <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
+                      <div style={{ width: 56, height: 56, borderRadius: 14, background: "#e8f4f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>🧑‍🔧</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 3 }}>{acceptedMitra.name}</div>
+                        <div style={{ fontSize: 13, color: "#f5a623", fontWeight: 700, marginBottom: 3 }}>⭐ {acceptedMitra.rating ?? "–"}{acceptedMitra.totalOrders > 0 ? ` · ${acceptedMitra.totalOrders} order` : ""}</div>
+                        <div style={{ fontSize: 12, color: "#4a5568" }}>{acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist*1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`} · Est. {acceptedMitra.etaMin} menit</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", marginBottom: 14, borderTop: "1px solid #f0f4f8", paddingTop: 14 }}>
+                      <div style={{ flex: 1, paddingRight: 14 }}><div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>Biaya Panggilan</div><div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>Rp {acceptedMitra.callFee.toLocaleString("id-ID")}</div></div>
+                      <div style={{ width: 1, background: "#e0e8f0", margin: "0 14px 0 0" }} />
+                      <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>Est. Tiba</div><div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>± {acceptedMitra.etaMin} menit</div></div>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "rgba(245,166,35,0.08)", borderRadius: 12, border: "1px solid rgba(245,166,35,0.2)" }}>
+                      <span style={{ fontSize: 15 }}>💡</span>
+                      <div><div style={{ fontSize: 12, fontWeight: 700, color: "#b45309" }}>Diskusikan biaya jasa dengan teknisi</div><div style={{ fontSize: 11, color: "#92400e", marginTop: 1 }}>Chat sebelum teknisi berangkat</div></div>
+                    </div>
+                  </div>
+                  <button onClick={() => setChatOpen(o => !o)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "15px", borderRadius: 14, border: "none", background: chatOpen ? "#1a3a5c" : "linear-gradient(135deg, #1a3a5c 0%, #2a3a7c 100%)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+                    <span style={{ fontSize: 17 }}>💬</span>Chat & Negosiasi {chatOpen ? "∧" : "∨"}
+                  </button>
+                  {chatOpen && (
+                    <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, overflow: "hidden" }}>
+                      <div style={{ padding: "10px 14px", background: "#f8fafc", borderBottom: "1px solid #f0f4f8" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#4a5568" }}>💬 Chat dengan {acceptedMitra.name}</div></div>
+                      <div style={{ minHeight: 160, maxHeight: 220, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 8, background: "#fff" }}>
+                        {chatMessages.length === 0 ? (
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "20px 0" }}><span style={{ fontSize: 32, opacity: 0.3 }}>💬</span><div style={{ fontSize: 12, color: "#b0bec5", textAlign: "center" }}>Mulai diskusi dengan teknisi</div></div>
+                        ) : chatMessages.map(m => {
+                          const isMine = m.senderRole === "pengguna";
+                          return (<div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}><div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "linear-gradient(135deg,#1a3a5c,#2a3a7c)" : "#f0f4f8", color: isMine ? "#fff" : "#1a2a3a", fontSize: 13 }}>{m.message}</div></div>);
+                        })}
+                        <div ref={chatBottomRef} />
+                      </div>
+                      <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: "#f8fafc", borderTop: "1px solid #f0f4f8" }}>
+                        <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChatMessage()} placeholder="Ketik pesan..." style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, outline: "none", background: "#fff" }} />
+                        <button onClick={sendChatMessage} disabled={!chatInput.trim() || chatSending} style={{ width: 40, height: 40, borderRadius: 12, border: "none", background: chatInput.trim() ? "linear-gradient(135deg,#1a3a5c,#2a3a7c)" : "#e0e8f0", color: "#fff", fontSize: 16, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>➤</button>
+                      </div>
+                    </div>
+                  )}
+                  <button onClick={() => setMitraConfirmed(true)} disabled={mitraConfirmed}
+                    style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: mitraConfirmed ? "#a5d6a7" : "linear-gradient(135deg, #2e7d32, #43a047)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "default" : "pointer" }}>
+                    {mitraConfirmed ? "✅ Teknisi Dikonfirmasi" : "✅ Setuju & Panggil Teknisi"}
+                  </button>
+                  {!mitraConfirmed && (
+                    <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {}); if (orderPollRef.current) clearInterval(orderPollRef.current); if (chatPollRef.current) clearInterval(chatPollRef.current); setOrderId(null); setOrderNo(""); setOrderStatus("creating"); setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false); setMitraConfirmed(false); setStep(2); setTimeout(() => setStep(3), 50); }}
+                      style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      🔄 Cari Teknisi Lain
+                    </button>
+                  )}
+                </div>
+              )}
+              {orderStatus === "cancelled" && (
+                <div style={{ textAlign: "center", padding: "32px 0" }}>
+                  <span style={{ fontSize: 52 }}>😔</span>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginTop: 12 }}>Pesanan Dibatalkan</div>
+                  <button onClick={() => navigate("/dashboard/pengguna")} style={{ marginTop: 16, padding: "12px 32px", borderRadius: 14, border: "none", background: "#1a3a5c", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali</button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 14px 20px", background: "linear-gradient(to top, #f0f4f8 90%, transparent)", zIndex: 100 }}>
+            {orderStatus === "accepted" ? (
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {}); if (orderPollRef.current) clearInterval(orderPollRef.current); if (chatPollRef.current) clearInterval(chatPollRef.current); navigate("/dashboard/pengguna"); }}
+                  style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e8a0a0", background: "#fff5f5", color: "#c0392b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕ Batalkan</button>
+                <button onClick={() => { if (mitraConfirmed) { setChatOpen(false); setStep(4); } }} disabled={!mitraConfirmed}
+                  style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: mitraConfirmed ? "linear-gradient(135deg, #1a3a5c 0%, #2a3a7c 100%)" : "#d0d8e0", color: mitraConfirmed ? "#fff" : "#a0aab4", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "pointer" : "not-allowed" }}>Lanjut →</button>
+              </div>
+            ) : (
+              <button disabled style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "#c0d0dc", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "not-allowed" }}>
+                {orderStatus === "creating" ? "Membuat pesanan..." : "Menunggu Teknisi Menerima..."}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* STEP 4 */}
+      {step === 4 && acceptedMitra && (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 0 100px" }}>
+            <div style={{ position: "relative", width: "100%", height: 220 }}>
+              <div ref={trackMapRef} style={{ width: "100%", height: "100%" }} />
+              <div style={{ position: "absolute", top: 12, right: 12, zIndex: 500, display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ background: "rgba(26,58,92,0.92)", backdropFilter: "blur(6px)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 13, fontWeight: 700, textAlign: "center" }}>🕐 {trackEta != null ? `± ${trackEta} menit` : `± ${acceptedMitra.etaMin} menit`}</div>
+                <div style={{ background: "rgba(26,122,106,0.9)", backdropFilter: "blur(6px)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 600, textAlign: "center" }}>📏 {trackDist != null ? (trackDist < 1 ? `${Math.round(trackDist*1000)} m` : `${trackDist.toFixed(1)} km`) : `${acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist*1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`}`}</div>
+              </div>
+              <div style={{ position: "absolute", top: 12, left: 12, zIndex: 500, background: "#1a7a6a", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>🏍️ Teknisi dalam perjalanan...</div>
+            </div>
+            <div style={{ padding: "16px 14px 0" }}>
+              <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center", marginBottom: 16, background: "#fff" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 24, background: "linear-gradient(135deg, #1a3a5c, #2a3a7c)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🧑‍🔧</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a" }}>{acceptedMitra.name}</div>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>✅ Teknisi Terverifikasi RIDE</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{acceptedMitra.rating != null ? `⭐ ${acceptedMitra.rating}` : "⭐ Baru"} · {acceptedMitra.totalOrders} order</div>
+                </div>
+                <button onClick={() => setChatOpen(o => !o)} style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>💬 Chat</button>
+              </div>
+              {chatOpen && (
+                <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, overflow: "hidden", marginBottom: 16 }}>
+                  <div style={{ padding: "10px 14px", background: "#f8fafc", borderBottom: "1px solid #f0f4f8" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#4a5568" }}>💬 Chat dengan {acceptedMitra.name}</div></div>
+                  <div style={{ minHeight: 120, maxHeight: 200, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 8, background: "#fff" }}>
+                    {chatMessages.map(m => { const isMine = m.senderRole === "pengguna"; return (<div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}><div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "linear-gradient(135deg,#1a3a5c,#2a3a7c)" : "#f0f4f8", color: isMine ? "#fff" : "#1a2a3a", fontSize: 13 }}>{m.message}</div></div>); })}
+                    <div ref={chatBottomRef} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: "#f8fafc", borderTop: "1px solid #f0f4f8" }}>
+                    <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChatMessage()} placeholder="Ketik pesan..." style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, outline: "none", background: "#fff" }} />
+                    <button onClick={sendChatMessage} disabled={!chatInput.trim() || chatSending} style={{ width: 40, height: 40, borderRadius: 12, border: "none", background: chatInput.trim() ? "linear-gradient(135deg,#1a3a5c,#2a3a7c)" : "#e0e8f0", color: "#fff", fontSize: 16, cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>➤</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ background: "#fff", border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>📍 Status Perjalanan</div>
+                {(() => {
+                  const phaseOrder = ["menuju","tiba","pengerjaan","selesai"];
+                  const curIdx = phaseOrder.indexOf(trackingPhase);
+                  return [{ label: "Teknisi menuju lokasi Anda", key: "menuju" }, { label: "Teknisi sudah tiba", key: "tiba" }, { label: "Sedang pengerjaan", key: "pengerjaan" }, { label: "Pengerjaan selesai ✅", key: "selesai" }].map((ph, i) => {
+                    const phIdx = phaseOrder.indexOf(ph.key);
+                    const done = phIdx < curIdx, active = phIdx === curIdx;
+                    return { label: ph.label, sub: active ? "Sekarang" : done ? "Selesai" : "", done, active };
+                  });
+                })().map((phase, i) => (
+                  <div key={i} style={{ display: "flex", gap: 14 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 12, flexShrink: 0, background: phase.done ? "#1a7a6a" : phase.active ? "#1a3a5c" : "#e0e8f0", display: "flex", alignItems: "center", justifyContent: "center", border: phase.active ? "2px solid #1a7a6a" : "none" }}>
+                        {phase.done ? <span style={{ color: "#fff", fontSize: 11 }}>✓</span> : phase.active ? <div style={{ width: 7, height: 7, borderRadius: 4, background: "#1a7a6a" }} /> : <div style={{ width: 6, height: 6, borderRadius: 3, background: "#c0d0dc" }} />}
+                      </div>
+                      {i < 3 && <div style={{ width: 2, height: 28, background: "#e0e8f0", margin: "3px 0" }} />}
+                    </div>
+                    <div style={{ paddingBottom: 14 }}>
+                      <div style={{ fontSize: 13, fontWeight: phase.active ? 700 : 500, color: phase.active ? "#1a2a3a" : "#9aa5b4" }}>{phase.label}</div>
+                      {phase.sub && <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600, marginTop: 1 }}>• {phase.sub}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 14px 20px", background: "linear-gradient(to top, #f0f4f8 90%, transparent)", zIndex: 100 }}>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => navigate("/dashboard/pengguna")} style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali</button>
+              <button disabled style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: "#d0d8e0", color: "#a0aab4", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}>Lanjut →</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* STEP 5 */}
+      {step === 5 && (() => {
+        const fmtIdr = (n: number) => n.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+        const VOUCHERS: Record<string, number> = { "RIDE10": 0.10, "RIDE20": 0.20, "GRATIS": 0.05 };
+        const discountAmt = paymentData ? Math.round(paymentData.total * (VOUCHERS[voucherCode.toUpperCase()] ?? 0)) : 0;
+        const finalTotal = paymentData ? Math.max(0, paymentData.total - discountAmt) : 0;
+        const pmLabel: Record<string, string> = { cash: "Bayar Tunai ke Teknisi", transfer: "Transfer Bank", qris: "Bayar via QRIS" };
+        const pmDesc: Record<string, string> = { cash: `Siapkan uang tunai sebesar ${fmtIdr(finalTotal)} dan berikan langsung ke teknisi.`, transfer: `Transfer ke rekening teknisi sebesar ${fmtIdr(finalTotal)}.`, qris: `Scan QRIS teknisi dan bayar sebesar ${fmtIdr(finalTotal)}.` };
+        const pmIcon: Record<string, string> = { cash: "💵", transfer: "🏦", qris: "📱" };
+        const selectedMethod = paymentMethodUser ?? paymentData?.paymentMethod ?? "cash";
+        return (
+          <>
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 120px" }}>
+              <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 16px" }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a", marginBottom: 14 }}>💳 Pembayaran</div>
+                <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 14, padding: "12px 16px", marginBottom: 16, textAlign: "center" as const }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1a7a6a" }}>✅ Layanan Selesai!</div>
+                  <div style={{ fontSize: 12, color: "#4a9a7a", marginTop: 3 }}>Silakan selesaikan pembayaran</div>
+                </div>
+                {!paymentData && (
+                  <div style={{ background: "#f8fafc", borderRadius: 16, border: "1.5px solid #e0e8f0", padding: "24px 16px", textAlign: "center" as const, marginBottom: 16 }}>
+                    <div style={{ fontSize: 28, marginBottom: 10, animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Menunggu teknisi mengisi rincian biaya...</div>
+                    <div style={{ fontSize: 12, color: "#9aa5b4" }}>Teknisi sedang mempersiapkan data pembayaran</div>
+                  </div>
+                )}
+                {paymentData && !paymentConfirmed && (
+                  <>
+                    <div style={{ borderRadius: 14, border: "1.5px solid #e0e8f0", overflow: "hidden", marginBottom: 14 }}>
+                      <div style={{ background: "#f8fafc", padding: "10px 16px", fontSize: 11, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1 }}>RINCIAN BIAYA</div>
+                      {[{ label: "Biaya Panggilan", val: paymentData.biayaPanggilan }, { label: "Jasa Service", val: paymentData.biayaJasa }, ...(paymentData.biayaSparepart > 0 ? [{ label: "Biaya Spare Part", val: paymentData.biayaSparepart }] : []), { label: "Biaya Layanan & Admin", val: paymentData.biayaLayanan }].map(row => (
+                        <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #f0f4f8" }}>
+                          <span style={{ fontSize: 13, color: "#4a5a6a" }}>{row.label}</span>
+                          <span style={{ fontSize: 13, color: "#1a2a3a" }}>{fmtIdr(row.val)}</span>
+                        </div>
+                      ))}
+                      {discountAmt > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #f0f4f8", background: "#f0faf7" }}><span style={{ fontSize: 13, color: "#1a7a6a", fontWeight: 600 }}>🎁 Diskon ({voucherCode.toUpperCase()})</span><span style={{ fontSize: 13, color: "#1a7a6a", fontWeight: 600 }}>-{fmtIdr(discountAmt)}</span></div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: "#fff" }}><span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total</span><span style={{ fontSize: 15, fontWeight: 900, color: "#ea580c" }}>{fmtIdr(finalTotal)}</span></div>
+                    </div>
+                    <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #e0e8f0", padding: "14px 16px", marginBottom: 14 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 10 }}>🎁 Kode Voucher</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input type="text" value={voucherCode} onChange={e => { setVoucherCode(e.target.value.toUpperCase()); setVoucherDiscount(0); }} placeholder="Contoh: RIDE10" style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1.5px solid #e0e8f0", fontSize: 14, outline: "none", fontWeight: 600 }} />
+                        <button onClick={() => { const disc = VOUCHERS[voucherCode.toUpperCase()]; setVoucherDiscount(disc ?? 0); }} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #1a3a5c, #2a3a7c)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Pakai</button>
+                      </div>
+                      {voucherCode && VOUCHERS[voucherCode.toUpperCase()] == null && <div style={{ fontSize: 11, color: "#dc2626", marginTop: 6 }}>Kode voucher tidak valid</div>}
+                      {voucherCode && VOUCHERS[voucherCode.toUpperCase()] != null && discountAmt > 0 && <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600, marginTop: 6 }}>✅ Voucher berhasil! Diskon {fmtIdr(discountAmt)}</div>}
+                    </div>
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 10 }}>Metode Pembayaran</div>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        {(["cash","transfer","qris"] as const).map(m => (<button key={m} onClick={() => setPaymentMethodUser(m)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: selectedMethod === m ? "2px solid #1a7a6a" : "1.5px solid #e0e8f0", background: selectedMethod === m ? "#f0faf7" : "#fff", color: selectedMethod === m ? "#1a7a6a" : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{m === "cash" ? "Cash" : m === "transfer" ? "Transfer" : "QRIS"}</button>))}
+                      </div>
+                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 20 }}>{pmIcon[selectedMethod]}</span>
+                        <div><div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{pmLabel[selectedMethod]}</div><div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 3, lineHeight: 1.4 }}>{pmDesc[selectedMethod]}</div></div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {paymentConfirmed && (
+                  <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 16, padding: "24px 16px", textAlign: "center" as const, marginBottom: 16 }}>
+                    <div style={{ fontSize: 40, marginBottom: 10 }}>🎉</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 6 }}>Pembayaran Berhasil!</div>
+                    <div style={{ fontSize: 12, color: "#4a9a7a" }}>Terima kasih telah menggunakan RIDE</div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}>
+                      <button onClick={() => navigate(`/review/${orderId}`)} style={{ padding: "10px 22px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#f5a623,#e8950a)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>⭐ Beri Ulasan</button>
+                      <button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "10px 22px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: "#fff", color: "#1a2a3a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏠 Beranda</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px 28px", background: "#fff", borderTop: "1px solid #e8f0f8", zIndex: 100 }}>
+              {!paymentData && <button disabled style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#e0e8f0", color: "#9aa5b4", fontWeight: 700, fontSize: 15 }}>⏳ Menunggu data pembayaran...</button>}
+              {paymentData && !paymentConfirmed && (
+                <button onClick={async () => {
+                  try {
+                    await fetch(`/api/pengguna/orders/${orderId}/confirm-payment`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ paymentMethod: selectedMethod, voucherCode: voucherCode || null }) });
+                    setPaymentConfirmed(true);
+                  } catch { alert("Gagal konfirmasi. Coba lagi."); }
+                }} style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c, #2a3a7c)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>
+                  ✅ Konfirmasi Pembayaran
+                </button>
+              )}
+              {paymentConfirmed && <button disabled style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#a5d6a7", color: "#fff", fontWeight: 700, fontSize: 15 }}>✅ Pembayaran Selesai</button>}
+            </div>
+          </>
+        );
+      })()}
+    </div>
+  );
+}
