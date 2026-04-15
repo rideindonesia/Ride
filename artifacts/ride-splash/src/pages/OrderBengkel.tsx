@@ -213,9 +213,11 @@ export default function OrderBengkel() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // Step 3: create order then poll status
+  // Step 3 — Phase 1: create order (only when entering step 3 fresh, orderId not yet set)
   useEffect(() => {
     if (step !== 3) return;
+    if (orderId) return; // already created, just waiting for acceptance
+
     setOrderStatus("creating");
     setAcceptedMitra(null);
     setCreateError(null);
@@ -224,7 +226,6 @@ export default function OrderBengkel() {
     const lat = pinLat ?? userLat ?? 0;
     const lng = pinLng ?? userLng ?? 0;
 
-    // Create order in DB
     fetch("/api/pengguna/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -248,47 +249,54 @@ export default function OrderBengkel() {
         setOrderId(d.orderId);
         setOrderNo(d.orderNo);
         setOrderStatus("pending");
-
-        // Poll every 5s for mitra acceptance
-        orderPollRef.current = setInterval(async () => {
-          try {
-            const res = await fetch(`/api/pengguna/orders/${d.orderId}`, { credentials: "include" });
-            const od = await res.json();
-            if (od.status === "accepted" && od.mitra) {
-              clearInterval(orderPollRef.current!);
-              const mitraLat = od.mitra.lat ?? 0;
-              const mitraLng = od.mitra.lng ?? 0;
-              const dist = calcDist(lat, lng, mitraLat, mitraLng);
-              const callFee = Math.round((dist * 2000 + 10000) / 500) * 500;
-              const etaMin = Math.max(5, Math.round(dist * 2 + 5));
-              setAcceptedMitra({
-                id: od.mitra.id,
-                name: od.mitra.name,
-                lat: mitraLat,
-                lng: mitraLng,
-                serviceType: od.mitra.serviceType,
-                rating: od.mitra.rating,
-                totalOrders: od.mitra.totalOrders,
-                dist,
-                callFee,
-                etaMin,
-              });
-              setOrderStatus("accepted");
-            } else if (od.status === "cancelled") {
-              clearInterval(orderPollRef.current!);
-              setOrderStatus("cancelled");
-            } else if (od.status === "done") {
-              clearInterval(orderPollRef.current!);
-              setOrderStatus("done");
-              setOrderTotal(od.totalAmount);
-            }
-          } catch { /* ignore */ }
-        }, 5000);
       })
       .catch(() => setCreateError("Koneksi gagal. Coba lagi."));
+  }, [step, orderId]);
 
+  // Step 3 — Phase 2: poll order status every 3s when pending
+  useEffect(() => {
+    if (step !== 3 || !orderId || orderStatus !== "pending") return;
+
+    const lat = pinLat ?? userLat ?? 0;
+    const lng = pinLng ?? userLng ?? 0;
+
+    const doPoll = async () => {
+      try {
+        const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
+        if (!res.ok) return;
+        const od = await res.json();
+        if (od.status === "accepted" && od.mitra) {
+          const mitraLat = od.mitra.lat ?? 0;
+          const mitraLng = od.mitra.lng ?? 0;
+          const dist = calcDist(lat, lng, mitraLat, mitraLng);
+          const callFee = Math.round((dist * 2000 + 10000) / 500) * 500;
+          const etaMin = Math.max(5, Math.round(dist * 2 + 5));
+          setAcceptedMitra({
+            id: od.mitra.id,
+            name: od.mitra.name,
+            lat: mitraLat,
+            lng: mitraLng,
+            serviceType: od.mitra.serviceType,
+            rating: od.mitra.rating,
+            totalOrders: od.mitra.totalOrders,
+            dist,
+            callFee,
+            etaMin,
+          });
+          setOrderStatus("accepted");
+        } else if (od.status === "cancelled") {
+          setOrderStatus("cancelled");
+        } else if (od.status === "done") {
+          setOrderStatus("done");
+          setOrderTotal(od.totalAmount);
+        }
+      } catch { /* ignore network errors, will retry */ }
+    };
+
+    doPoll(); // immediate first check
+    orderPollRef.current = setInterval(doPoll, 3000);
     return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); };
-  }, [step]);
+  }, [step, orderId, orderStatus]);
 
   // Poll chat messages when order accepted
   useEffect(() => {
