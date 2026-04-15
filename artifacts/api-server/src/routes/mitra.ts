@@ -371,6 +371,35 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
   res.json({ incoming: incoming[0] ?? null });
 });
 
+// GET /api/mitra/active-order — kembalikan order aktif mitra beserta paymentData
+router.get("/active-order", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const [order] = await db.select({
+    id: ordersTable.id,
+    orderNo: ordersTable.orderNo,
+    serviceType: ordersTable.serviceType,
+    vehicleType: ordersTable.vehicleType,
+    vehicleModel: ordersTable.vehicleModel,
+    vehicleYear: ordersTable.vehicleYear,
+    damageCategories: ordersTable.damageCategories,
+    pickupAddress: ordersTable.pickupAddress,
+    pickupLat: ordersTable.pickupLat,
+    pickupLng: ordersTable.pickupLng,
+    totalAmount: ordersTable.totalAmount,
+    platformFee: ordersTable.platformFee,
+    trackingPhase: ordersTable.trackingPhase,
+    paymentData: ordersTable.paymentData,
+    penggunaName: usersTable.name,
+    createdAt: ordersTable.createdAt,
+  }).from(ordersTable)
+    .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
+    .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "accepted")))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(1);
+
+  res.json({ order: order ?? null });
+});
+
 // PATCH /api/mitra/orders/:id/accept
 router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;

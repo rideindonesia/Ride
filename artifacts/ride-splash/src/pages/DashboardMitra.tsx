@@ -141,6 +141,30 @@ export default function DashboardMitra() {
     finally { setLoading(false); }
   }, [navigate]);
 
+  // Restore active order dari DB (untuk kasus reload halaman)
+  const fetchActiveOrder = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE}/api/mitra/active-order`, { credentials: "include" });
+      if (!res.ok) return;
+      const d = await res.json();
+      if (!d.order) return;
+      const o = d.order;
+      // Jangan override kalau sudah ada activeOrder (mitra baru saja accept)
+      setActiveOrder(prev => prev ? prev : o);
+      // Restore phase dari DB
+      const phaseMap: Record<string, string> = { menuju: "menuju", tiba: "tiba", pengerjaan: "pengerjaan", selesai: "selesai" };
+      const dbPhase = phaseMap[o.trackingPhase ?? ""] ?? "diterima";
+      setMitraPhase(prev => prev !== "diterima" ? prev : dbPhase as any);
+      // Restore paymentData & rincianSent kalau sudah pernah kirim
+      if (o.paymentData) {
+        setBiayaJasa(String(o.paymentData.biayaJasa ?? ""));
+        setBiayaSparepart(String(o.paymentData.biayaSparepart ?? "0"));
+        setPaymentMethod(o.paymentData.paymentMethod ?? "cash");
+        setRincianSent(true);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   const pushNotif = useCallback((n: Omit<Notif, "id" | "time" | "read">) => {
     setNotifs(prev => [{ ...n, id: Date.now().toString(), time: new Date(), read: false }, ...prev].slice(0, 50));
   }, []);
@@ -168,12 +192,13 @@ export default function DashboardMitra() {
   useEffect(() => {
     fetchDashboard();
     fetchIncoming();
+    fetchActiveOrder();
     pollRef.current = setInterval(() => {
       fetchDashboard();
       fetchIncoming();
     }, 15000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [fetchDashboard, fetchIncoming]);
+  }, [fetchDashboard, fetchIncoming, fetchActiveOrder]);
 
   // Countdown timer for incoming order
   useEffect(() => {
@@ -673,20 +698,25 @@ export default function DashboardMitra() {
 
                   const kirimRincian = async () => {
                     if (!activeOrder || !canSend) return;
-                    // Simpan paymentData ke DB agar pengguna bisa lihat breakdown
-                    await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/payment-data`, {
-                      method: "PATCH", headers: { "Content-Type": "application/json" },
-                      credentials: "include",
-                      body: JSON.stringify({ biayaJasa: jasa, biayaSparepart: spare, biayaPanggilan, biayaLayanan, total, paymentMethod }),
-                    });
-                    // Kirim juga notifikasi via chat
-                    const msg = `📋 Rincian Biaya:\n• Biaya Jasa: ${fmtIdr(jasa)}\n• Biaya Sparepart: ${fmtIdr(spare)}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
-                    await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      credentials: "include", body: JSON.stringify({ message: msg }),
-                    });
-                    setRincianSent(true);
-                    pushNotif({ type: "chat", icon: "📋", title: "Rincian Terkirim", body: "Rincian biaya sudah dikirim ke konsumen." });
+                    try {
+                      // Simpan paymentData ke DB agar pengguna bisa lihat breakdown
+                      const r = await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/payment-data`, {
+                        method: "PATCH", headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ biayaJasa: jasa, biayaSparepart: spare, biayaPanggilan, biayaLayanan, total, paymentMethod }),
+                      });
+                      if (!r.ok) throw new Error("Gagal simpan");
+                      // Kirim juga notifikasi via chat
+                      const msg = `📋 Rincian Biaya:\n• Biaya Jasa: ${fmtIdr(jasa)}\n• Biaya Sparepart: ${fmtIdr(spare)}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
+                      await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        credentials: "include", body: JSON.stringify({ message: msg }),
+                      });
+                      setRincianSent(true);
+                      pushNotif({ type: "chat", icon: "📋", title: "Rincian Terkirim", body: "Rincian biaya sudah dikirim ke konsumen." });
+                    } catch {
+                      alert("Gagal mengirim rincian. Periksa koneksi dan coba lagi.");
+                    }
                   };
 
                   const konfirmasiSelesai = async () => {

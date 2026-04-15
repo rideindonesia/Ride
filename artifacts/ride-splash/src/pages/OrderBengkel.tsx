@@ -390,14 +390,16 @@ export default function OrderBengkel() {
 
   // Step 4+5: poll order state for live tracking & paymentData
   useEffect(() => {
-    if ((step !== 4 && step !== 5) || !orderId || !pinLat || !pinLng) return;
+    if (step !== 4 && step !== 5) return;
+    if (!orderId) return;
+    // pinLat/pinLng hanya dibutuhkan step 4 untuk hitung jarak; step 5 cukup orderId
     const poll = async () => {
       try {
         const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
         const data = await res.json();
         const mLat: number | null = data.mitra?.lat ?? null;
         const mLng: number | null = data.mitra?.lng ?? null;
-        if (mLat && mLng) {
+        if (step === 4 && mLat && mLng && pinLat && pinLng) {
           setMitraTrackLat(mLat);
           setMitraTrackLng(mLng);
           const dist = haversineDist(mLat, mLng, pinLat, pinLng);
