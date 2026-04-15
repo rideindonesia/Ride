@@ -5,6 +5,7 @@ import RoleSelect from "@/pages/RoleSelect";
 import AuthForm from "@/pages/AuthForm";
 import RegisterPengguna from "@/pages/RegisterPengguna";
 import RegisterMitra from "@/pages/RegisterMitra";
+import DashboardPengguna from "@/pages/DashboardPengguna";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ function Router() {
         <AuthForm mode="login" />
       </Route>
       <Route path="/register/form" component={RegisterFormRouter} />
+      <Route path="/dashboard/pengguna" component={DashboardPengguna} />
     </Switch>
   );
 }

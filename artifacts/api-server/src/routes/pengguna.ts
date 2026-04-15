@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, usersTable, otpCodesTable } from "@workspace/db";
-import { eq, and, gt } from "drizzle-orm";
+import { db, usersTable, otpCodesTable, mitraLocationsTable } from "@workspace/db";
+import { eq, and, gt, sql } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 
@@ -176,6 +176,48 @@ router.post("/resend-otp", async (req, res) => {
     phone,
     otpCode,
   });
+});
+
+// GET /api/pengguna/mitra-online?lat=X&lng=Y
+router.get("/mitra-online", async (req, res) => {
+  const lat = parseFloat(req.query.lat as string);
+  const lng = parseFloat(req.query.lng as string);
+
+  if (isNaN(lat) || isNaN(lng)) {
+    const mitra = await db.select({
+      id: mitraLocationsTable.id,
+      userId: mitraLocationsTable.userId,
+      name: usersTable.name,
+      lat: mitraLocationsTable.lat,
+      lng: mitraLocationsTable.lng,
+      serviceType: mitraLocationsTable.serviceType,
+    })
+      .from(mitraLocationsTable)
+      .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
+      .where(eq(mitraLocationsTable.isOnline, true));
+    return res.json({ mitra });
+  }
+
+  const latDelta = 0.18;
+  const lngDelta = 0.22;
+
+  const mitra = await db.select({
+    id: mitraLocationsTable.id,
+    userId: mitraLocationsTable.userId,
+    name: usersTable.name,
+    lat: mitraLocationsTable.lat,
+    lng: mitraLocationsTable.lng,
+    serviceType: mitraLocationsTable.serviceType,
+  })
+    .from(mitraLocationsTable)
+    .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
+    .where(and(
+      eq(mitraLocationsTable.isOnline, true),
+      sql`${mitraLocationsTable.lat} BETWEEN ${lat - latDelta} AND ${lat + latDelta}`,
+      sql`${mitraLocationsTable.lng} BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}`,
+    ));
+
+  res.json({ mitra });
 });
 
 export default router;

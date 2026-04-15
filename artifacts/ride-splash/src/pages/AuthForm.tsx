@@ -33,7 +33,14 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
 
   const loginMutation = useLogin({
     mutation: {
-      onSuccess: () => { setSuccess(true); setError(null); },
+      onSuccess: (data) => {
+        setError(null);
+        const userRole = (data as { user?: { role?: string } })?.user?.role ?? role;
+        setTimeout(() => {
+          if (userRole === "pengguna") navigate("/dashboard/pengguna");
+          else navigate("/dashboard/mitra");
+        }, 300);
+      },
       onError: (err: unknown) => {
         const e = err as { response?: { data?: { error?: string } } };
         setError(e?.response?.data?.error ?? "Nomor HP atau password salah");
