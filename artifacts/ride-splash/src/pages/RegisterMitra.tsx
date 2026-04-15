@@ -83,7 +83,7 @@ export default function RegisterMitra() {
   };
 
   return (
-    <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column", background: "linear-gradient(180deg, #0d2137 0%, #1a3a5c 50%, #1c4a5a 100%)", overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "linear-gradient(180deg, #0d2137 0%, #1a3a5c 50%, #1c4a5a 100%)", overflow: "hidden" }}>
       <Header step={step} onBack={step < 5 ? handleBack : undefined} />
       <div style={{ flex: 1, background: "#f0f4f8", borderRadius: "28px 28px 0 0", overflow: "auto" }}>
         {step === 1 && <Step1 form={form} setField={setField} onNext={() => setStep(2)} />}

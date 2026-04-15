@@ -31,8 +31,8 @@ export default function SplashScreen() {
   return (
     <div
       style={{
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
+        height: "100%",
         background: "linear-gradient(180deg, #0d2137 0%, #1a3a5c 30%, #1c4a5a 60%, #1a6060 80%, #1a7a6a 100%)",
         display: "flex",
         flexDirection: "column",

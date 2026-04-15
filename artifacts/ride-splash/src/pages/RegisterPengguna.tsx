@@ -11,7 +11,7 @@ export default function RegisterPengguna() {
   const [otpFromServer, setOtpFromServer] = useState("");
 
   return (
-    <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column", background: "#0d2137", overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#0d2137", overflow: "hidden" }}>
       <Header onBack={step === "otp" ? () => setStep("form") : undefined} />
       <div style={{ flex: 1, background: "#f0f4f8", borderRadius: "28px 28px 0 0", overflow: "auto" }}>
         {step === "form" && (

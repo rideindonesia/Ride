@@ -70,7 +70,7 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
   const title = role === "pengguna" ? "Masuk sebagai\nPengguna" : "Masuk sebagai\nMitra";
 
   return (
-    <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column", background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 45%, #1c4a5a 100%)", overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 45%, #1c4a5a 100%)", overflow: "hidden" }}>
       {/* Header */}
       <div style={{ flex: "0 0 auto", padding: "52px 24px 32px", position: "relative" }}>
         <button

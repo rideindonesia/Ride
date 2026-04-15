@@ -1,16 +1,43 @@
 @import "tailwindcss";
 
-* {
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
   font-family: 'Inter', sans-serif;
   background: #0d2137;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+}
+
+img, svg {
+  max-width: 100%;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+input, textarea, select {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
 }
