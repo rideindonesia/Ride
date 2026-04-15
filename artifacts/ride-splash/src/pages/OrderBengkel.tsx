@@ -121,6 +121,12 @@ export default function OrderBengkel() {
   const [trackDist, setTrackDist] = useState<number | null>(null);
   const [trackEta, setTrackEta] = useState<number | null>(null);
   const [trackingPhase, setTrackingPhase] = useState<string>("menuju");
+  type PaymentData = { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string };
+  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [voucherCode, setVoucherCode] = useState("");
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
   const trackMapRef = useRef<HTMLDivElement>(null);
   const trackLeafletRef = useRef<L.Map | null>(null);
   const trackMitraMarkerRef = useRef<L.Marker | null>(null);
@@ -186,7 +192,12 @@ export default function OrderBengkel() {
           etaMin,
         });
         setMitraConfirmed(true);
-        setStep(4);
+        if (data.trackingPhase === "selesai") {
+          if (data.paymentData) setPaymentData(data.paymentData);
+          setStep(5);
+        } else {
+          setStep(4);
+        }
       })
       .catch(() => {});
   }, []);
@@ -377,9 +388,9 @@ export default function OrderBengkel() {
     return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
   }, [orderStatus, orderId]);
 
-  // Step 4: poll mitra location for live tracking
+  // Step 4+5: poll order state for live tracking & paymentData
   useEffect(() => {
-    if (step !== 4 || !orderId || !pinLat || !pinLng) return;
+    if ((step !== 4 && step !== 5) || !orderId || !pinLat || !pinLng) return;
     const poll = async () => {
       try {
         const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
@@ -394,6 +405,8 @@ export default function OrderBengkel() {
           setTrackEta(Math.max(1, Math.round(dist / 40 * 60)));
         }
         if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
+        if (data.paymentData) setPaymentData(data.paymentData);
+        if (data.trackingPhase === "selesai") setStep(5);
         if (data.status === "done") { setOrderStatus("done"); setOrderTotal(data.totalAmount); }
       } catch { /* ignore */ }
     };
@@ -1015,70 +1028,173 @@ export default function OrderBengkel() {
       )}
 
       {/* ── STEP 5: BAYAR ── */}
-      {step === 5 && (
-        <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
-            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 20 }}>💳 Pembayaran</div>
+      {step === 5 && (() => {
+        const fmtIdr = (n: number) => n.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+        const VOUCHERS: Record<string, number> = { "RIDE10": 0.10, "RIDE20": 0.20, "GRATIS": 0.05 };
+        const discountAmt = paymentData ? Math.round((paymentData.total * (VOUCHERS[voucherCode.toUpperCase()] ?? 0))) : 0;
+        const finalTotal = paymentData ? Math.max(0, paymentData.total - discountAmt) : 0;
+        const pmLabel: Record<string, string> = {
+          cash: "Bayar Tunai ke Mitra",
+          transfer: "Transfer Bank",
+          qris: "Bayar via QRIS",
+        };
+        const pmDesc: Record<string, string> = {
+          cash: `Siapkan uang tunai sebesar ${fmtIdr(finalTotal)} dan berikan langsung ke mitra.`,
+          transfer: `Transfer ke rekening mitra sebesar ${fmtIdr(finalTotal)} dan tunjukkan bukti transfer.`,
+          qris: `Scan QRIS mitra dan bayar sebesar ${fmtIdr(finalTotal)}.`,
+        };
+        const pmIcon: Record<string, string> = { cash: "💵", transfer: "🏦", qris: "📱" };
+        const selectedMethod = paymentMethodUser ?? paymentData?.paymentMethod ?? "cash";
 
-              {/* Order summary */}
-              <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#4a5568", marginBottom: 12 }}>Ringkasan Pesanan</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                    <span style={{ color: "#7a8a9a" }}>Kendaraan</span>
-                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>{merekModel} {tahun}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                    <span style={{ color: "#7a8a9a" }}>Keluhan</span>
-                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>{kategori.join(", ")}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                    <span style={{ color: "#7a8a9a" }}>Mitra</span>
-                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>{acceptedMitra?.name ?? "-"}</span>
-                  </div>
-                  <div style={{ height: 1, background: "#f0f4f8", margin: "4px 0" }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                    <span style={{ color: "#7a8a9a" }}>Biaya Panggilan</span>
-                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>Rp {(acceptedMitra?.callFee ?? 0).toLocaleString("id-ID")}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                    <span style={{ color: "#7a8a9a" }}>Biaya Jasa & Sparepart</span>
-                    <span style={{ color: "#9aa5b4" }}>Menunggu konfirmasi</span>
-                  </div>
+        return (
+          <>
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 120px" }}>
+              <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 16px" }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                  💳 Pembayaran
                 </div>
-              </div>
 
-              {/* Total */}
-              <div style={{ background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", borderRadius: 16, padding: "16px 20px", marginBottom: 20 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Total yang perlu dibayar</div>
-                    <div style={{ color: "#fff", fontSize: 22, fontWeight: 900, marginTop: 2 }}>
-                      {orderTotal != null ? `Rp ${orderTotal.toLocaleString("id-ID")}` : "Menunggu harga akhir"}
+                {/* Layanan Selesai notice */}
+                <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 14, padding: "12px 16px", marginBottom: 16, textAlign: "center" as const }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1a7a6a" }}>✅ Layanan Selesai!</div>
+                  <div style={{ fontSize: 12, color: "#4a9a7a", marginTop: 3 }}>Silakan selesaikan pembayaran</div>
+                </div>
+
+                {/* State: Menunggu rincian */}
+                {!paymentData && (
+                  <div style={{ background: "#f8fafc", borderRadius: 16, border: "1.5px solid #e0e8f0", padding: "28px 20px", textAlign: "center" as const, marginBottom: 16 }}>
+                    <div style={{ fontSize: 28, marginBottom: 10, animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Menunggu mitra mengisi rincian biaya...</div>
+                    <div style={{ fontSize: 12, color: "#9aa5b4" }}>Mitra sedang mempersiapkan data pembayaran untuk Anda</div>
+                  </div>
+                )}
+
+                {/* State: Rincian diterima */}
+                {paymentData && !paymentConfirmed && (
+                  <>
+                    {/* Rincian Biaya */}
+                    <div style={{ borderRadius: 14, border: "1.5px solid #e0e8f0", overflow: "hidden", marginBottom: 14 }}>
+                      <div style={{ background: "#f8fafc", padding: "10px 16px", fontSize: 11, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1 }}>RINCIAN BIAYA</div>
+                      {[
+                        { label: "Biaya Panggilan", val: paymentData.biayaPanggilan },
+                        { label: "Jasa Service", val: paymentData.biayaJasa },
+                        ...(paymentData.biayaSparepart > 0 ? [{ label: "Biaya Sparepart", val: paymentData.biayaSparepart }] : []),
+                        { label: "Biaya Layanan & Admin", val: paymentData.biayaLayanan },
+                      ].map(row => (
+                        <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #f0f4f8" }}>
+                          <span style={{ fontSize: 13, color: "#4a5a6a" }}>{row.label}</span>
+                          <span style={{ fontSize: 13, color: "#1a2a3a" }}>{fmtIdr(row.val)}</span>
+                        </div>
+                      ))}
+                      {discountAmt > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #f0f4f8", background: "#f0faf7" }}>
+                          <span style={{ fontSize: 13, color: "#1a7a6a", fontWeight: 600 }}>🎁 Diskon Voucher ({voucherCode.toUpperCase()})</span>
+                          <span style={{ fontSize: 13, color: "#1a7a6a", fontWeight: 600 }}>-{fmtIdr(discountAmt)}</span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 16px", background: "#fff" }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total</span>
+                        <span style={{ fontSize: 15, fontWeight: 900, color: "#ea580c" }}>{fmtIdr(finalTotal)}</span>
+                      </div>
+                    </div>
+
+                    {/* Kode Voucher */}
+                    <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #e0e8f0", padding: "14px 16px", marginBottom: 14 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 10 }}>🎁 Kode Voucher</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          type="text" value={voucherCode} onChange={e => { setVoucherCode(e.target.value.toUpperCase()); setVoucherDiscount(0); }}
+                          placeholder="Contoh: RIDE10"
+                          style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1.5px solid #e0e8f0", fontSize: 14, outline: "none", fontWeight: 600 }}
+                        />
+                        <button
+                          onClick={() => {
+                            const disc = VOUCHERS[voucherCode.toUpperCase()];
+                            setVoucherDiscount(disc ?? 0);
+                          }}
+                          style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                          Pakai
+                        </button>
+                      </div>
+                      {voucherCode && VOUCHERS[voucherCode.toUpperCase()] == null && (
+                        <div style={{ fontSize: 11, color: "#dc2626", marginTop: 6 }}>Kode voucher tidak valid</div>
+                      )}
+                      {voucherCode && VOUCHERS[voucherCode.toUpperCase()] != null && discountAmt > 0 && (
+                        <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600, marginTop: 6 }}>✅ Voucher berhasil! Diskon {fmtIdr(discountAmt)}</div>
+                      )}
+                    </div>
+
+                    {/* Metode Pembayaran */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 10 }}>Metode Pembayaran</div>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        {(["cash", "transfer", "qris"] as const).map(m => (
+                          <button key={m} onClick={() => setPaymentMethodUser(m)}
+                            style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: selectedMethod === m ? "2px solid #1a7a6a" : "1.5px solid #e0e8f0", background: selectedMethod === m ? "#f0faf7" : "#fff", color: selectedMethod === m ? "#1a7a6a" : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                            {m === "cash" ? "Cash" : m === "transfer" ? "Transfer" : "QRIS"}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 20 }}>{pmIcon[selectedMethod]}</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{pmLabel[selectedMethod]}</div>
+                          <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 3, lineHeight: 1.4 }}>{pmDesc[selectedMethod]}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* State: Pembayaran Berhasil */}
+                {paymentConfirmed && (
+                  <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 16, padding: "28px 20px", textAlign: "center" as const, marginBottom: 16 }}>
+                    <div style={{ fontSize: 40, marginBottom: 10 }}>🎉</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 6 }}>Pembayaran Berhasil!</div>
+                    <div style={{ fontSize: 12, color: "#4a9a7a" }}>Terima kasih telah menggunakan RIDE</div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}>
+                      <button
+                        onClick={() => { /* struk placeholder */ alert("Struk akan tersedia di fitur berikutnya"); }}
+                        style={{ padding: "10px 22px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: "#fff", color: "#1a2a3a", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                        📄 Struk
+                      </button>
+                      <button
+                        onClick={() => navigate(`/review/${orderId}`)}
+                        style={{ padding: "10px 22px", borderRadius: 12, border: "2px solid #f59e0b", background: "#fff", color: "#d97706", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                        ⭐ Beri Ulasan
+                      </button>
                     </div>
                   </div>
-                  <span style={{ fontSize: 32 }}>💳</span>
-                </div>
-              </div>
+                )}
 
-              {/* No. Pesanan */}
-              {orderNo && (
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-                  <span style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</span>
-                </div>
+              </div>
+            </div>
+
+            {/* Bottom action */}
+            <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px 28px", background: "#fff", borderTop: "1px solid #e8f0f8", zIndex: 100 }}>
+              {!paymentData && (
+                <button disabled style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#e0e8f0", color: "#9aa5b4", fontWeight: 700, fontSize: 15 }}>
+                  ⏳ Menunggu data pembayaran...
+                </button>
+              )}
+              {paymentData && !paymentConfirmed && (
+                <button
+                  onClick={() => setPaymentConfirmed(true)}
+                  style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+                  ✅ Konfirmasi Pembayaran
+                </button>
+              )}
+              {paymentConfirmed && (
+                <button
+                  onClick={() => navigate("/dashboard/pengguna")}
+                  style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#f0f4f8", color: "#4a5a6a", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+                  ← Kembali
+                </button>
               )}
             </div>
-          </div>
-
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
-            <button
-              onClick={() => navigate("/dashboard/pengguna")}
-              style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
-            >✓ Kembali ke Beranda</button>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
     </div>
   );
 }

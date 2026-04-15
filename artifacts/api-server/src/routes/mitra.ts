@@ -411,6 +411,19 @@ router.patch("/orders/:id/phase", requireMitra, async (req, res) => {
   res.json({ ok: true });
 });
 
+// PATCH /api/mitra/orders/:id/payment-data — kirim rincian biaya ke pengguna
+router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const orderId = parseInt(req.params.id);
+  const { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod } = req.body;
+
+  await db.update(ordersTable)
+    .set({ paymentData: { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod }, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+
+  res.json({ ok: true });
+});
+
 // PATCH /api/mitra/orders/:id/done — mitra marks order complete
 router.patch("/orders/:id/done", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;

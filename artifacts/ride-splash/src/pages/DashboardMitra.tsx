@@ -673,7 +673,14 @@ export default function DashboardMitra() {
 
                   const kirimRincian = async () => {
                     if (!activeOrder || !canSend) return;
-                    const msg = `📋 *Rincian Biaya*\n• Biaya Jasa: ${fmtIdr(jasa)}\n• Biaya Sparepart: ${fmtIdr(spare)}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n━━━━━━━━━━━━\n💰 *Total: ${fmtIdr(total)}*\n\nMetode bayar: ${paymentMethod.toUpperCase()}`;
+                    // Simpan paymentData ke DB agar pengguna bisa lihat breakdown
+                    await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/payment-data`, {
+                      method: "PATCH", headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({ biayaJasa: jasa, biayaSparepart: spare, biayaPanggilan, biayaLayanan, total, paymentMethod }),
+                    });
+                    // Kirim juga notifikasi via chat
+                    const msg = `📋 Rincian Biaya:\n• Biaya Jasa: ${fmtIdr(jasa)}\n• Biaya Sparepart: ${fmtIdr(spare)}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
                     await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
                       method: "POST", headers: { "Content-Type": "application/json" },
                       credentials: "include", body: JSON.stringify({ message: msg }),

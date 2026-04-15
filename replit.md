@@ -86,3 +86,9 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 - Password di-hash SHA256 + SESSION_SECRET
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+### Alur Pembayaran (Payment Flow)
+- **Mitra side**: Form rincian biaya (biaya jasa + sparepart) di fase "selesai"; tombol "Kirim Rincian" → `PATCH /api/mitra/orders/:id/payment-data` + chat message; "Konfirmasi Pembayaran Selesai" → `PATCH /api/mitra/orders/:id/done`
+- **Pengguna side (Step 5)**: 3 state: (1) Menunggu — paymentData null; (2) Rincian diterima — breakdown + kode voucher (RIDE10/RIDE20/GRATIS) + pilih metode bayar cash/transfer/QRIS + "Konfirmasi Pembayaran"; (3) Berhasil — Struk + Beri Ulasan
+- **Auto-transition**: Polling step 4 deteksi `trackingPhase === "selesai"` → pindah ke step 5; `paymentData` juga dipoll tiap 4 detik
+- **`paymentData` schema**: `{ biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod }` disimpan sebagai JSON di kolom `payment_data` tabel `orders`

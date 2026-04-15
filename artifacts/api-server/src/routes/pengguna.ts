@@ -311,6 +311,7 @@ router.get("/orders/:id", async (req, res) => {
     orderNo: order.orderNo,
     status: order.status,
     trackingPhase: order.trackingPhase ?? "menuju",
+    paymentData: order.paymentData ?? null,
     pickupLat: order.pickupLat,
     pickupLng: order.pickupLng,
     pickupAddress: order.pickupAddress,

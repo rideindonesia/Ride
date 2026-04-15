@@ -18,6 +18,7 @@ export const ordersTable = pgTable("orders", {
   pickupLng: doublePrecision("pickup_lng"),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   trackingPhase: varchar("tracking_phase", { length: 20 }).default("menuju"),
+  paymentData: json("payment_data").$type<{ biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string } | null>(),
   totalAmount: integer("total_amount"),
   platformFee: integer("platform_fee"),
   rating: real("rating"),
