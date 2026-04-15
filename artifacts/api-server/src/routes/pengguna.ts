@@ -331,7 +331,8 @@ router.get("/active-order", async (req, res) => {
     .from(ordersTable)
     .where(and(
       eq(ordersTable.penggunaId, penggunaId),
-      or(eq(ordersTable.status, "pending"), eq(ordersTable.status, "accepted"))
+      eq(ordersTable.status, "accepted"),
+      gt(ordersTable.createdAt, new Date(Date.now() - 3 * 60 * 60 * 1000))
     ))
     .orderBy(desc(ordersTable.createdAt))
     .limit(1);
