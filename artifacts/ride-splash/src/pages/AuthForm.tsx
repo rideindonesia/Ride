@@ -1,10 +1,21 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { useRegister, useLogin } from "@workspace/api-client-react";
+import { useLogin } from "@workspace/api-client-react";
 
 interface AuthFormPageProps {
   mode: "login" | "register";
 }
+
+const DEMO_PENGGUNA = { hp: "81355446677", password: "demo1234" };
+
+const DEMO_MITRA = [
+  { name: "Budi Santoso", hp: "81234567890", service: "Bengkel Panggilan", emoji: "🔧", password: "mitra1234" },
+  { name: "Rudi Hermawan", hp: "82198765432", service: "E-Towing", emoji: "🚛", password: "mitra1234" },
+  { name: "Doni Prasetyo", hp: "83188889999", service: "Elektronik", emoji: "💡", password: "mitra1234" },
+  { name: "Anto Wijaya", hp: "85211223344", service: "Pangkas Rambut", emoji: "✂️", password: "mitra1234" },
+  { name: "Wahyu Sanjaya", hp: "87812345678", service: "Cuci Kendaraan", emoji: "🚿", password: "mitra1234" },
+  { name: "Heru Gunawan", hp: "89934567890", service: "Inspeksi", emoji: "🔍", password: "mitra1234" },
+];
 
 export default function AuthForm({ mode }: AuthFormPageProps) {
   const [, navigate] = useLocation();
@@ -13,35 +24,19 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
   const role = (params.get("role") ?? "pengguna") as "pengguna" | "mitra";
   const isLogin = mode === "login";
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [hp, setHp] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  const registerMutation = useRegister({
-    mutation: {
-      onSuccess: () => {
-        setSuccess(true);
-        setError(null);
-        setTimeout(() => navigate("/login"), 1500);
-      },
-      onError: (err: unknown) => {
-        const e = err as { response?: { data?: { error?: string } } };
-        setError(e?.response?.data?.error ?? "Terjadi kesalahan");
-      },
-    },
-  });
+  const [mitraListOpen, setMitraListOpen] = useState(true);
 
   const loginMutation = useLogin({
     mutation: {
-      onSuccess: () => {
-        setSuccess(true);
-        setError(null);
-      },
+      onSuccess: () => { setSuccess(true); setError(null); },
       onError: (err: unknown) => {
         const e = err as { response?: { data?: { error?: string } } };
-        setError(e?.response?.data?.error ?? "Email atau password salah");
+        setError(e?.response?.data?.error ?? "Nomor HP atau password salah");
       },
     },
   });
@@ -49,143 +44,157 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (isLogin) {
-      loginMutation.mutate({ data: { email, password, role } });
-    } else {
-      registerMutation.mutate({ data: { name, email, password, role } });
-    }
+    const fullPhone = "+62" + hp.replace(/^0+/, "");
+    loginMutation.mutate({ data: { email: fullPhone, password, role } });
   };
 
-  const isPending = registerMutation.isPending || loginMutation.isPending;
-  const roleLabel = role === "pengguna" ? "Pengguna" : "Mitra";
+  const fillDemo = (demoHp: string, demoPass: string) => {
+    setHp(demoHp);
+    setPassword(demoPass);
+    setError(null);
+  };
+
+  const isPending = loginMutation.isPending;
+
+  const subtitle = role === "pengguna"
+    ? "Cari & pesan layanan jasa favoritmu"
+    : "Terima order & hasilkan uang bersama RIDE";
+
+  const title = role === "pengguna" ? "Masuk sebagai\nPengguna" : "Masuk sebagai\nMitra";
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "#0d2137",
-        overflow: "hidden",
-      }}
-    >
-      {/* Top section */}
-      <div
-        style={{
-          background: "linear-gradient(180deg, #0d2137 0%, #1a3a5c 50%, #1c4a5a 100%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          paddingTop: 56,
-          paddingBottom: 40,
-          flex: "0 0 auto",
-          position: "relative",
-        }}
-      >
+    <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column", background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 45%, #1c4a5a 100%)", overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ flex: "0 0 auto", padding: "52px 24px 32px", position: "relative" }}>
         <button
           onClick={() => navigate(isLogin ? "/login" : "/register")}
-          style={{ position: "absolute", top: 56, left: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px", backdropFilter: "blur(4px)" }}
+          style={{ position: "absolute", top: 52, left: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px", backdropFilter: "blur(4px)" }}
         >&lt;-</button>
-        <svg width="80" height="90" viewBox="0 0 120 134" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <polygon points="60,4 112,33 112,101 60,130 8,101 8,33" stroke="rgba(100,200,200,0.7)" strokeWidth="3" fill="none" />
-          <polygon points="60,18 98,40 98,94 60,116 22,94 22,40" stroke="rgba(80,180,180,0.5)" strokeWidth="2" fill="none" />
-          <text x="60" y="78" textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize="38" fontWeight="700" fontFamily="'Inter', sans-serif">R</text>
-        </svg>
-        <div style={{ marginTop: 16, color: "rgba(100,200,200,0.9)", fontSize: 24, fontWeight: 700, letterSpacing: "0.22em", fontFamily: "'Inter', sans-serif" }}>RIDE</div>
-        <div style={{ marginTop: 20, color: "rgba(255,255,255,0.75)", fontSize: 16, fontFamily: "'Inter', sans-serif" }}>
-          {isLogin ? `Masuk sebagai ${roleLabel}` : `Daftar sebagai ${roleLabel}`}
+
+        <div style={{ marginTop: 12, paddingLeft: 4 }}>
+          <div style={{ color: "#fff", fontSize: 30, fontWeight: 800, fontFamily: "'Inter', sans-serif", lineHeight: 1.2, whiteSpace: "pre-line" }}>{title}</div>
+          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, fontFamily: "'Inter', sans-serif", marginTop: 8 }}>{subtitle}</div>
         </div>
       </div>
 
-      {/* Bottom card */}
-      <div style={{ flex: 1, background: "#f0f4f8", borderRadius: "28px 28px 0 0", padding: "32px 24px 40px", display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Form card */}
+      <div style={{ flex: 1, background: "#f0f4f8", borderRadius: "28px 28px 0 0", padding: "24px 20px 40px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
         {success ? (
-          <div style={{ textAlign: "center", color: "#1a8080", fontWeight: 700, fontSize: 16, marginTop: 32 }}>
-            {isLogin ? "Berhasil masuk!" : "Pendaftaran berhasil! Mengarahkan ke halaman masuk..."}
+          <div style={{ textAlign: "center", color: "#1a7a6a", fontWeight: 700, fontSize: 17, marginTop: 40, fontFamily: "'Inter', sans-serif" }}>
+            ✓ Berhasil masuk!
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {!isLogin && (
+          <>
+            {/* Demo box pengguna */}
+            {role === "pengguna" && (
+              <button
+                onClick={() => fillDemo(DEMO_PENGGUNA.hp, DEMO_PENGGUNA.password)}
+                style={{ width: "100%", textAlign: "left", padding: "14px 16px", borderRadius: 14, background: "rgba(26,122,106,0.08)", border: "1.5px solid rgba(26,122,106,0.25)", cursor: "pointer" }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#1a7a6a", fontFamily: "'Inter', sans-serif" }}>Akun Demo Pengguna</div>
+                <div style={{ fontSize: 13, color: "#2a6a5a", fontFamily: "'Inter', sans-serif", marginTop: 4 }}>
+                  HP: <strong>{DEMO_PENGGUNA.hp}</strong> &nbsp;·&nbsp; Password: <strong>{DEMO_PENGGUNA.password}</strong>
+                </div>
+              </button>
+            )}
+
+            {/* Demo box mitra */}
+            {role === "mitra" && (
+              <div style={{ borderRadius: 14, background: "rgba(26,122,106,0.08)", border: "1.5px solid rgba(26,122,106,0.25)", overflow: "hidden" }}>
+                <button
+                  onClick={() => setMitraListOpen(o => !o)}
+                  style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: 13, color: "#1a7a6a", fontFamily: "'Inter', sans-serif" }}>
+                    Daftar Akun Demo Mitra ({DEMO_MITRA.length} akun)
+                  </span>
+                  <span style={{ fontSize: 12, color: "#1a7a6a", fontFamily: "'Inter', sans-serif" }}>
+                    {mitraListOpen ? "▲ Tutup" : "▼ Buka"}
+                  </span>
+                </button>
+                {mitraListOpen && (
+                  <div style={{ borderTop: "1px solid rgba(26,122,106,0.15)", maxHeight: 240, overflowY: "auto" }}>
+                    {DEMO_MITRA.map((m, i) => (
+                      <button
+                        key={m.hp}
+                        onClick={() => fillDemo(m.hp, m.password)}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", borderTop: i > 0 ? "1px solid rgba(26,122,106,0.1)" : "none", cursor: "pointer", textAlign: "left" }}
+                      >
+                        <span style={{ fontSize: 20, flexShrink: 0 }}>{m.emoji}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#1a2a3a", fontFamily: "'Inter', sans-serif" }}>{m.name}</div>
+                          <div style={{ fontSize: 12, color: "#7a8a9a", fontFamily: "'Inter', sans-serif" }}>{m.service}</div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 12, color: "#1a3a5c", fontFamily: "monospace" }}>+62 {m.hp}</div>
+                          <div style={{ fontSize: 11, color: "#7a8a9a", fontFamily: "'Inter', sans-serif" }}>{m.password}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Nomor HP */}
               <div>
-                <label style={{ fontSize: 13, color: "#4a6a7a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 6 }}>Nama Lengkap</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  required
-                  placeholder="Masukkan nama lengkap"
-                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #d0dce8", fontSize: 15, fontFamily: "'Inter', sans-serif", outline: "none", background: "#fff" }}
-                />
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 8 }}>Nomor HP</label>
+                <div style={{ display: "flex", borderRadius: 12, border: "1.5px solid #d0dce8", background: "#fff", overflow: "hidden" }}>
+                  <div style={{ padding: "14px 14px", background: "#f0f4f8", borderRight: "1.5px solid #d0dce8", fontSize: 15, fontWeight: 600, color: "#1a3a5c", fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>+62</div>
+                  <input
+                    type="tel"
+                    value={hp}
+                    onChange={e => setHp(e.target.value.replace(/\D/g, ""))}
+                    required
+                    placeholder="8xx xxxx xxxx"
+                    style={{ flex: 1, padding: "14px 14px", border: "none", outline: "none", fontSize: 15, fontFamily: "'Inter', sans-serif", color: "#1a2a3a", background: "transparent" }}
+                  />
+                </div>
               </div>
-            )}
-            <div>
-              <label style={{ fontSize: 13, color: "#4a6a7a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 6 }}>
-                {isLogin ? "Email / No. HP" : "Email"}
-              </label>
-              <input
-                type="text"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                placeholder={isLogin ? "Email atau nomor HP terdaftar" : "Masukkan email"}
-                style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #d0dce8", fontSize: 15, fontFamily: "'Inter', sans-serif", outline: "none", background: "#fff" }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: 13, color: "#4a6a7a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 6 }}>Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                placeholder="Masukkan password"
-                style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #d0dce8", fontSize: 15, fontFamily: "'Inter', sans-serif", outline: "none", background: "#fff" }}
-              />
-            </div>
 
-            {error && (
-              <div style={{ color: "#c0392b", fontSize: 13, fontFamily: "'Inter', sans-serif", textAlign: "center" }}>
-                {error}
+              {/* Password */}
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 8 }}>Password</label>
+                <div style={{ display: "flex", borderRadius: 12, border: "1.5px solid #d0dce8", background: "#fff", overflow: "hidden", alignItems: "center" }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    placeholder="Masukkan password"
+                    style={{ flex: 1, padding: "14px 14px", border: "none", outline: "none", fontSize: 15, fontFamily: "'Inter', sans-serif", color: "#1a2a3a", background: "transparent" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(s => !s)}
+                    style={{ padding: "0 14px", background: "none", border: "none", cursor: "pointer", color: "#7a8a9a", fontSize: 18, display: "flex", alignItems: "center" }}
+                  >
+                    {showPassword ? "🙈" : "👁️"}
+                  </button>
+                </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={isPending}
-              style={{
-                marginTop: 8,
-                padding: "16px",
-                borderRadius: 14,
-                border: "none",
-                background: "linear-gradient(135deg, #1a3a5c 0%, #1a6060 100%)",
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: 16,
-                fontFamily: "'Inter', sans-serif",
-                cursor: isPending ? "not-allowed" : "pointer",
-                opacity: isPending ? 0.7 : 1,
-              }}
-            >
-              {isPending ? "Memproses..." : isLogin ? "Masuk" : "Daftar"}
-            </button>
-
-            <div style={{ textAlign: "center", fontSize: 14, color: "#7a8a9a", fontFamily: "'Inter', sans-serif" }}>
-              {isLogin ? (
-                <>Belum punya akun?{" "}
-                  <button type="button" onClick={() => navigate("/register")} style={{ background: "none", border: "none", color: "#1a8080", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                    Daftar Sekarang
-                  </button>
-                </>
-              ) : (
-                <>Sudah punya akun?{" "}
-                  <button type="button" onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: "#1a8080", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                    Masuk Sekarang
-                  </button>
-                </>
+              {error && (
+                <div style={{ color: "#c0392b", fontSize: 13, fontFamily: "'Inter', sans-serif", textAlign: "center" }}>{error}</div>
               )}
-            </div>
-          </form>
+
+              <button
+                type="submit"
+                disabled={isPending}
+                style={{ marginTop: 4, padding: "16px", borderRadius: 14, border: "none", background: isPending ? "#b0c4d0" : "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 16, fontFamily: "'Inter', sans-serif", cursor: isPending ? "not-allowed" : "pointer" }}
+              >
+                {isPending ? "Memverifikasi..." : "Masuk"}
+              </button>
+
+              <div style={{ textAlign: "center", fontSize: 14, color: "#7a8a9a", fontFamily: "'Inter', sans-serif" }}>
+                Belum punya akun?{" "}
+                <button type="button" onClick={() => navigate("/register")} style={{ background: "none", border: "none", color: "#1a7a6a", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                  Daftar Sekarang
+                </button>
+              </div>
+            </form>
+          </>
         )}
       </div>
     </div>
