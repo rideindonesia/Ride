@@ -364,6 +364,75 @@ export default function DashboardMitra() {
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 90px" }}>
 
+        {/* Incoming Order card — inline, between toggle and stats */}
+        {incoming && (
+          <div style={{
+            marginBottom: 16,
+            background: "#fff",
+            borderRadius: 20,
+            boxShadow: "0 4px 20px rgba(26,122,106,0.18)",
+            border: "2px solid #1a7a6a",
+            overflow: "hidden",
+            animation: "slideDown 0.3s ease",
+          }}>
+            {/* Header */}
+            <div style={{ background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ color: "#fff", fontSize: 13, fontWeight: 800 }}>🔔 Pesanan Masuk!</div>
+                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 2 }}>Konfirmasi dalam {incomingTimer}s</div>
+              </div>
+              {/* Countdown ring */}
+              <div style={{ position: "relative", width: 38, height: 38 }}>
+                <svg width="38" height="38" style={{ transform: "rotate(-90deg)" }}>
+                  <circle cx="19" cy="19" r="15" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
+                  <circle cx="19" cy="19" r="15" fill="none" stroke="#fff" strokeWidth="3"
+                    strokeDasharray={`${2 * Math.PI * 15}`}
+                    strokeDashoffset={`${2 * Math.PI * 15 * (1 - incomingTimer / 30)}`}
+                    strokeLinecap="round" style={{ transition: "stroke-dashoffset 1s linear" }} />
+                </svg>
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 800 }}>{incomingTimer}</div>
+              </div>
+            </div>
+
+            {/* Order detail */}
+            <div style={{ padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>{incoming.penggunaName}</div>
+                  <div style={{ fontSize: 13, color: "#4a5568", marginTop: 2 }}>{incoming.vehicleModel} {incoming.vehicleYear}</div>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>
+                    {Array.isArray(incoming.damageCategories) ? incoming.damageCategories.join(", ") : ""}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: "#ea580c" }}>{fmtRp(incoming.totalAmount ?? 0)}</div>
+                  <div style={{ fontSize: 11, color: "#9aa5b4" }}>Fee: {fmtRp(incoming.platformFee ?? 0)}</div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#f0f8f6", borderRadius: 10, marginBottom: 14 }}>
+                <span style={{ fontSize: 13 }}>📍</span>
+                <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.pickupAddress ?? "-"}</span>
+              </div>
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => rejectOrder(incoming.id)}
+                  style={{ flex: 1, padding: "13px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                >
+                  ✕ Tolak
+                </button>
+                <button
+                  onClick={() => acceptOrder(incoming.id)}
+                  style={{ flex: 2, padding: "13px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                >
+                  ✓ Terima Pesanan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats 2x2 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
           {[
@@ -477,65 +546,6 @@ export default function DashboardMitra() {
         ))}
       </div>
 
-      {/* Incoming Order overlay card */}
-      {incoming && (
-        <div style={{ position: "fixed", bottom: 75, left: 16, right: 16, zIndex: 300 }}>
-          <div style={{ background: "#fff", borderRadius: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "2px solid #1a7a6a", overflow: "hidden" }}>
-            {/* Header */}
-            <div style={{ background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ color: "#fff", fontSize: 13, fontWeight: 800 }}>🔔 Pesanan Masuk!</div>
-                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 2 }}>Konfirmasi dalam {incomingTimer}s</div>
-              </div>
-              {/* Countdown ring */}
-              <div style={{ position: "relative", width: 38, height: 38 }}>
-                <svg width="38" height="38" style={{ transform: "rotate(-90deg)" }}>
-                  <circle cx="19" cy="19" r="15" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
-                  <circle cx="19" cy="19" r="15" fill="none" stroke="#fff" strokeWidth="3" strokeDasharray={`${2 * Math.PI * 15}`} strokeDashoffset={`${2 * Math.PI * 15 * (1 - incomingTimer / 30)}`} strokeLinecap="round" />
-                </svg>
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 800 }}>{incomingTimer}</div>
-              </div>
-            </div>
-
-            {/* Order detail */}
-            <div style={{ padding: "14px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>{incoming.penggunaName}</div>
-                  <div style={{ fontSize: 13, color: "#4a5568", marginTop: 2 }}>{incoming.vehicleModel} {incoming.vehicleYear}</div>
-                  <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>
-                    {Array.isArray(incoming.damageCategories) ? incoming.damageCategories.join(", ") : ""}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#ea580c" }}>{fmtRp(incoming.totalAmount ?? 0)}</div>
-                  <div style={{ fontSize: 11, color: "#9aa5b4" }}>Fee: {fmtRp(incoming.platformFee ?? 0)}</div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#f0f8f6", borderRadius: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: 13 }}>📍</span>
-                <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.pickupAddress ?? "-"}</span>
-              </div>
-
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  onClick={() => rejectOrder(incoming.id)}
-                  style={{ flex: 1, padding: "13px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                >
-                  ✕ Tolak
-                </button>
-                <button
-                  onClick={() => acceptOrder(incoming.id)}
-                  style={{ flex: 2, padding: "13px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                >
-                  ✓ Terima Pesanan
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
