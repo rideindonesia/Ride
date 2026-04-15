@@ -67,7 +67,8 @@ export default function OrderCuci() {
   // Step 1
   const [jenisKendaraan, setJenisKendaraan] = useState<"motor"|"mobil"|"pickup">("mobil");
   const [paketCuci, setPaketCuci] = useState("");
-  const canNext1 = paketCuci !== "";
+  const [merekModel, setMerekModel] = useState("");
+  const canNext1 = paketCuci !== "" && merekModel.trim() !== "";
 
   const handleJenisChange = (j: "motor"|"mobil"|"pickup") => { setJenisKendaraan(j); setPaketCuci(""); };
 
@@ -168,7 +169,7 @@ export default function OrderCuci() {
   useEffect(() => {
     if (step !== 3 || orderId) return;
     setOrderStatus("creating"); setAcceptedMitra(null); setCreateError(null);
-    fetch("/api/pengguna/orders", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ vehicleType: jenisKendaraan, vehicleModel: paketCuci, vehicleYear: "", damageCategories: [paketCuci], description: "", pickupAddress: autoAddress || "Lokasi yang dipilih", detailAlamat, pickupLat: pinLat ?? userLat ?? 0, pickupLng: pinLng ?? userLng ?? 0, serviceType: "cuci" }) })
+    fetch("/api/pengguna/orders", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ vehicleType: jenisKendaraan, vehicleModel: merekModel, vehicleYear: "", damageCategories: [paketCuci], description: `Paket: ${paketCuci}`, pickupAddress: autoAddress || "Lokasi yang dipilih", detailAlamat, pickupLat: pinLat ?? userLat ?? 0, pickupLng: pinLng ?? userLng ?? 0, serviceType: "cuci" }) })
       .then(r => r.json()).then(d => { if (!d.orderId) { setCreateError("Gagal membuat pesanan."); return; } setOrderId(d.orderId); setOrderNo(d.orderNo); setOrderStatus("pending"); }).catch(() => setCreateError("Koneksi gagal."));
   }, [step, orderId]);
 
@@ -276,6 +277,16 @@ export default function OrderCuci() {
                     </button>
                   ))}
                 </div>
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 8 }}>Merek & Model Kendaraan</label>
+                <input
+                  type="text"
+                  value={merekModel}
+                  onChange={e => setMerekModel(e.target.value)}
+                  placeholder={jenisKendaraan === "motor" ? "Contoh: Honda Beat, Yamaha NMAX" : jenisKendaraan === "pickup" ? "Contoh: Toyota Hilux, Mitsubishi L300" : "Contoh: Toyota Avanza, Honda HRV"}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", fontSize: 15, color: "#1a2a3a", background: "#f8fafc", outline: "none" }}
+                />
               </div>
               <div style={{ marginBottom: 8 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 12 }}>Pilih Paket Cuci</label>
