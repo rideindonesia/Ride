@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable } from "@workspace/db";
-import { eq, and, gte, desc, sql, avg, count, sum } from "drizzle-orm";
+import { eq, and, or, gt, gte, desc, sql, avg, count, sum } from "drizzle-orm";
 import crypto from "crypto";
 
 const router = Router();
@@ -393,8 +393,15 @@ router.get("/active-order", requireMitra, async (req, res) => {
     createdAt: ordersTable.createdAt,
   }).from(ordersTable)
     .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
-    .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "accepted")))
-    .orderBy(desc(ordersTable.createdAt))
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      eq(ordersTable.status, "accepted"),
+      or(
+        gt(ordersTable.updatedAt, new Date(Date.now() - 8 * 60 * 60 * 1000)),
+        eq(ordersTable.trackingPhase, "selesai")
+      )
+    ))
+    .orderBy(desc(ordersTable.updatedAt))
     .limit(1);
 
   res.json({ order: order ?? null });
