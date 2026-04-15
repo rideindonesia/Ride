@@ -22,6 +22,7 @@ export const ordersTable = pgTable("orders", {
   totalAmount: integer("total_amount"),
   platformFee: integer("platform_fee"),
   rating: real("rating"),
+  reviewComment: text("review_comment"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

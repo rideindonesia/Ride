@@ -1172,7 +1172,80 @@ export default function OrderBengkel() {
                     <div style={{ fontSize: 12, color: "#4a9a7a" }}>Terima kasih telah menggunakan RIDE</div>
                     <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}>
                       <button
-                        onClick={() => { /* struk placeholder */ alert("Struk akan tersedia di fitur berikutnya"); }}
+                        onClick={() => {
+                          if (!paymentData) return;
+                          const disc = voucherCode && paymentData ? Math.round(paymentData.total * ({"RIDE10":0.10,"RIDE20":0.20,"GRATIS":0.05}[voucherCode.toUpperCase()] ?? 0)) : 0;
+                          const fin = Math.max(0, paymentData.total - disc);
+                          const fmt = (n: number) => "Rp " + n.toLocaleString("id-ID");
+                          const now = new Date();
+                          const tgl = now.toLocaleDateString("id-ID", { day:"2-digit", month:"long", year:"numeric" });
+                          const jam = now.toLocaleTimeString("id-ID", { hour:"2-digit", minute:"2-digit" });
+                          const pmLabel: Record<string,string> = { cash:"Tunai", transfer:"Transfer Bank", qris:"QRIS" };
+                          const html = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Struk RIDE - ${orderNo}</title><style>
+                            *{margin:0;padding:0;box-sizing:border-box}
+                            body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#1a2a3a;max-width:400px;margin:0 auto;padding:20px}
+                            .logo{text-align:center;padding:20px 0 10px;border-bottom:2px solid #1a7a6a}
+                            .logo-r{width:56px;height:56px;background:linear-gradient(135deg,#1a3a5c,#1a7a6a);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:900;margin-bottom:8px}
+                            .logo-title{font-size:20px;font-weight:900;color:#1a3a5c;letter-spacing:4px}
+                            .logo-sub{font-size:11px;color:#7a8a9a;margin-top:2px}
+                            .badge-ok{display:inline-block;background:#dcfce7;color:#16a34a;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;margin:12px 0}
+                            .orderno{font-size:13px;color:#7a8a9a}
+                            .orderno span{font-weight:700;color:#1a2a3a}
+                            .section{margin-top:16px;border:1px solid #e0e8f0;border-radius:12px;overflow:hidden}
+                            .section-title{background:#f8fafc;padding:8px 14px;font-size:10px;font-weight:800;color:#9aa5b4;letter-spacing:1px}
+                            .row{display:flex;justify-content:space-between;padding:9px 14px;border-top:1px solid #f0f4f8;font-size:13px}
+                            .row:first-of-type{border-top:none}
+                            .row .label{color:#7a8a9a}
+                            .row .val{font-weight:600;color:#1a2a3a;text-align:right;max-width:60%}
+                            .divider{border:none;border-top:1px dashed #e0e8f0;margin:4px 0}
+                            .total-row{display:flex;justify-content:space-between;padding:12px 14px;background:#f0faf7;font-size:15px;font-weight:900;color:#1a2a3a}
+                            .total-row .total-val{color:#16a34a;font-size:16px}
+                            ${disc>0?".discount-row{display:flex;justify-content:space-between;padding:9px 14px;border-top:1px solid #f0f4f8;font-size:13px;color:#16a34a;font-weight:600}":""}
+                            .footer{text-align:center;margin-top:20px;padding-top:16px;border-top:1px dashed #e0e8f0;font-size:11px;color:#9aa5b4;line-height:1.8}
+                            .footer strong{color:#1a7a6a}
+                            @media print{body{padding:10px}button{display:none}}
+                          </style></head><body>
+                          <div class="logo">
+                            <div class="logo-r">R</div>
+                            <div class="logo-title">RIDE</div>
+                            <div class="logo-sub">Super App Jasa Panggilan</div>
+                          </div>
+                          <div style="text-align:center;margin-top:12px">
+                            <div class="badge-ok">✓ Pembayaran Berhasil</div>
+                            <div class="orderno">No. Pesanan: <span>${orderNo}</span></div>
+                            <div style="font-size:12px;color:#9aa5b4;margin-top:4px">${tgl} • ${jam}</div>
+                          </div>
+                          <div class="section">
+                            <div class="section-title">DETAIL KENDARAAN</div>
+                            <div class="row"><span class="label">Kendaraan</span><span class="val">${merekModel} ${tahun}</span></div>
+                            <div class="row"><span class="label">Layanan</span><span class="val">${kategori.join(", ")}</span></div>
+                            ${acceptedMitra?.name ? `<div class="row"><span class="label">Mitra Teknisi</span><span class="val">${acceptedMitra.name}</span></div>` : ""}
+                          </div>
+                          <div class="section">
+                            <div class="section-title">RINCIAN BIAYA</div>
+                            <div class="row"><span class="label">Biaya Panggilan</span><span class="val">${fmt(paymentData.biayaPanggilan)}</span></div>
+                            <div class="row"><span class="label">Biaya Jasa Service</span><span class="val">${fmt(paymentData.biayaJasa)}</span></div>
+                            ${paymentData.biayaSparepart > 0 ? `<div class="row"><span class="label">Biaya Sparepart</span><span class="val">${fmt(paymentData.biayaSparepart)}</span></div>` : ""}
+                            <div class="row"><span class="label">Biaya Layanan & Admin</span><span class="val">${fmt(paymentData.biayaLayanan)}</span></div>
+                            ${disc > 0 ? `<div class="discount-row"><span>🎁 Diskon Voucher (${voucherCode.toUpperCase()})</span><span>-${fmt(disc)}</span></div>` : ""}
+                            <hr class="divider">
+                            <div class="total-row"><span>Total Dibayar</span><span class="total-val">${fmt(fin)}</span></div>
+                          </div>
+                          <div class="section">
+                            <div class="section-title">PEMBAYARAN</div>
+                            <div class="row"><span class="label">Metode</span><span class="val">${pmLabel[paymentData.paymentMethod] ?? paymentData.paymentMethod}</span></div>
+                            <div class="row"><span class="label">Status</span><span class="val" style="color:#16a34a">✓ Lunas</span></div>
+                          </div>
+                          <div class="footer">
+                            Terima kasih telah menggunakan <strong>RIDE</strong><br>
+                            Simpan struk ini sebagai bukti transaksi<br>
+                            <span style="font-size:10px">Dicetak: ${tgl} ${jam}</span>
+                          </div>
+                          <script>window.onload=()=>{window.print()}</script>
+                          </body></html>`;
+                          const w = window.open("", "_blank");
+                          if (w) { w.document.write(html); w.document.close(); }
+                        }}
                         style={{ padding: "10px 22px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: "#fff", color: "#1a2a3a", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                         📄 Struk
                       </button>

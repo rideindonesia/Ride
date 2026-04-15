@@ -360,6 +360,63 @@ router.get("/active-order", async (req, res) => {
   });
 });
 
+// POST /api/pengguna/orders/:id/review — kirim ulasan & rating
+router.post("/orders/:id/review", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orderId = parseInt(req.params.id);
+  const { rating, comment } = req.body as { rating: number; comment?: string };
+
+  if (!rating || rating < 1 || rating > 5) {
+    res.status(400).json({ error: "Rating harus antara 1-5" }); return;
+  }
+
+  const [updated] = await db.update(ordersTable)
+    .set({ rating, reviewComment: comment?.trim() || null, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId)))
+    .returning({ id: ordersTable.id });
+
+  if (!updated) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+  res.json({ ok: true });
+});
+
+// GET /api/pengguna/orders/:id/receipt — data untuk struk
+router.get("/orders/:id/receipt", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orderId = parseInt(req.params.id);
+  const [order] = await db.select().from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId)))
+    .limit(1);
+
+  if (!order) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+
+  let mitraName: string | null = null;
+  if (order.mitraId) {
+    const [m] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, order.mitraId));
+    mitraName = m?.name ?? null;
+  }
+  const [pengguna] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, penggunaId));
+
+  res.json({
+    orderNo: order.orderNo,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    penggunaName: pengguna?.name ?? null,
+    mitraName,
+    vehicleModel: order.vehicleModel,
+    vehicleYear: order.vehicleYear,
+    damageCategories: order.damageCategories,
+    pickupAddress: order.pickupAddress,
+    paymentData: order.paymentData,
+    totalAmount: order.totalAmount,
+    rating: order.rating,
+    reviewComment: order.reviewComment,
+  });
+});
+
 // DELETE /api/pengguna/orders/:id — batalkan order
 router.delete("/orders/:id", async (req, res) => {
   const penggunaId = getPenggunaId(req);
