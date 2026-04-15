@@ -256,12 +256,6 @@ export default function DashboardPengguna() {
           <div style={{ flex: 1, color: "rgba(255,255,255,0.85)", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {gpsError ? <span style={{ color: "#fca5a5" }}>{gpsError}</span> : address}
           </div>
-          <button
-            onClick={() => setShowLocationPicker(true)}
-            style={{ background: "none", border: "none", color: "#5fd3c4", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
-          >
-            Ubah
-          </button>
         </div>
 
         {/* Search bar */}
