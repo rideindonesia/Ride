@@ -156,6 +156,9 @@ export default function DashboardMitra() {
   const [pesananSubTab, setPesananSubTab] = useState<"aktif" | "riwayat">("aktif");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
+  // Chat sub-tab
+  const [chatSubTab, setChatSubTab] = useState<"aktif" | "riwayat">("aktif");
+
   // Chat history (Riwayat Pesan per order selesai)
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
   const [chatHistoryOrderId, setChatHistoryOrderId] = useState<number | null>(null);
@@ -1189,8 +1192,22 @@ export default function DashboardMitra() {
 
         {/* ══ CHAT TAB ══ */}
         {activeTab === "chat" && <>
+          {/* Chat sub-tab pills */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            {([
+              { id: "aktif" as const, label: "Chat Aktif", count: activeOrder ? 1 : 0 },
+              { id: "riwayat" as const, label: "Riwayat Chat", count: data?.recentOrders?.length ?? 0 },
+            ]).map(tab => (
+              <button key={tab.id} onClick={() => setChatSubTab(tab.id)}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 24, border: chatSubTab === tab.id ? "none" : "1.5px solid #d0dce8", background: chatSubTab === tab.id ? "#1a3a5c" : "#fff", color: chatSubTab === tab.id ? "#fff" : "#7a8a9a", fontWeight: chatSubTab === tab.id ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                {tab.label}
+                <span style={{ minWidth: 20, height: 20, borderRadius: 10, background: chatSubTab === tab.id ? "rgba(255,255,255,0.25)" : "#e8f0f8", color: chatSubTab === tab.id ? "#fff" : "#4a5a6a", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+
           {/* Chat Aktif */}
-          <div style={{ background: "#fff", borderRadius: 18, marginBottom: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          {chatSubTab === "aktif" && <div style={{ background: "#fff", borderRadius: 18, marginBottom: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             <div style={{ padding: "14px 16px", borderBottom: "1px solid #f0f4f8", display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 18 }}>💬</span>
               <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Chat Aktif</span>
@@ -1228,18 +1245,15 @@ export default function DashboardMitra() {
                 <div style={{ fontSize: 12 }}>Chat akan aktif saat Anda menerima dan memproses pesanan</div>
               </div>
             )}
-          </div>
+          </div>}
 
-          {/* Riwayat Pesan */}
-          <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
-            <div style={{ padding: "14px 16px", borderBottom: "1px solid #f0f4f8", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 18 }}>🗂️</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Riwayat Pesan</span>
-            </div>
+          {/* Riwayat Chat */}
+          {chatSubTab === "riwayat" && <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
             {(data?.recentOrders?.length ?? 0) === 0 ? (
-              <div style={{ padding: "36px 24px", textAlign: "center", color: "#9aa5b4" }}>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>🗂️</div>
-                <div style={{ fontSize: 13 }}>Belum ada riwayat percakapan</div>
+              <div style={{ padding: "56px 24px", textAlign: "center", color: "#9aa5b4" }}>
+                <div style={{ fontSize: 52, marginBottom: 12 }}>🗂️</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Belum ada riwayat chat</div>
+                <div style={{ fontSize: 13 }}>Riwayat chat akan muncul di sini setelah order selesai</div>
               </div>
             ) : (
               data!.recentOrders.map((o, i) => (
@@ -1247,7 +1261,7 @@ export default function DashboardMitra() {
                   {i > 0 && <div style={{ height: 1, background: "#f0f4f8" }} />}
                   <div>
                     <button onClick={() => fetchChatHistory(o.id)} style={{ width: "100%", padding: "14px 16px", border: "none", background: "transparent", cursor: "pointer", display: "flex", gap: 12, alignItems: "center", textAlign: "left" as const }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvcCfg(data?.serviceType).emoji}</div>
+                      <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvcCfg(o.serviceType).emoji}</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{o.penggunaName}</div>
                         <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} · {fmtDate(o.createdAt)}</div>
@@ -1277,7 +1291,7 @@ export default function DashboardMitra() {
                 </div>
               ))
             )}
-          </div>
+          </div>}
         </>}
 
         {/* ══ AKUN TAB ══ */}
