@@ -80,12 +80,18 @@ export default function OrderBengkel() {
   const [detailAlamat, setDetailAlamat] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
 
-  // Step 3
-  type FoundMitra = { id: number; userId: number; name: string; lat: number; lng: number; serviceType: string; dist: number };
-  const [searchStatus, setSearchStatus] = useState<"searching" | "found" | "unavailable">("searching");
-  const [foundMitra, setFoundMitra] = useState<FoundMitra | null>(null);
-  const [searchAttempt, setSearchAttempt] = useState(0);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Step 3 — order lifecycle
+  type AcceptedMitra = {
+    id: number; name: string; lat: number; lng: number; serviceType: string;
+    rating: number | null; totalOrders: number; dist: number; callFee: number; etaMin: number;
+  };
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const [orderNo, setOrderNo] = useState("");
+  const [orderStatus, setOrderStatus] = useState<"creating" | "pending" | "accepted" | "done" | "cancelled">("creating");
+  const [acceptedMitra, setAcceptedMitra] = useState<AcceptedMitra | null>(null);
+  const [orderTotal, setOrderTotal] = useState<number | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -198,48 +204,82 @@ export default function OrderBengkel() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // Step 3: search mitra on enter, retry with interval
+  // Step 3: create order then poll status
   useEffect(() => {
     if (step !== 3) return;
-    setSearchStatus("searching");
-    setFoundMitra(null);
-    setSearchAttempt(0);
+    setOrderStatus("creating");
+    setAcceptedMitra(null);
+    setCreateError(null);
 
-    let attempt = 0;
-    const MAX_ATTEMPTS = 4;
-    const INTERVAL = 8000;
+    const address = autoAddress || "Lokasi yang dipilih";
+    const lat = pinLat ?? userLat ?? 0;
+    const lng = pinLng ?? userLng ?? 0;
 
-    const doSearch = async () => {
-      attempt++;
-      setSearchAttempt(attempt);
-      const lat = pinLat ?? userLat ?? -1.2654;
-      const lng = pinLng ?? userLng ?? 116.8312;
-      try {
-        const res = await fetch(`/api/pengguna/mitra-online?lat=${lat}&lng=${lng}`);
-        const data = await res.json();
-        const list = (data.mitra ?? []) as Array<{ id: number; userId: number; name: string; lat: number; lng: number; serviceType: string }>;
-        if (list.length > 0) {
-          // Pick closest mitra
-          const withDist = list.map(m => ({ ...m, dist: calcDist(lat, lng, m.lat, m.lng) }));
-          withDist.sort((a, b) => a.dist - b.dist);
-          setFoundMitra(withDist[0]);
-          setSearchStatus("found");
-          return;
-        }
-      } catch { /* continue */ }
-      if (attempt >= MAX_ATTEMPTS) {
-        setSearchStatus("unavailable");
-      } else {
-        searchTimerRef.current = setTimeout(doSearch, INTERVAL);
-      }
-    };
+    // Create order in DB
+    fetch("/api/pengguna/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        vehicleType: jenisKendaraan,
+        vehicleModel: merekModel,
+        vehicleYear: tahun,
+        damageCategories: kategori,
+        description: deskripsi,
+        pickupAddress: address,
+        detailAlamat,
+        pickupLat: lat,
+        pickupLng: lng,
+        serviceType: "bengkel",
+      }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.orderId) { setCreateError("Gagal membuat pesanan. Coba lagi."); return; }
+        setOrderId(d.orderId);
+        setOrderNo(d.orderNo);
+        setOrderStatus("pending");
 
-    doSearch();
+        // Poll every 5s for mitra acceptance
+        orderPollRef.current = setInterval(async () => {
+          try {
+            const res = await fetch(`/api/pengguna/orders/${d.orderId}`, { credentials: "include" });
+            const od = await res.json();
+            if (od.status === "accepted" && od.mitra) {
+              clearInterval(orderPollRef.current!);
+              const mitraLat = od.mitra.lat ?? 0;
+              const mitraLng = od.mitra.lng ?? 0;
+              const dist = calcDist(lat, lng, mitraLat, mitraLng);
+              const callFee = Math.round((dist * 2000 + 10000) / 500) * 500;
+              const etaMin = Math.max(5, Math.round(dist * 2 + 5));
+              setAcceptedMitra({
+                id: od.mitra.id,
+                name: od.mitra.name,
+                lat: mitraLat,
+                lng: mitraLng,
+                serviceType: od.mitra.serviceType,
+                rating: od.mitra.rating,
+                totalOrders: od.mitra.totalOrders,
+                dist,
+                callFee,
+                etaMin,
+              });
+              setOrderStatus("accepted");
+            } else if (od.status === "cancelled") {
+              clearInterval(orderPollRef.current!);
+              setOrderStatus("cancelled");
+            } else if (od.status === "done") {
+              clearInterval(orderPollRef.current!);
+              setOrderStatus("done");
+              setOrderTotal(od.totalAmount);
+            }
+          } catch { /* ignore */ }
+        }, 5000);
+      })
+      .catch(() => setCreateError("Koneksi gagal. Coba lagi."));
 
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [step, pinLat, pinLng, userLat, userLng]);
+    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); };
+  }, [step]);
 
   const snapToGps = useCallback(() => {
     if (!leafletMapRef.current || userLat === null || userLng === null) return;
@@ -262,7 +302,16 @@ export default function OrderBengkel() {
       <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 20px 0", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <button
-            onClick={() => step === 1 ? navigate("/dashboard/pengguna") : setStep(1)}
+            onClick={async () => {
+              if (step === 1) { navigate("/dashboard/pengguna"); return; }
+              if (step === 2) { setStep(1); return; }
+              if (step >= 3) {
+                // cancel order if exists
+                if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" });
+                if (orderPollRef.current) clearInterval(orderPollRef.current);
+                navigate("/dashboard/pengguna");
+              }
+            }}
             style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", flexShrink: 0 }}
           >&lt;-</button>
           <div>
@@ -418,116 +467,277 @@ export default function OrderBengkel() {
             <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 24 }}>🔧 Cari Mitra</div>
 
-              {/* Searching state */}
-              {searchStatus === "searching" && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "32px 0 24px" }}>
-                  <span style={{ fontSize: 56 }}>🔍</span>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 56, height: 56 }}>
+              {/* Creating / error */}
+              {(orderStatus === "creating" || createError) && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "32px 0 24px" }}>
+                  {createError ? (
+                    <>
+                      <span style={{ fontSize: 48 }}>⚠️</span>
+                      <div style={{ fontSize: 14, color: "#ea580c", fontWeight: 600, textAlign: "center" }}>{createError}</div>
+                      <button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div className="search-pulse" />
+                        <div className="search-spinner" />
+                      </div>
+                      <div style={{ fontSize: 14, color: "#7a8a9a" }}>Membuat pesanan...</div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Pending — waiting for mitra to accept */}
+              {orderStatus === "pending" && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "24px 0 16px" }}>
+                  <div style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div className="search-pulse" />
                     <div className="search-spinner" />
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Mitra Terdekat...</div>
-                    <div style={{ fontSize: 13, color: "#7a8a9a" }}>
-                      {searchAttempt <= 1 && "Menghubungi mitra di sekitar lokasi Anda"}
-                      {searchAttempt === 2 && "Memperluas radius pencarian"}
-                      {searchAttempt >= 3 && "Mencoba menghubungi semua mitra tersedia"}
-                    </div>
+                    <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Menghubungi mitra di sekitar lokasi Anda. Harap tunggu.</div>
                   </div>
+                  {orderNo && <div style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</div>}
                   <button
-                    onClick={() => navigate("/dashboard/pengguna")}
+                    onClick={async () => {
+                      if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" });
+                      if (orderPollRef.current) clearInterval(orderPollRef.current);
+                      navigate("/dashboard/pengguna");
+                    }}
                     style={{ marginTop: 8, padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                  >
-                    ✕ Batalkan
-                  </button>
+                  >✕ Batalkan</button>
                 </div>
               )}
 
-              {/* Found state */}
-              {searchStatus === "found" && foundMitra && (
+              {/* Accepted — show real mitra card */}
+              {orderStatus === "accepted" && acceptedMitra && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "rgba(26,122,106,0.08)", borderRadius: 14, border: "1.5px solid rgba(26,122,106,0.25)" }}>
                     <span style={{ fontSize: 22 }}>✅</span>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#1a7a6a" }}>Mitra Ditemukan!</div>
-                      <div style={{ fontSize: 12, color: "#4a5568" }}>Mitra siap menuju lokasi Anda</div>
+                      <div style={{ fontSize: 12, color: "#4a5568" }}>Mitra sedang bersiap menuju lokasi Anda</div>
                     </div>
                   </div>
 
-                  {/* Mitra card */}
-                  <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "20px 16px", display: "flex", gap: 14, alignItems: "center" }}>
-                    <div style={{ width: 58, height: 58, borderRadius: 29, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>
-                      🧑‍🔧
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 4 }}>{foundMitra.name}</div>
-                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                        <span style={{ fontSize: 12, color: "#7a8a9a" }}>⭐ 4.8</span>
-                        <span style={{ fontSize: 12, color: "#7a8a9a" }}>•</span>
-                        <span style={{ fontSize: 12, color: "#1a7a6a", fontWeight: 600 }}>
-                          {foundMitra.dist < 1
-                            ? `${Math.round(foundMitra.dist * 1000)} m`
-                            : `${foundMitra.dist.toFixed(1)} km`} dari lokasi Anda
-                        </span>
+                  {/* Mitra info card */}
+                  <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "18px 16px" }}>
+                    <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
+                      <div style={{ width: 58, height: 58, borderRadius: 29, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>🧑‍🔧</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 3 }}>{acceptedMitra.name}</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          {acceptedMitra.rating != null
+                            ? <span style={{ fontSize: 12, color: "#f5a623", fontWeight: 700 }}>⭐ {acceptedMitra.rating}</span>
+                            : <span style={{ fontSize: 12, color: "#9aa5b4" }}>⭐ Baru</span>}
+                          {acceptedMitra.totalOrders > 0 && <span style={{ fontSize: 12, color: "#7a8a9a" }}>· {acceptedMitra.totalOrders} order</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#1a7a6a", fontWeight: 600, marginTop: 3 }}>
+                          {acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist * 1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`} · Est. {acceptedMitra.etaMin} menit
+                        </div>
                       </div>
-                      <div style={{ marginTop: 6, display: "inline-block", background: "rgba(26,122,106,0.1)", borderRadius: 8, padding: "3px 10px" }}>
-                        <span style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600 }}>🔧 {foundMitra.serviceType}</span>
+                    </div>
+
+                    {/* Biaya Panggilan + ETA */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 3 }}>Biaya Panggilan</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>Rp {acceptedMitra.callFee.toLocaleString("id-ID")}</div>
+                      </div>
+                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 3 }}>Est. Tiba</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>± {acceptedMitra.etaMin} menit</div>
+                      </div>
+                    </div>
+
+                    {/* Hint */}
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "rgba(245,166,35,0.08)", borderRadius: 12, border: "1px solid rgba(245,166,35,0.2)" }}>
+                      <span style={{ fontSize: 16 }}>💡</span>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309" }}>Diskusikan dulu biaya jasa & sparepart</div>
+                        <div style={{ fontSize: 11, color: "#92400e", marginTop: 2 }}>Chat dengan mitra sebelum memulai pekerjaan</div>
                       </div>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => navigate("/dashboard/pengguna")}
-                    style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                  >
-                    ✕ Batalkan Pesanan
+                  {/* Chat button */}
+                  <button style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+                    💬 Chat & Negosiasi
                   </button>
+
+                  {/* Cancel */}
+                  <button
+                    onClick={async () => {
+                      if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" });
+                      navigate("/dashboard/pengguna");
+                    }}
+                    style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >✕ Batalkan Pesanan</button>
                 </div>
               )}
 
-              {/* Unavailable state */}
-              {searchStatus === "unavailable" && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "24px 0" }}>
+              {/* Cancelled */}
+              {orderStatus === "cancelled" && (
+                <div style={{ textAlign: "center", padding: "32px 0" }}>
                   <span style={{ fontSize: 52 }}>😔</span>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Tidak Ada Mitra Tersedia</div>
-                    <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Semua mitra sedang sibuk atau di luar jangkauan. Coba lagi beberapa saat.</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSearchStatus("searching");
-                      setFoundMitra(null);
-                      setSearchAttempt(0);
-                      setStep(3);
-                    }}
-                    style={{ padding: "14px 32px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                  >
-                    🔄 Cari Lagi
-                  </button>
-                  <button
-                    onClick={() => navigate("/dashboard/pengguna")}
-                    style={{ padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                  >
-                    ✕ Batalkan
-                  </button>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginTop: 12 }}>Pesanan Dibatalkan</div>
+                  <button onClick={() => navigate("/dashboard/pengguna")} style={{ marginTop: 16, padding: "12px 32px", borderRadius: 14, border: "none", background: "#1a3a5c", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali</button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Bottom: only Lanjut, enabled when found */}
+          {/* Bottom: Lanjut ke Tracking (only when accepted) */}
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
             <button
-              disabled={searchStatus !== "found"}
+              disabled={orderStatus !== "accepted"}
+              onClick={() => setStep(4)}
               style={{
                 width: "100%", padding: "17px", borderRadius: 16, border: "none",
-                background: searchStatus === "found" ? "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)" : "#c0d0dc",
+                background: orderStatus === "accepted" ? "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)" : "#c0d0dc",
                 color: "#fff", fontWeight: 700, fontSize: 16,
-                cursor: searchStatus === "found" ? "pointer" : "not-allowed",
+                cursor: orderStatus === "accepted" ? "pointer" : "not-allowed",
               }}
             >
-              {searchStatus === "found" ? "Konfirmasi Mitra →" : "Menunggu Mitra..."}
+              {orderStatus === "accepted" ? "Lanjut ke Tracking →" : "Menunggu Mitra Menerima..."}
             </button>
+          </div>
+        </>
+      )}
+
+      {/* ── STEP 4: TRACKING ── */}
+      {step === 4 && acceptedMitra && (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 20 }}>📡 Tracking Order</div>
+
+              {/* Status progress */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 24 }}>
+                {[
+                  { label: "Pesanan Diterima", sub: `Mitra ${acceptedMitra.name} menuju lokasi`, done: true, active: false },
+                  { label: "Mitra Dalam Perjalanan", sub: `Estimasi tiba ± ${acceptedMitra.etaMin} menit`, done: false, active: true },
+                  { label: "Mitra Tiba", sub: "Mitra sudah di lokasi Anda", done: false, active: false },
+                  { label: "Pengerjaan Selesai", sub: "Kendaraan sudah diperbaiki", done: false, active: false },
+                ].map((phase, i) => (
+                  <div key={i} style={{ display: "flex", gap: 14 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 14, flexShrink: 0,
+                        background: phase.done ? "#1a7a6a" : phase.active ? "#1a3a5c" : "#e0e8f0",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        border: phase.active ? "2px solid #1a7a6a" : "none",
+                      }}>
+                        {phase.done ? <span style={{ color: "#fff", fontSize: 13, fontWeight: 900 }}>✓</span>
+                          : phase.active ? <div style={{ width: 8, height: 8, borderRadius: 4, background: "#1a7a6a" }} />
+                          : <div style={{ width: 6, height: 6, borderRadius: 3, background: "#c0d0dc" }} />}
+                      </div>
+                      {i < 3 && <div style={{ width: 2, height: 32, background: phase.done ? "#1a7a6a" : "#e0e8f0", margin: "4px 0" }} />}
+                    </div>
+                    <div style={{ paddingBottom: 16 }}>
+                      <div style={{ fontSize: 14, fontWeight: phase.active || phase.done ? 700 : 500, color: phase.active || phase.done ? "#1a2a3a" : "#9aa5b4" }}>{phase.label}</div>
+                      <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>{phase.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mitra info compact */}
+              <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 24, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🧑‍🔧</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a" }}>{acceptedMitra.name}</div>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>
+                    {acceptedMitra.rating != null ? `⭐ ${acceptedMitra.rating}` : "⭐ Baru"} · {acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist * 1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`}
+                  </div>
+                </div>
+                <button style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>💬 Chat</button>
+              </div>
+
+              {/* Pickup address */}
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 14px", background: "#f0f8f6", borderRadius: 12 }}>
+                <span style={{ fontSize: 14 }}>📍</span>
+                <div>
+                  <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 700, marginBottom: 2 }}>Lokasi Penjemputan</div>
+                  <div style={{ fontSize: 13, color: "#1a2a3a", lineHeight: 1.4 }}>{autoAddress || "Lokasi yang dipilih"}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
+            <button
+              onClick={() => setStep(5)}
+              style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
+            >Selesai & Bayar →</button>
+          </div>
+        </>
+      )}
+
+      {/* ── STEP 5: BAYAR ── */}
+      {step === 5 && (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 20 }}>💳 Pembayaran</div>
+
+              {/* Order summary */}
+              <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#4a5568", marginBottom: 12 }}>Ringkasan Pesanan</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "#7a8a9a" }}>Kendaraan</span>
+                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>{merekModel} {tahun}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "#7a8a9a" }}>Keluhan</span>
+                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>{kategori.join(", ")}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "#7a8a9a" }}>Mitra</span>
+                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>{acceptedMitra?.name ?? "-"}</span>
+                  </div>
+                  <div style={{ height: 1, background: "#f0f4f8", margin: "4px 0" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "#7a8a9a" }}>Biaya Panggilan</span>
+                    <span style={{ color: "#1a2a3a", fontWeight: 600 }}>Rp {(acceptedMitra?.callFee ?? 0).toLocaleString("id-ID")}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "#7a8a9a" }}>Biaya Jasa & Sparepart</span>
+                    <span style={{ color: "#9aa5b4" }}>Menunggu konfirmasi</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total */}
+              <div style={{ background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", borderRadius: 16, padding: "16px 20px", marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Total yang perlu dibayar</div>
+                    <div style={{ color: "#fff", fontSize: 22, fontWeight: 900, marginTop: 2 }}>
+                      {orderTotal != null ? `Rp ${orderTotal.toLocaleString("id-ID")}` : "Menunggu harga akhir"}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 32 }}>💳</span>
+                </div>
+              </div>
+
+              {/* No. Pesanan */}
+              {orderNo && (
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                  <span style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
+            <button
+              onClick={() => navigate("/dashboard/pengguna")}
+              style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
+            >✓ Kembali ke Beranda</button>
           </div>
         </>
       )}

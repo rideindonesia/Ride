@@ -67,7 +67,8 @@ interface DashData {
 interface IncomingOrder {
   id: number; orderNo: string; serviceType: string; vehicleType: string;
   vehicleModel: string; vehicleYear: string; damageCategories: string[];
-  pickupAddress: string; totalAmount: number; platformFee: number;
+  pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
+  totalAmount: number; platformFee: number;
   penggunaName: string; createdAt: string;
 }
 

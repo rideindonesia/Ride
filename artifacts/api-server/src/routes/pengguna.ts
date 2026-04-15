@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, usersTable, otpCodesTable, mitraLocationsTable } from "@workspace/db";
-import { eq, and, gt, sql } from "drizzle-orm";
+import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable } from "@workspace/db";
+import { eq, and, gt, sql, avg, count } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 
@@ -183,41 +183,144 @@ router.get("/mitra-online", async (req, res) => {
   const lat = parseFloat(req.query.lat as string);
   const lng = parseFloat(req.query.lng as string);
 
-  if (isNaN(lat) || isNaN(lng)) {
-    const mitra = await db.select({
-      id: mitraLocationsTable.id,
-      userId: mitraLocationsTable.userId,
-      name: usersTable.name,
-      lat: mitraLocationsTable.lat,
-      lng: mitraLocationsTable.lng,
-      serviceType: mitraLocationsTable.serviceType,
-    })
-      .from(mitraLocationsTable)
-      .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
-      .where(eq(mitraLocationsTable.isOnline, true));
-    return res.json({ mitra });
-  }
-
-  const latDelta = 0.18;
-  const lngDelta = 0.22;
-
-  const mitra = await db.select({
+  const base = {
     id: mitraLocationsTable.id,
     userId: mitraLocationsTable.userId,
     name: usersTable.name,
     lat: mitraLocationsTable.lat,
     lng: mitraLocationsTable.lng,
     serviceType: mitraLocationsTable.serviceType,
-  })
-    .from(mitraLocationsTable)
-    .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
-    .where(and(
-      eq(mitraLocationsTable.isOnline, true),
-      sql`${mitraLocationsTable.lat} BETWEEN ${lat - latDelta} AND ${lat + latDelta}`,
-      sql`${mitraLocationsTable.lng} BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}`,
-    ));
+  };
+
+  let rows;
+  if (isNaN(lat) || isNaN(lng)) {
+    rows = await db.select(base)
+      .from(mitraLocationsTable)
+      .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
+      .where(eq(mitraLocationsTable.isOnline, true));
+  } else {
+    const latDelta = 0.18, lngDelta = 0.22;
+    rows = await db.select(base)
+      .from(mitraLocationsTable)
+      .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
+      .where(and(
+        eq(mitraLocationsTable.isOnline, true),
+        sql`${mitraLocationsTable.lat} BETWEEN ${lat - latDelta} AND ${lat + latDelta}`,
+        sql`${mitraLocationsTable.lng} BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}`,
+      ));
+  }
+
+  // Enrich each mitra with real rating + total orders
+  const mitra = await Promise.all(rows.map(async m => {
+    const [stats] = await db.select({
+      rating: avg(ordersTable.rating),
+      totalOrders: count(ordersTable.id),
+    }).from(ordersTable).where(and(eq(ordersTable.mitraId, m.userId), eq(ordersTable.status, "done")));
+    return {
+      ...m,
+      rating: stats?.rating != null ? parseFloat(Number(stats.rating).toFixed(1)) : null,
+      totalOrders: Number(stats?.totalOrders) || 0,
+    };
+  }));
 
   res.json({ mitra });
+});
+
+// POST /api/pengguna/orders — buat order baru
+router.post("/orders", async (req, res) => {
+  const penggunaId = (req.session as any)?.userId;
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const { vehicleType, vehicleModel, vehicleYear, damageCategories, description,
+    pickupAddress, detailAlamat, pickupLat, pickupLng, serviceType } = req.body;
+
+  if (!vehicleModel || !pickupAddress) {
+    res.status(400).json({ error: "Data tidak lengkap" }); return;
+  }
+
+  const orderNo = `ORD${Date.now().toString().slice(-8)}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+
+  const [order] = await db.insert(ordersTable).values({
+    orderNo,
+    penggunaId,
+    serviceType: serviceType ?? "bengkel",
+    vehicleType,
+    vehicleModel,
+    vehicleYear,
+    damageCategories: Array.isArray(damageCategories) ? damageCategories : [],
+    description,
+    pickupAddress,
+    detailAlamat,
+    pickupLat: typeof pickupLat === "number" ? pickupLat : null,
+    pickupLng: typeof pickupLng === "number" ? pickupLng : null,
+    status: "pending",
+  }).returning({ id: ordersTable.id, orderNo: ordersTable.orderNo });
+
+  res.json({ orderId: order.id, orderNo: order.orderNo });
+});
+
+// GET /api/pengguna/orders/:id — poll status order
+router.get("/orders/:id", async (req, res) => {
+  const penggunaId = (req.session as any)?.userId;
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orderId = parseInt(req.params.id);
+  if (isNaN(orderId)) { res.status(400).json({ error: "ID tidak valid" }); return; }
+
+  const [order] = await db.select().from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId)))
+    .limit(1);
+
+  if (!order) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+
+  // If accepted, fetch mitra info
+  let mitraInfo = null;
+  if (order.mitraId) {
+    const [mitraUser] = await db.select({ name: usersTable.name })
+      .from(usersTable).where(eq(usersTable.id, order.mitraId));
+    const [mitraLoc] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng, serviceType: mitraLocationsTable.serviceType })
+      .from(mitraLocationsTable).where(eq(mitraLocationsTable.userId, order.mitraId));
+    const [stats] = await db.select({ rating: avg(ordersTable.rating), totalOrders: count(ordersTable.id) })
+      .from(ordersTable).where(and(eq(ordersTable.mitraId, order.mitraId), eq(ordersTable.status, "done")));
+
+    mitraInfo = {
+      id: order.mitraId,
+      name: mitraUser?.name ?? "",
+      lat: mitraLoc?.lat ?? 0,
+      lng: mitraLoc?.lng ?? 0,
+      serviceType: mitraLoc?.serviceType ?? "",
+      rating: stats?.rating != null ? parseFloat(Number(stats.rating).toFixed(1)) : null,
+      totalOrders: Number(stats?.totalOrders) || 0,
+    };
+  }
+
+  res.json({
+    id: order.id,
+    orderNo: order.orderNo,
+    status: order.status,
+    pickupLat: order.pickupLat,
+    pickupLng: order.pickupLng,
+    pickupAddress: order.pickupAddress,
+    vehicleModel: order.vehicleModel,
+    vehicleYear: order.vehicleYear,
+    damageCategories: order.damageCategories,
+    totalAmount: order.totalAmount,
+    platformFee: order.platformFee,
+    mitra: mitraInfo,
+  });
+});
+
+// DELETE /api/pengguna/orders/:id — batalkan order
+router.delete("/orders/:id", async (req, res) => {
+  const penggunaId = (req.session as any)?.userId;
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orderId = parseInt(req.params.id);
+  await db.update(ordersTable)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId)));
+
+  res.json({ ok: true });
 });
 
 export default router;

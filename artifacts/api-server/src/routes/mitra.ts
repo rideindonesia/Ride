@@ -324,6 +324,19 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
     .where(eq(mitraLocationsTable.userId, mitraId))
     .limit(1);
 
+  // Show pending orders that match mitra's serviceType and are unassigned (mitraId IS NULL)
+  // If no serviceType match, fall back to all unassigned pending orders
+  const whereClause = locRow?.serviceType
+    ? and(
+        eq(ordersTable.status, "pending"),
+        sql`${ordersTable.mitraId} IS NULL`,
+        eq(ordersTable.serviceType, locRow.serviceType),
+      )
+    : and(
+        eq(ordersTable.status, "pending"),
+        sql`${ordersTable.mitraId} IS NULL`,
+      );
+
   const incoming = await db.select({
     id: ordersTable.id,
     orderNo: ordersTable.orderNo,
@@ -333,16 +346,15 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
     vehicleYear: ordersTable.vehicleYear,
     damageCategories: ordersTable.damageCategories,
     pickupAddress: ordersTable.pickupAddress,
+    pickupLat: ordersTable.pickupLat,
+    pickupLng: ordersTable.pickupLng,
     totalAmount: ordersTable.totalAmount,
     platformFee: ordersTable.platformFee,
     penggunaName: usersTable.name,
     createdAt: ordersTable.createdAt,
   }).from(ordersTable)
     .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
-    .where(and(
-      eq(ordersTable.status, "pending"),
-      eq(ordersTable.mitraId, mitraId),
-    ))
+    .where(whereClause)
     .orderBy(desc(ordersTable.createdAt))
     .limit(1);
 
@@ -354,20 +366,34 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   const mitraId = (req.session as any).userId as number;
   const orderId = parseInt(req.params.id);
 
+  // Assign mitraId + set accepted (order was pending with no mitra yet)
   await db.update(ordersTable)
-    .set({ status: "accepted", updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+    .set({ status: "accepted", mitraId, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")));
 
   res.json({ ok: true });
 });
 
 // PATCH /api/mitra/orders/:id/reject
 router.patch("/orders/:id/reject", requireMitra, async (req, res) => {
-  const mitraId = (req.session as any).userId as number;
   const orderId = parseInt(req.params.id);
 
+  // Just set cancelled — the order goes back to pool or stays cancelled
   await db.update(ordersTable)
-    .set({ status: "cancelled", mitraId: null as unknown as number, updatedAt: new Date() })
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")));
+
+  res.json({ ok: true });
+});
+
+// PATCH /api/mitra/orders/:id/done — mitra marks order complete
+router.patch("/orders/:id/done", requireMitra, async (req, res) => {
+  const mitraId = (req.session as any).userId as number;
+  const orderId = parseInt(req.params.id);
+  const { totalAmount } = req.body;
+
+  await db.update(ordersTable)
+    .set({ status: "done", totalAmount: totalAmount ?? null, updatedAt: new Date() })
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
 
   res.json({ ok: true });

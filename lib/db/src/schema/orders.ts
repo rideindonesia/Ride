@@ -14,6 +14,8 @@ export const ordersTable = pgTable("orders", {
   description: text("description"),
   pickupAddress: text("pickup_address"),
   detailAlamat: text("detail_alamat"),
+  pickupLat: doublePrecision("pickup_lat"),
+  pickupLng: doublePrecision("pickup_lng"),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   totalAmount: integer("total_amount"),
   platformFee: integer("platform_fee"),
