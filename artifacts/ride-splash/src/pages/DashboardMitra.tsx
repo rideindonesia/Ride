@@ -372,7 +372,7 @@ export default function DashboardMitra() {
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", overflow: "hidden", position: "relative" }}>
 
       {/* Header */}
-      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 20px 20px", flexShrink: 0 }}>
+      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 14px 16px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Avatar */}
           <div style={{ width: 48, height: 48, borderRadius: 16, background: "rgba(255,255,255,0.15)", border: "2px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
@@ -528,14 +528,14 @@ export default function DashboardMitra() {
               </div>
 
               {/* Customer + vehicle */}
-              <div style={{ padding: "0 16px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ padding: "0 10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 18 }}>📍</span>
                 <span style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>
                   {activeOrder.penggunaName} · {activeOrder.vehicleModel} {activeOrder.vehicleYear}
                 </span>
               </div>
 
-              <div style={{ padding: "0 16px 16px" }}>
+              <div style={{ padding: "0 10px 16px" }}>
 
                 {/* ── FASE 1: Diterima ── */}
                 {mitraPhase === "diterima" && (

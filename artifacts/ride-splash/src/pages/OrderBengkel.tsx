@@ -516,7 +516,7 @@ export default function OrderBengkel() {
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", overflow: "hidden" }}>
 
       {/* Header */}
-      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 20px 0", flexShrink: 0 }}>
+      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 14px 0", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           {step !== 3 && (
             <button
@@ -539,8 +539,8 @@ export default function OrderBengkel() {
       {/* ── STEP 1 ── */}
       {step === 1 && (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
-            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "22px 16px" }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 20 }}>🚗 Data Kendaraan</div>
 
               <div style={{ marginBottom: 20 }}>
@@ -588,7 +588,7 @@ export default function OrderBengkel() {
             </div>
           </div>
 
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
             <button disabled={!canNext1} onClick={goToStep2} style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: canNext1 ? "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)" : "#c0d0dc", color: "#fff", fontWeight: 700, fontSize: 16, cursor: canNext1 ? "pointer" : "not-allowed" }}>
               Lanjut →
             </button>
@@ -599,8 +599,8 @@ export default function OrderBengkel() {
       {/* ── STEP 2 ── */}
       {step === 2 && (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
-            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 14px" }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 16 }}>📍 Pilih Lokasi</div>
 
               {/* Map with center pin */}
@@ -650,7 +650,7 @@ export default function OrderBengkel() {
             </div>
           </div>
 
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100, display: "flex", gap: 12 }}>
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100, display: "flex", gap: 12 }}>
             <button
               onClick={() => setStep(1)}
               style={{ flex: 1, padding: "17px", borderRadius: 16, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
@@ -677,8 +677,8 @@ export default function OrderBengkel() {
       {/* ── STEP 3 ── */}
       {step === 3 && (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 100px" }}>
-            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
+            <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "22px 16px" }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 24 }}>🔧 Cari Mitra</div>
 
               {/* Creating / error */}
@@ -1066,7 +1066,7 @@ export default function OrderBengkel() {
 
         return (
           <>
-            <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 120px" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 120px" }}>
               <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 16px" }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
                   💳 Pembayaran
@@ -1080,7 +1080,7 @@ export default function OrderBengkel() {
 
                 {/* State: Menunggu rincian */}
                 {!paymentData && (
-                  <div style={{ background: "#f8fafc", borderRadius: 16, border: "1.5px solid #e0e8f0", padding: "28px 20px", textAlign: "center" as const, marginBottom: 16 }}>
+                  <div style={{ background: "#f8fafc", borderRadius: 16, border: "1.5px solid #e0e8f0", padding: "24px 16px", textAlign: "center" as const, marginBottom: 16 }}>
                     <div style={{ fontSize: 28, marginBottom: 10, animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Menunggu mitra mengisi rincian biaya...</div>
                     <div style={{ fontSize: 12, color: "#9aa5b4" }}>Mitra sedang mempersiapkan data pembayaran untuk Anda</div>
@@ -1166,7 +1166,7 @@ export default function OrderBengkel() {
 
                 {/* State: Pembayaran Berhasil */}
                 {paymentConfirmed && (
-                  <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 16, padding: "28px 20px", textAlign: "center" as const, marginBottom: 16 }}>
+                  <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 16, padding: "24px 16px", textAlign: "center" as const, marginBottom: 16 }}>
                     <div style={{ fontSize: 40, marginBottom: 10 }}>🎉</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 6 }}>Pembayaran Berhasil!</div>
                     <div style={{ fontSize: 12, color: "#4a9a7a" }}>Terima kasih telah menggunakan RIDE</div>
@@ -1262,7 +1262,7 @@ export default function OrderBengkel() {
             </div>
 
             {/* Bottom action */}
-            <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px 28px", background: "#fff", borderTop: "1px solid #e8f0f8", zIndex: 100 }}>
+            <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px 28px", background: "#fff", borderTop: "1px solid #e8f0f8", zIndex: 100 }}>
               {!paymentData && (
                 <button disabled style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#e0e8f0", color: "#9aa5b4", fontWeight: 700, fontSize: 15 }}>
                   ⏳ Menunggu data pembayaran...

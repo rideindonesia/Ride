@@ -256,7 +256,7 @@ export default function DashboardPengguna() {
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", fontFamily: "'Inter', sans-serif", overflow: "hidden" }}>
 
       {/* Header dark */}
-      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "48px 20px 20px", flexShrink: 0 }}>
+      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "48px 14px 16px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -294,7 +294,7 @@ export default function DashboardPengguna() {
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
 
         {/* White card - services */}
-        <div style={{ background: "#fff", borderRadius: "0 0 24px 24px", padding: "20px 20px 24px", marginBottom: 12 }}>
+        <div style={{ background: "#fff", borderRadius: "0 0 24px 24px", padding: "18px 14px 22px", marginBottom: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}>Layanan Kami</div>
             <button onClick={() => setShowAllServices(true)} style={{ background: "none", border: "none", color: "#1a7a6a", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Lihat Semua</button>
@@ -319,7 +319,7 @@ export default function DashboardPengguna() {
           </div>
         </div>
 
-        <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ padding: "0 10px", display: "flex", flexDirection: "column", gap: 12 }}>
 
           {/* Active order card */}
           {activeOrder && (
@@ -453,7 +453,7 @@ export default function DashboardPengguna() {
       {showAllServices && (
         <div style={{ position: "fixed", inset: 0, background: "#f0f4f8", zIndex: 3000, display: "flex", flexDirection: "column", overflowY: "auto" }}>
           {/* Header */}
-          <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 100%)", padding: "52px 20px 24px", flexShrink: 0 }}>
+          <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 100%)", padding: "52px 14px 24px", flexShrink: 0 }}>
             <button
               onClick={() => setShowAllServices(false)}
               style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px", backdropFilter: "blur(4px)", marginBottom: 16 }}
@@ -463,7 +463,7 @@ export default function DashboardPengguna() {
           </div>
 
           {/* White content */}
-          <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", flex: 1, padding: "28px 20px 40px", marginTop: -12 }}>
+          <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", flex: 1, padding: "26px 14px 40px", marginTop: -12 }}>
             {/* Active services grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
               {ACTIVE_SERVICES.map(s => {
@@ -512,15 +512,15 @@ export default function DashboardPengguna() {
       {showLocationPicker && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", flexDirection: "column" }}>
           <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", marginTop: "auto", height: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #e8ecf0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "16px 14px 12px", borderBottom: "1px solid #e8ecf0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}>Pilih Lokasi Kamu</div>
               <button onClick={() => { setShowLocationPicker(false); if (pickerLeafletRef.current) { pickerLeafletRef.current.remove(); pickerLeafletRef.current = null; } }} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9aa5b4" }}>✕</button>
             </div>
-            <div style={{ color: "#7a8a9a", fontSize: 13, padding: "8px 20px", background: "#f8f9fa" }}>
+            <div style={{ color: "#7a8a9a", fontSize: 13, padding: "8px 14px", background: "#f8f9fa" }}>
               📍 Seret pin atau tap peta untuk memilih lokasi
             </div>
             <div ref={pickerMapRef} style={{ flex: 1 }} />
-            <div style={{ padding: "16px 20px", borderTop: "1px solid #e8ecf0" }}>
+            <div style={{ padding: "16px 14px", borderTop: "1px solid #e8ecf0" }}>
               <button
                 onClick={confirmLocationPick}
                 style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
