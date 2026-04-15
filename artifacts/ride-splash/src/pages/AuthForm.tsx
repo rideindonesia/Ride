@@ -115,13 +115,15 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
               </div>
             )}
             <div>
-              <label style={{ fontSize: 13, color: "#4a6a7a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 6 }}>Email</label>
+              <label style={{ fontSize: 13, color: "#4a6a7a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 6 }}>
+                {isLogin ? "Email / No. HP" : "Email"}
+              </label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                placeholder="Masukkan email"
+                placeholder={isLogin ? "Email atau nomor HP terdaftar" : "Masukkan email"}
                 style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #d0dce8", fontSize: 15, fontFamily: "'Inter', sans-serif", outline: "none", background: "#fff" }}
               />
             </div>

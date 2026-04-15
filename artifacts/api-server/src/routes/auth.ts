@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import crypto from "crypto";
 
@@ -47,14 +47,20 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  const { email, password, role } = parsed.data;
+  const { email: emailOrPhone, password, role } = parsed.data;
 
   const [user] = await db.select().from(usersTable).where(
-    and(eq(usersTable.email, email), eq(usersTable.role, role))
+    and(
+      or(
+        eq(usersTable.email, emailOrPhone),
+        eq(usersTable.phone, emailOrPhone),
+      ),
+      eq(usersTable.role, role),
+    )
   ).limit(1);
 
   if (!user || user.passwordHash !== hashPassword(password)) {
-    res.status(401).json({ error: "Email, password, atau peran tidak cocok" });
+    res.status(401).json({ error: "Email/No. HP, password, atau peran tidak cocok" });
     return;
   }
 
@@ -62,7 +68,7 @@ router.post("/login", async (req, res) => {
   (req.session as Record<string, unknown>).userRole = user.role;
 
   res.json({
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role },
     message: "Berhasil masuk",
   });
 });
