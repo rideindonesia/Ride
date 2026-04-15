@@ -9,6 +9,7 @@ const SERVICE_ROUTES: Record<string, string> = {
   ride_wash: "/order/cuci",
   ride_barber: "/order/barber",
   ride_inspection: "/order/inspeksi",
+  ride_towing: "/order/towing",
 };
 
 // Fix leaflet default icon paths
