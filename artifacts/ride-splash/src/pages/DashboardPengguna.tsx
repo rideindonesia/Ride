@@ -11,17 +11,22 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-const SERVICES = [
+const ACTIVE_SERVICES = [
   { id: "ride_auto", label: "Ride Auto", emoji: "🔧", color: "#1a3a5c" },
   { id: "ride_towing", label: "Ride Towing", emoji: "🚛", color: "#1a4a7c" },
   { id: "ride_service", label: "Ride Service", emoji: "💡", color: "#2a3a7c" },
   { id: "ride_barber", label: "Ride Barber", emoji: "✂️", color: "#7c2a2a" },
   { id: "ride_wash", label: "Ride Wash", emoji: "🚿", color: "#1a5c7c" },
-  { id: "ride_inspection", label: "Ride Inspection", emoji: "🔍", color: "#3a3a7c" },
-  { id: "ride_repair", label: "Ride Repair & Build", emoji: "🏗️", color: "#5c3a1a" },
-  { id: "ride_laundry", label: "Ride Laundry", emoji: "👕", color: "#1a5c3a" },
-  { id: "ride_cleaning", label: "Ride Cleaning", emoji: "🧹", color: "#4a1a7c" },
+  { id: "ride_inspection", label: "Ride Inspection", emoji: "🔍", color: "#2a5c2a" },
 ];
+
+const COMING_SOON_SERVICES = [
+  { id: "ride_laundry", label: "Ride Laundry", emoji: "👕", color: "#8a9aaa" },
+  { id: "ride_cleaning", label: "Ride Cleaning", emoji: "🧹", color: "#8a9aaa" },
+  { id: "ride_repair", label: "Ride Repair & Build", emoji: "🏗️", color: "#8a9aaa" },
+];
+
+const SERVICES = [...ACTIVE_SERVICES, ...COMING_SOON_SERVICES];
 
 interface OnlineMitra {
   id: number;
@@ -63,6 +68,7 @@ export default function DashboardPengguna() {
   const [pickLng, setPickLng] = useState<number | null>(null);
   const [notifCount] = useState(0);
   const [activeOrder] = useState<null | { service: string; status: string }>(null);
+  const [showAllServices, setShowAllServices] = useState(false);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -272,7 +278,7 @@ export default function DashboardPengguna() {
         <div style={{ background: "#fff", borderRadius: "0 0 24px 24px", padding: "20px 20px 24px", marginBottom: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}>Layanan Kami</div>
-            <button style={{ background: "none", border: "none", color: "#1a7a6a", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Lihat Semua</button>
+            <button onClick={() => setShowAllServices(true)} style={{ background: "none", border: "none", color: "#1a7a6a", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Lihat Semua</button>
           </div>
           <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
             {SERVICES.map(s => (
@@ -390,6 +396,58 @@ export default function DashboardPengguna() {
           </button>
         ))}
       </div>
+
+      {/* Semua Layanan Overlay */}
+      {showAllServices && (
+        <div style={{ position: "fixed", inset: 0, background: "#f0f4f8", zIndex: 3000, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+          {/* Header */}
+          <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 100%)", padding: "52px 20px 24px", flexShrink: 0 }}>
+            <button
+              onClick={() => setShowAllServices(false)}
+              style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px", backdropFilter: "blur(4px)", marginBottom: 16 }}
+            >&lt;-</button>
+            <div style={{ color: "#fff", fontSize: 22, fontWeight: 800 }}>Semua Layanan</div>
+            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, marginTop: 4 }}>{ACTIVE_SERVICES.length + COMING_SOON_SERVICES.length} layanan tersedia</div>
+          </div>
+
+          {/* White content */}
+          <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", flex: 1, padding: "28px 20px 40px", marginTop: -12 }}>
+            {/* Active services grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+              {ACTIVE_SERVICES.map(s => (
+                <div key={s.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>
+                    {s.emoji}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+              <div style={{ flex: 1, height: 1, background: "#e0e8f0" }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#9aa5b4", letterSpacing: 1.5 }}>SEGERA HADIR</span>
+              <div style={{ flex: 1, height: 1, background: "#e0e8f0" }} />
+            </div>
+
+            {/* Coming soon grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+              {COMING_SOON_SERVICES.map(s => (
+                <div key={s.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: "#c8d4e0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontSize: 32, position: "relative", overflow: "hidden" }}>
+                    <span style={{ filter: "grayscale(0.4) opacity(0.6)" }}>{s.emoji}</span>
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(80,100,120,0.82)", padding: "5px 0", textAlign: "center" }}>
+                      <span style={{ color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>COMING SOON</span>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#9aa5b4", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Location Picker Modal */}
       {showLocationPicker && (
