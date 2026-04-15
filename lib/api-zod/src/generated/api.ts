@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,7 +15,7 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Register a new user
+ * @summary Register (mitra or generic)
  */
 export const RegisterBody = zod.object({
   name: zod.string(),
@@ -26,7 +25,7 @@ export const RegisterBody = zod.object({
 });
 
 /**
- * @summary Login an existing user
+ * @summary Login
  */
 export const LoginBody = zod.object({
   email: zod.string(),
@@ -39,6 +38,7 @@ export const LoginResponse = zod.object({
     id: zod.number(),
     name: zod.string(),
     email: zod.string(),
+    phone: zod.string().optional(),
     role: zod.enum(["pengguna", "mitra"]),
   }),
   message: zod.string(),
@@ -51,6 +51,7 @@ export const GetMeResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   email: zod.string(),
+  phone: zod.string().optional(),
   role: zod.enum(["pengguna", "mitra"]),
 });
 
@@ -59,4 +60,49 @@ export const GetMeResponse = zod.object({
  */
 export const LogoutResponse = zod.object({
   message: zod.string(),
+});
+
+/**
+ * @summary Step 1 - Submit registration form and send OTP
+ */
+export const RegisterPenggunaBody = zod.object({
+  name: zod.string(),
+  phone: zod.string(),
+  email: zod.string(),
+  password: zod.string(),
+  confirmPassword: zod.string(),
+  agreeTerms: zod.boolean(),
+});
+
+export const RegisterPenggunaResponse = zod.object({
+  message: zod.string(),
+  phone: zod.string(),
+  otpCode: zod
+    .string()
+    .optional()
+    .describe("OTP code (dev only, remove in production with SMS integration)"),
+});
+
+/**
+ * @summary Step 2 - Verify OTP and create account
+ */
+export const VerifyOtpPenggunaBody = zod.object({
+  phone: zod.string(),
+  otp: zod.string(),
+});
+
+/**
+ * @summary Resend OTP
+ */
+export const ResendOtpPenggunaBody = zod.object({
+  phone: zod.string(),
+});
+
+export const ResendOtpPenggunaResponse = zod.object({
+  message: zod.string(),
+  phone: zod.string(),
+  otpCode: zod
+    .string()
+    .optional()
+    .describe("OTP code (dev only, remove in production with SMS integration)"),
 });

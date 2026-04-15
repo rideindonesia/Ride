@@ -3,8 +3,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SplashScreen from "@/pages/SplashScreen";
 import RoleSelect from "@/pages/RoleSelect";
 import AuthForm from "@/pages/AuthForm";
+import RegisterPengguna from "@/pages/RegisterPengguna";
 
 const queryClient = new QueryClient();
+
+function RegisterFormRouter() {
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const role = new URLSearchParams(search).get("role");
+  if (role === "pengguna") return <RegisterPengguna />;
+  return <AuthForm mode="register" />;
+}
 
 function Router() {
   return (
@@ -19,9 +27,7 @@ function Router() {
       <Route path="/login/form">
         <AuthForm mode="login" />
       </Route>
-      <Route path="/register/form">
-        <AuthForm mode="register" />
-      </Route>
+      <Route path="/register/form" component={RegisterFormRouter} />
     </Switch>
   );
 }

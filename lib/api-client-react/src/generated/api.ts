@@ -23,7 +23,11 @@ import type {
   LoginBody,
   MessageResponse,
   RegisterBody,
+  RegisterPenggunaBody,
+  ResendOtpBody,
+  SendOtpResponse,
   User,
+  VerifyOtpBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -36,7 +40,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -112,7 +115,7 @@ export function useHealthCheck<
 }
 
 /**
- * @summary Register a new user
+ * @summary Register (mitra or generic)
  */
 export const getRegisterUrl = () => {
   return `/api/auth/register`;
@@ -175,7 +178,7 @@ export type RegisterMutationBody = BodyType<RegisterBody>;
 export type RegisterMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Register a new user
+ * @summary Register (mitra or generic)
  */
 export const useRegister = <
   TError = ErrorType<ErrorResponse>,
@@ -198,7 +201,7 @@ export const useRegister = <
 };
 
 /**
- * @summary Login an existing user
+ * @summary Login
  */
 export const getLoginUrl = () => {
   return `/api/auth/login`;
@@ -261,7 +264,7 @@ export type LoginMutationBody = BodyType<LoginBody>;
 export type LoginMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Login an existing user
+ * @summary Login
  */
 export const useLogin = <
   TError = ErrorType<ErrorResponse>,
@@ -425,4 +428,262 @@ export const useLogout = <
   TContext
 > => {
   return useMutation(getLogoutMutationOptions(options));
+};
+
+/**
+ * @summary Step 1 - Submit registration form and send OTP
+ */
+export const getRegisterPenggunaUrl = () => {
+  return `/api/pengguna/register`;
+};
+
+export const registerPengguna = async (
+  registerPenggunaBody: RegisterPenggunaBody,
+  options?: RequestInit,
+): Promise<SendOtpResponse> => {
+  return customFetch<SendOtpResponse>(getRegisterPenggunaUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(registerPenggunaBody),
+  });
+};
+
+export const getRegisterPenggunaMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPengguna>>,
+    TError,
+    { data: BodyType<RegisterPenggunaBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerPengguna>>,
+  TError,
+  { data: BodyType<RegisterPenggunaBody> },
+  TContext
+> => {
+  const mutationKey = ["registerPengguna"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerPengguna>>,
+    { data: BodyType<RegisterPenggunaBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerPengguna(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegisterPenggunaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerPengguna>>
+>;
+export type RegisterPenggunaMutationBody = BodyType<RegisterPenggunaBody>;
+export type RegisterPenggunaMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Step 1 - Submit registration form and send OTP
+ */
+export const useRegisterPengguna = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPengguna>>,
+    TError,
+    { data: BodyType<RegisterPenggunaBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof registerPengguna>>,
+  TError,
+  { data: BodyType<RegisterPenggunaBody> },
+  TContext
+> => {
+  return useMutation(getRegisterPenggunaMutationOptions(options));
+};
+
+/**
+ * @summary Step 2 - Verify OTP and create account
+ */
+export const getVerifyOtpPenggunaUrl = () => {
+  return `/api/pengguna/verify-otp`;
+};
+
+export const verifyOtpPengguna = async (
+  verifyOtpBody: VerifyOtpBody,
+  options?: RequestInit,
+): Promise<AuthResponse> => {
+  return customFetch<AuthResponse>(getVerifyOtpPenggunaUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(verifyOtpBody),
+  });
+};
+
+export const getVerifyOtpPenggunaMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyOtpPengguna>>,
+    TError,
+    { data: BodyType<VerifyOtpBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof verifyOtpPengguna>>,
+  TError,
+  { data: BodyType<VerifyOtpBody> },
+  TContext
+> => {
+  const mutationKey = ["verifyOtpPengguna"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof verifyOtpPengguna>>,
+    { data: BodyType<VerifyOtpBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return verifyOtpPengguna(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VerifyOtpPenggunaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof verifyOtpPengguna>>
+>;
+export type VerifyOtpPenggunaMutationBody = BodyType<VerifyOtpBody>;
+export type VerifyOtpPenggunaMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Step 2 - Verify OTP and create account
+ */
+export const useVerifyOtpPengguna = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyOtpPengguna>>,
+    TError,
+    { data: BodyType<VerifyOtpBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof verifyOtpPengguna>>,
+  TError,
+  { data: BodyType<VerifyOtpBody> },
+  TContext
+> => {
+  return useMutation(getVerifyOtpPenggunaMutationOptions(options));
+};
+
+/**
+ * @summary Resend OTP
+ */
+export const getResendOtpPenggunaUrl = () => {
+  return `/api/pengguna/resend-otp`;
+};
+
+export const resendOtpPengguna = async (
+  resendOtpBody: ResendOtpBody,
+  options?: RequestInit,
+): Promise<SendOtpResponse> => {
+  return customFetch<SendOtpResponse>(getResendOtpPenggunaUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resendOtpBody),
+  });
+};
+
+export const getResendOtpPenggunaMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendOtpPengguna>>,
+    TError,
+    { data: BodyType<ResendOtpBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resendOtpPengguna>>,
+  TError,
+  { data: BodyType<ResendOtpBody> },
+  TContext
+> => {
+  const mutationKey = ["resendOtpPengguna"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resendOtpPengguna>>,
+    { data: BodyType<ResendOtpBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resendOtpPengguna(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResendOtpPenggunaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resendOtpPengguna>>
+>;
+export type ResendOtpPenggunaMutationBody = BodyType<ResendOtpBody>;
+export type ResendOtpPenggunaMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Resend OTP
+ */
+export const useResendOtpPengguna = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendOtpPengguna>>,
+    TError,
+    { data: BodyType<ResendOtpBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resendOtpPengguna>>,
+  TError,
+  { data: BodyType<ResendOtpBody> },
+  TContext
+> => {
+  return useMutation(getResendOtpPenggunaMutationOptions(options));
 };

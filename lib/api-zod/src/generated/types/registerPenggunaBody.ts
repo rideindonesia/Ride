@@ -5,12 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { UserRole } from "./userRole";
 
-export interface User {
-  id: number;
+export interface RegisterPenggunaBody {
   name: string;
+  phone: string;
   email: string;
-  phone?: string;
-  role: UserRole;
+  password: string;
+  confirmPassword: string;
+  agreeTerms: boolean;
 }

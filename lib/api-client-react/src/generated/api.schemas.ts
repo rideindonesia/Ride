@@ -37,6 +37,31 @@ export interface LoginBody {
   role: LoginBodyRole;
 }
 
+export interface RegisterPenggunaBody {
+  name: string;
+  phone: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  agreeTerms: boolean;
+}
+
+export interface VerifyOtpBody {
+  phone: string;
+  otp: string;
+}
+
+export interface ResendOtpBody {
+  phone: string;
+}
+
+export interface SendOtpResponse {
+  message: string;
+  phone: string;
+  /** OTP code (dev only, remove in production with SMS integration) */
+  otpCode?: string;
+}
+
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export const UserRole = {
@@ -48,6 +73,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
+  phone?: string;
   role: UserRole;
 }
 

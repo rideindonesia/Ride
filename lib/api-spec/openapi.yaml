@@ -12,13 +12,14 @@ tags:
     description: Health operations
   - name: auth
     description: Authentication operations
+  - name: pengguna
+    description: Pengguna registration flow
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -30,7 +31,7 @@ paths:
     post:
       operationId: register
       tags: [auth]
-      summary: Register a new user
+      summary: Register (mitra or generic)
       requestBody:
         required: true
         content:
@@ -60,7 +61,7 @@ paths:
     post:
       operationId: login
       tags: [auth]
-      summary: Login an existing user
+      summary: Login
       requestBody:
         required: true
         content:
@@ -69,7 +70,7 @@ paths:
               $ref: "#/components/schemas/LoginBody"
       responses:
         "200":
-          description: Logged in successfully
+          description: Logged in
           content:
             application/json:
               schema:
@@ -116,6 +117,84 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+  /pengguna/register:
+    post:
+      operationId: registerPengguna
+      tags: [pengguna]
+      summary: Step 1 - Submit registration form and send OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPenggunaBody"
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendOtpResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email or phone already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pengguna/verify-otp:
+    post:
+      operationId: verifyOtpPengguna
+      tags: [pengguna]
+      summary: Step 2 - Verify OTP and create account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpBody"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pengguna/resend-otp:
+    post:
+      operationId: resendOtpPengguna
+      tags: [pengguna]
+      summary: Resend OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendOtpBody"
+      responses:
+        "200":
+          description: OTP resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendOtpResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -123,8 +202,7 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
     RegisterBody:
       type: object
       properties:
@@ -137,11 +215,7 @@ components:
         role:
           type: string
           enum: [pengguna, mitra]
-      required:
-        - name
-        - email
-        - password
-        - role
+      required: [name, email, password, role]
     LoginBody:
       type: object
       properties:
@@ -152,10 +226,48 @@ components:
         role:
           type: string
           enum: [pengguna, mitra]
-      required:
-        - email
-        - password
-        - role
+      required: [email, password, role]
+    RegisterPenggunaBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        confirmPassword:
+          type: string
+        agreeTerms:
+          type: boolean
+      required: [name, phone, email, password, confirmPassword, agreeTerms]
+    VerifyOtpBody:
+      type: object
+      properties:
+        phone:
+          type: string
+        otp:
+          type: string
+      required: [phone, otp]
+    ResendOtpBody:
+      type: object
+      properties:
+        phone:
+          type: string
+      required: [phone]
+    SendOtpResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        phone:
+          type: string
+        otpCode:
+          type: string
+          description: OTP code (dev only, remove in production with SMS integration)
+      required: [message, phone]
     AuthResponse:
       type: object
       properties:
@@ -163,9 +275,7 @@ components:
           $ref: "#/components/schemas/User"
         message:
           type: string
-      required:
-        - user
-        - message
+      required: [user, message]
     User:
       type: object
       properties:
@@ -175,25 +285,21 @@ components:
           type: string
         email:
           type: string
+        phone:
+          type: string
         role:
           type: string
           enum: [pengguna, mitra]
-      required:
-        - id
-        - name
-        - email
-        - role
+      required: [id, name, email, role]
     MessageResponse:
       type: object
       properties:
         message:
           type: string
-      required:
-        - message
+      required: [message]
     ErrorResponse:
       type: object
       properties:
         error:
           type: string
-      required:
-        - error
+      required: [error]
