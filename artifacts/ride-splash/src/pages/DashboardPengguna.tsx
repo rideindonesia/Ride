@@ -3,6 +3,10 @@ import { useLocation } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+const SERVICE_ROUTES: Record<string, string> = {
+  ride_auto: "/order/bengkel",
+};
+
 // Fix leaflet default icon paths
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -281,14 +285,22 @@ export default function DashboardPengguna() {
             <button onClick={() => setShowAllServices(true)} style={{ background: "none", border: "none", color: "#1a7a6a", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Lihat Semua</button>
           </div>
           <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
-            {SERVICES.map(s => (
-              <div key={s.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, flexShrink: 0, width: 72, cursor: "pointer" }}>
-                <div style={{ width: 56, height: 56, borderRadius: 16, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
-                  {s.emoji}
+            {SERVICES.map(s => {
+              const route = SERVICE_ROUTES[s.id];
+              const isComingSoon = COMING_SOON_SERVICES.some(cs => cs.id === s.id);
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => !isComingSoon && route && navigate(route)}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, flexShrink: 0, width: 72, cursor: isComingSoon ? "default" : route ? "pointer" : "default", opacity: isComingSoon ? 0.5 : 1, position: "relative" }}
+                >
+                  <div style={{ width: 56, height: 56, borderRadius: 16, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+                    {s.emoji}
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -414,14 +426,21 @@ export default function DashboardPengguna() {
           <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", flex: 1, padding: "28px 20px 40px", marginTop: -12 }}>
             {/* Active services grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
-              {ACTIVE_SERVICES.map(s => (
-                <div key={s.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>
-                    {s.emoji}
+              {ACTIVE_SERVICES.map(s => {
+                const route = SERVICE_ROUTES[s.id];
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => { setShowAllServices(false); if (route) navigate(route); }}
+                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, cursor: route ? "pointer" : "default" }}
+                  >
+                    <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>
+                      {s.emoji}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Divider */}
