@@ -72,7 +72,7 @@ export default function DashboardPengguna() {
   const [pickLng, setPickLng] = useState<number | null>(null);
   const [notifCount] = useState(0);
   const [activeOrder, setActiveOrder] = useState<null | {
-    id: number; orderNo: string; status: string;
+    id: number; orderNo: string; status: string; trackingPhase: string;
     vehicleModel: string; damageCategories: string[]; mitraName: string | null;
   }>(null);
   const [showAllServices, setShowAllServices] = useState(false);
@@ -339,7 +339,13 @@ export default function DashboardPengguna() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{activeOrder.vehicleModel || "Bengkel Panggilan"}</div>
                   <div style={{ color: "#5fd3c4", fontSize: 12, marginTop: 2 }}>
-                    {activeOrder.status === "accepted" && activeOrder.mitraName
+                    {activeOrder.trackingPhase === "selesai"
+                      ? "💳 Menunggu pembayaran"
+                      : activeOrder.trackingPhase === "pengerjaan"
+                      ? "🔧 Sedang dikerjakan"
+                      : activeOrder.trackingPhase === "tiba"
+                      ? "📍 Mitra sudah tiba"
+                      : activeOrder.mitraName
                       ? `🏍️ ${activeOrder.mitraName} menuju lokasi`
                       : "🔍 Mencari mitra terdekat..."}
                   </div>
@@ -347,10 +353,16 @@ export default function DashboardPengguna() {
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
                   <div style={{
-                    background: activeOrder.status === "accepted" ? "#1a7a6a" : "#f59e0b",
+                    background: activeOrder.trackingPhase === "selesai" ? "#ea580c"
+                      : activeOrder.trackingPhase === "pengerjaan" ? "#7c3aed"
+                      : activeOrder.trackingPhase === "tiba" ? "#0284c7"
+                      : "#1a7a6a",
                     color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700
                   }}>
-                    {activeOrder.status === "accepted" ? "✅ Diterima" : "🔍 Mencari"}
+                    {activeOrder.trackingPhase === "selesai" ? "💳 Bayar" 
+                      : activeOrder.trackingPhase === "pengerjaan" ? "🔧 Pengerjaan"
+                      : activeOrder.trackingPhase === "tiba" ? "📍 Tiba"
+                      : "✅ Diterima"}
                   </div>
                   <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 4 }}>Ketuk untuk lihat</div>
                 </div>

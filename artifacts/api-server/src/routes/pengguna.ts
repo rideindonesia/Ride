@@ -329,14 +329,21 @@ router.get("/active-order", async (req, res) => {
   const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
+  // Hanya tampilkan order yang:
+  // 1. status accepted AND diupdate dalam 8 jam terakhir (menghindari order terbengkalai)
+  // 2. ATAU status accepted AND phase selesai (menunggu pembayaran, perlu tetap tampil)
+  const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60 * 1000);
   const [order] = await db.select()
     .from(ordersTable)
     .where(and(
       eq(ordersTable.penggunaId, penggunaId),
       eq(ordersTable.status, "accepted"),
-      gt(ordersTable.createdAt, new Date(Date.now() - 3 * 60 * 60 * 1000))
+      or(
+        gt(ordersTable.updatedAt, eightHoursAgo),
+        eq(ordersTable.trackingPhase, "selesai")
+      )
     ))
-    .orderBy(desc(ordersTable.createdAt))
+    .orderBy(desc(ordersTable.updatedAt))
     .limit(1);
 
   if (!order) { res.json({ order: null }); return; }
@@ -353,6 +360,7 @@ router.get("/active-order", async (req, res) => {
       id: order.id,
       orderNo: order.orderNo,
       status: order.status,
+      trackingPhase: order.trackingPhase ?? "menuju",
       vehicleModel: order.vehicleModel,
       damageCategories: order.damageCategories,
       mitraName,
