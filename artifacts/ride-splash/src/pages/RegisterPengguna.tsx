@@ -41,9 +41,9 @@ function Header({ onBack }: { onBack?: () => void }) {
     <div style={{ background: "linear-gradient(180deg, #0d2137 0%, #1a3a5c 50%, #1c4a5a 100%)", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 48, paddingBottom: 32, flex: "0 0 auto", position: "relative" }}>
       <button
         onClick={onBack ?? (() => navigate("/register"))}
-        style={{ position: "absolute", top: 48, left: 20, width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        style={{ position: "absolute", top: 48, left: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(30,50,70,0.7)", border: "none", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-1px" }}
       >
-        ←
+        &lt;-
       </button>
       <svg width="64" height="72" viewBox="0 0 120 134" fill="none" xmlns="http://www.w3.org/2000/svg">
         <polygon points="60,4 112,33 112,101 60,130 8,101 8,33" stroke="rgba(100,200,200,0.7)" strokeWidth="3" fill="none" />
