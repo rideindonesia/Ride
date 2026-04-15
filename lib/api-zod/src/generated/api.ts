@@ -14,3 +14,49 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Register a new user
+ */
+export const RegisterBody = zod.object({
+  name: zod.string(),
+  email: zod.string(),
+  password: zod.string(),
+  role: zod.enum(["pengguna", "mitra"]),
+});
+
+/**
+ * @summary Login an existing user
+ */
+export const LoginBody = zod.object({
+  email: zod.string(),
+  password: zod.string(),
+  role: zod.enum(["pengguna", "mitra"]),
+});
+
+export const LoginResponse = zod.object({
+  user: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum(["pengguna", "mitra"]),
+  }),
+  message: zod.string(),
+});
+
+/**
+ * @summary Get current user
+ */
+export const GetMeResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum(["pengguna", "mitra"]),
+});
+
+/**
+ * @summary Logout
+ */
+export const LogoutResponse = zod.object({
+  message: zod.string(),
+});

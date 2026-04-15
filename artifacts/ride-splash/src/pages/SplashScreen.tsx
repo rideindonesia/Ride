@@ -1,4 +1,16 @@
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+
 export default function SplashScreen() {
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      navigate("/login");
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [navigate]);
+
   return (
     <div
       style={{
@@ -92,34 +104,9 @@ export default function SplashScreen() {
           gap: 10,
         }}
       >
-        {/* Active dot (elongated) */}
-        <div
-          style={{
-            width: 28,
-            height: 8,
-            borderRadius: 4,
-            background: "rgba(255,255,255,0.85)",
-          }}
-        />
-        {/* Inactive dots */}
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            border: "1.5px solid rgba(255,255,255,0.5)",
-            background: "transparent",
-          }}
-        />
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            border: "1.5px solid rgba(255,255,255,0.5)",
-            background: "transparent",
-          }}
-        />
+        <div style={{ width: 28, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.85)" }} />
+        <div style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.5)", background: "transparent" }} />
+        <div style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.5)", background: "transparent" }} />
       </div>
     </div>
   );
@@ -134,21 +121,18 @@ function HexagonLogo() {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Outer hexagon */}
       <polygon
         points="60,4 112,33 112,101 60,130 8,101 8,33"
         stroke="rgba(100,200,200,0.7)"
         strokeWidth="3"
         fill="none"
       />
-      {/* Inner hexagon */}
       <polygon
         points="60,18 98,40 98,94 60,116 22,94 22,40"
         stroke="rgba(80,180,180,0.5)"
         strokeWidth="2"
         fill="none"
       />
-      {/* Letter R */}
       <text
         x="60"
         y="78"

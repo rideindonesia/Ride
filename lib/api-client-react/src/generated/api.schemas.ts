@@ -8,3 +8,58 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type RegisterBodyRole =
+  (typeof RegisterBodyRole)[keyof typeof RegisterBodyRole];
+
+export const RegisterBodyRole = {
+  pengguna: "pengguna",
+  mitra: "mitra",
+} as const;
+
+export interface RegisterBody {
+  name: string;
+  email: string;
+  password: string;
+  role: RegisterBodyRole;
+}
+
+export type LoginBodyRole = (typeof LoginBodyRole)[keyof typeof LoginBodyRole];
+
+export const LoginBodyRole = {
+  pengguna: "pengguna",
+  mitra: "mitra",
+} as const;
+
+export interface LoginBody {
+  email: string;
+  password: string;
+  role: LoginBodyRole;
+}
+
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+export const UserRole = {
+  pengguna: "pengguna",
+  mitra: "mitra",
+} as const;
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface AuthResponse {
+  user: User;
+  message: string;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface ErrorResponse {
+  error: string;
+}

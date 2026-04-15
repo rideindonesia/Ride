@@ -6,4 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./authResponse";
+export * from "./errorResponse";
 export * from "./healthStatus";
+export * from "./loginBody";
+export * from "./loginBodyRole";
+export * from "./messageResponse";
+export * from "./registerBody";
+export * from "./registerBodyRole";
+export * from "./user";
+export * from "./userRole";
