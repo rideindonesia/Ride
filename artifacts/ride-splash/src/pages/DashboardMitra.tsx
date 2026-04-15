@@ -119,10 +119,12 @@ export default function DashboardMitra() {
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Mitra order phase: diterima → chat → menuju → tiba → pengerjaan → selesai
-  type MitraPhase = "diterima" | "chat" | "menuju" | "tiba" | "pengerjaan";
+  type MitraPhase = "diterima" | "chat" | "menuju" | "tiba" | "pengerjaan" | "selesai";
   const [mitraPhase, setMitraPhase] = useState<MitraPhase>("diterima");
   const [etaSecs, setEtaSecs] = useState(0);
   const etaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [paymentModal, setPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -480,7 +482,7 @@ export default function DashboardMitra() {
         {activeOrder && (() => {
           const badgeLabel: Record<string, string> = {
             diterima: "Diterima", chat: "Chat & Negosiasi",
-            menuju: "Menuju Lokasi", tiba: "Sudah Tiba", pengerjaan: "Sedang Dikerjakan",
+            menuju: "Menuju Lokasi", tiba: "Sudah Tiba", pengerjaan: "Pengerjaan", selesai: "Selesai",
           };
           const etaMM = String(Math.floor(etaSecs / 60)).padStart(2, "0");
           const etaSS = String(etaSecs % 60).padStart(2, "0");
@@ -635,34 +637,32 @@ export default function DashboardMitra() {
 
                 {/* ── FASE 4: Sudah Tiba ── */}
                 {mitraPhase === "tiba" && (
-                  <>
-                    <div style={{ background: "#d4f5ec", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 18 }}>✅</span>
-                      <span style={{ fontSize: 13, color: "#1a5a4a", fontWeight: 600 }}>Anda sudah tiba di lokasi konsumen</span>
-                    </div>
-                    <button
-                      onClick={async () => { await updatePhase("pengerjaan"); setMitraPhase("pengerjaan"); }}
-                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                    >
-                      🔧 Mulai Pengerjaan
-                    </button>
-                  </>
+                  <button
+                    onClick={async () => { await updatePhase("pengerjaan"); setMitraPhase("pengerjaan"); }}
+                    style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                  >
+                    🔧 Mulai Perbaikan
+                  </button>
                 )}
 
-                {/* ── FASE 5: Sedang Dikerjakan ── */}
+                {/* ── FASE 5: Pengerjaan ── */}
                 {mitraPhase === "pengerjaan" && (
-                  <>
-                    <div style={{ background: "#fff8e1", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 18 }}>⚙️</span>
-                      <span style={{ fontSize: 13, color: "#7a5a00", fontWeight: 600 }}>Sedang mengerjakan kendaraan konsumen...</span>
-                    </div>
-                    <button
-                      onClick={completeOrder}
-                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                    >
-                      🏁 Tandai Selesai
-                    </button>
-                  </>
+                  <button
+                    onClick={async () => { await updatePhase("selesai"); setMitraPhase("selesai"); }}
+                    style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                  >
+                    ✅ Perbaikan Selesai
+                  </button>
+                )}
+
+                {/* ── FASE 6: Selesai — isi pembayaran ── */}
+                {mitraPhase === "selesai" && (
+                  <button
+                    onClick={() => setPaymentModal(true)}
+                    style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #ea8c00, #f59e0b)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                  >
+                    💳 Isi Pembayaran
+                  </button>
                 )}
 
               </div>
@@ -836,6 +836,64 @@ export default function DashboardMitra() {
           </div>
         )}
       </div>
+
+      {/* ── Modal Isi Pembayaran ── */}
+      {paymentModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500, display: "flex", alignItems: "flex-end" }}
+          onClick={e => { if (e.target === e.currentTarget) setPaymentModal(false); }}>
+          <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px 40px", width: "100%" }}>
+            <div style={{ width: 40, height: 4, background: "#e0e8f0", borderRadius: 2, margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", marginBottom: 6 }}>💳 Isi Pembayaran</div>
+            <div style={{ fontSize: 13, color: "#7a8a9a", marginBottom: 20 }}>
+              Masukkan total biaya yang disepakati dengan {activeOrder?.penggunaName}
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Total Biaya Jasa (Rp)</div>
+              <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
+                <span style={{ padding: "0 14px", fontSize: 14, fontWeight: 700, color: "#7a8a9a", background: "#f8fafc", borderRight: "1.5px solid #e0e8f0", alignSelf: "stretch", display: "flex", alignItems: "center" }}>Rp</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  placeholder="150000"
+                  style={{ flex: 1, padding: "13px 14px", border: "none", outline: "none", fontSize: 16, fontWeight: 700, color: "#1a2a3a" }}
+                />
+              </div>
+              {paymentAmount && (
+                <div style={{ fontSize: 13, color: "#1a7a6a", fontWeight: 600, marginTop: 6 }}>
+                  {Number(paymentAmount).toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}
+                </div>
+              )}
+            </div>
+            <button
+              disabled={!paymentAmount || Number(paymentAmount) <= 0}
+              onClick={async () => {
+                if (!activeOrder) return;
+                const amt = Number(paymentAmount);
+                await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/done`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ totalAmount: amt }),
+                });
+                if (chatPollRef.current) clearInterval(chatPollRef.current);
+                if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+                setPaymentModal(false);
+                setPaymentAmount("");
+                setActiveOrder(null);
+                setChatMsgs([]);
+                setMitraPhase("diterima");
+                setEtaSecs(0);
+                pushNotif({ type: "system", icon: "🎉", title: "Pekerjaan Selesai", body: `Order selesai. Total: Rp ${amt.toLocaleString("id-ID")}` });
+                fetchDashboard();
+              }}
+              style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: paymentAmount && Number(paymentAmount) > 0 ? "linear-gradient(135deg, #1a7a6a, #1a3a5c)" : "#e0e8f0", color: paymentAmount && Number(paymentAmount) > 0 ? "#fff" : "#9aa5b4", fontWeight: 700, fontSize: 15, cursor: paymentAmount && Number(paymentAmount) > 0 ? "pointer" : "default" }}
+            >
+              ✅ Konfirmasi Selesai
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #e8f0f8", display: "flex", zIndex: 200, paddingBottom: "env(safe-area-inset-bottom)" }}>
