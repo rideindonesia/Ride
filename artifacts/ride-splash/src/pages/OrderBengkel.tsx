@@ -564,41 +564,35 @@ export default function OrderBengkel() {
 
               {/* Accepted — mitra card + chat */}
               {orderStatus === "accepted" && acceptedMitra && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {/* Banner */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "rgba(26,122,106,0.08)", borderRadius: 14, border: "1.5px solid rgba(26,122,106,0.25)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "#e8f8f2", borderRadius: 14, border: "1.5px solid #b2e8d4" }}>
                     <span style={{ fontSize: 22 }}>✅</span>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a7a6a" }}>Mitra Ditemukan!</div>
-                      <div style={{ fontSize: 12, color: "#4a5568" }}>Diskusikan harga & detail sebelum memanggil</div>
-                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#1a7a6a" }}>Mitra Ditemukan!</div>
                   </div>
 
                   {/* Mitra card */}
-                  <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "18px 16px" }}>
+                  <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "18px 16px", background: "#fff" }}>
                     <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
-                      <div style={{ width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🧑‍🔧</div>
+                      <div style={{ width: 60, height: 60, borderRadius: 16, background: "#e8f4f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, flexShrink: 0 }}>🧑‍🔧</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 2 }}>{acceptedMitra.name}</div>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          {acceptedMitra.rating != null
-                            ? <span style={{ fontSize: 12, color: "#f5a623", fontWeight: 700 }}>⭐ {acceptedMitra.rating}</span>
-                            : <span style={{ fontSize: 12, color: "#9aa5b4" }}>⭐ –</span>}
-                          {acceptedMitra.totalOrders > 0 && <span style={{ fontSize: 12, color: "#7a8a9a" }}>· {acceptedMitra.totalOrders} order</span>}
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 3 }}>{acceptedMitra.name}</div>
+                        <div style={{ fontSize: 13, color: "#f5a623", fontWeight: 700, marginBottom: 3 }}>
+                          ⭐ {acceptedMitra.rating ?? "–"}{acceptedMitra.totalOrders > 0 ? ` · ${acceptedMitra.totalOrders} order` : ""}
                         </div>
-                        <div style={{ fontSize: 12, color: "#1a7a6a", fontWeight: 600, marginTop: 2 }}>
+                        <div style={{ fontSize: 12, color: "#4a5568" }}>
                           {acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist * 1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`} · Est. {acceptedMitra.etaMin} menit
                         </div>
                       </div>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 2 }}>Biaya Panggilan</div>
+                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>Biaya Panggilan</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>Rp {acceptedMitra.callFee.toLocaleString("id-ID")}</div>
                       </div>
-                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 2 }}>Est. Tiba</div>
+                      <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>Est. Tiba</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>± {acceptedMitra.etaMin} menit</div>
                       </div>
                     </div>
@@ -612,13 +606,13 @@ export default function OrderBengkel() {
                     </div>
                   </div>
 
-                  {/* Chat toggle button */}
+                  {/* Chat & Negosiasi button */}
                   <button
                     onClick={() => setChatOpen(o => !o)}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: chatOpen ? "#f0f8f6" : "#f8fafc", color: chatOpen ? "#1a7a6a" : "#1a3a5c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "16px", borderRadius: 16, border: "none", background: chatOpen ? "#f0f8f6" : "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: chatOpen ? "#1a7a6a" : "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", boxShadow: chatOpen ? "none" : "0 4px 14px rgba(26,58,92,0.3)" }}
                   >
-                    <span style={{ fontSize: 16 }}>💬</span>
-                    {chatOpen ? `Tutup Chat ∧` : `Chat dengan ${acceptedMitra.name}`}
+                    <span style={{ fontSize: 18 }}>💬</span>
+                    {chatOpen ? "Tutup Chat ∧" : "Chat & Negosiasi"}
                   </button>
 
                   {/* Chat panel */}
@@ -690,36 +684,25 @@ export default function OrderBengkel() {
             </div>
           </div>
 
-          {/* Bottom: Setuju & Panggil / Cari Mitra Lain */}
+          {/* Bottom bar */}
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 20px", background: "linear-gradient(to top, #f0f4f8 90%, transparent)", zIndex: 100 }}>
             {orderStatus === "accepted" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <button
-                  onClick={() => setStep(4)}
-                  style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a7a6a 0%, #1a3a5c 100%)", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                >
-                  ✅ Setuju & Panggil Mitra
-                </button>
+              <div style={{ display: "flex", gap: 12 }}>
                 <button
                   onClick={async () => {
-                    if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" });
+                    if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
                     if (orderPollRef.current) clearInterval(orderPollRef.current);
                     if (chatPollRef.current) clearInterval(chatPollRef.current);
-                    // Reset to re-search
-                    setOrderId(null);
-                    setOrderNo("");
-                    setOrderStatus("creating");
-                    setAcceptedMitra(null);
-                    setChatMessages([]);
-                    setChatInput("");
-                    // Trigger new order creation by resetting step to 3
+                    setOrderId(null); setOrderNo(""); setOrderStatus("creating");
+                    setAcceptedMitra(null); setChatMessages([]); setChatInput("");
                     setStep(2);
-                    setTimeout(() => setStep(3), 50);
                   }}
-                  style={{ width: "100%", padding: "14px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                >
-                  🔄 Cari Mitra Lain
-                </button>
+                  style={{ flex: 1, padding: "16px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
+                >← Kembali</button>
+                <button
+                  onClick={() => setStep(4)}
+                  style={{ flex: 2, padding: "16px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", boxShadow: "0 4px 14px rgba(26,58,92,0.3)" }}
+                >Lanjut →</button>
               </div>
             ) : (
               <button
