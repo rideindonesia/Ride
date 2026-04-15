@@ -96,11 +96,21 @@ router.post("/apply", uploadFields, async (req, res) => {
   });
 });
 
+/** Read mitra userId from signed role-cookie or fall back to session */
+function getMitraId(req: any): number | null {
+  const fromCookie = req.signedCookies?.["ride-m-uid"];
+  if (fromCookie) {
+    const n = parseInt(fromCookie);
+    if (!isNaN(n)) return n;
+  }
+  const fromSession = req.session?.userId;
+  if (fromSession && req.session?.userRole === "mitra") return fromSession as number;
+  return null;
+}
+
 // Middleware: require mitra session
 function requireMitra(req: any, res: any, next: any) {
-  const userId = req.session?.userId;
-  const role = req.session?.userRole;
-  if (!userId || role !== "mitra") {
+  if (!getMitraId(req)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -109,7 +119,7 @@ function requireMitra(req: any, res: any, next: any) {
 
 // GET /api/mitra/dashboard
 router.get("/dashboard", requireMitra, async (req, res) => {
-  const mitraId = (req.session as any).userId as number;
+  const mitraId = getMitraId(req) as number;
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -280,7 +290,7 @@ router.get("/dashboard", requireMitra, async (req, res) => {
 
 // PATCH /api/mitra/toggle-online
 router.patch("/toggle-online", requireMitra, async (req, res) => {
-  const mitraId = (req.session as any).userId as number;
+  const mitraId = getMitraId(req) as number;
   const { isOnline, lat, lng } = req.body;
 
   const existing = await db.select({ id: mitraLocationsTable.id, lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
@@ -317,7 +327,7 @@ router.patch("/toggle-online", requireMitra, async (req, res) => {
 
 // GET /api/mitra/incoming-orders
 router.get("/incoming-orders", requireMitra, async (req, res) => {
-  const mitraId = (req.session as any).userId as number;
+  const mitraId = getMitraId(req) as number;
 
   const [locRow] = await db.select({ serviceType: mitraLocationsTable.serviceType })
     .from(mitraLocationsTable)
@@ -363,7 +373,7 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
 
 // PATCH /api/mitra/orders/:id/accept
 router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
-  const mitraId = (req.session as any).userId as number;
+  const mitraId = getMitraId(req) as number;
   const orderId = parseInt(req.params.id);
 
   // Assign mitraId + set accepted (order was pending with no mitra yet)
@@ -388,7 +398,7 @@ router.patch("/orders/:id/reject", requireMitra, async (req, res) => {
 
 // PATCH /api/mitra/orders/:id/done — mitra marks order complete
 router.patch("/orders/:id/done", requireMitra, async (req, res) => {
-  const mitraId = (req.session as any).userId as number;
+  const mitraId = getMitraId(req) as number;
   const orderId = parseInt(req.params.id);
   const { totalAmount } = req.body;
 

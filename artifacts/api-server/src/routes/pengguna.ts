@@ -6,6 +6,18 @@ import crypto from "crypto";
 
 const router = Router();
 
+/** Read pengguna userId from signed role-cookie (survives cross-role login) or fall back to session */
+function getPenggunaId(req: any): number | null {
+  const fromCookie = req.signedCookies?.["ride-p-uid"];
+  if (fromCookie) {
+    const n = parseInt(fromCookie);
+    if (!isNaN(n)) return n;
+  }
+  const fromSession = req.session?.userId;
+  if (fromSession && req.session?.userRole === "pengguna") return fromSession as number;
+  return null;
+}
+
 function hashPassword(password: string): string {
   const salt = process.env.SESSION_SECRET;
   if (!salt) throw new Error("SESSION_SECRET tidak ditemukan");
@@ -228,7 +240,7 @@ router.get("/mitra-online", async (req, res) => {
 
 // POST /api/pengguna/orders — buat order baru
 router.post("/orders", async (req, res) => {
-  const penggunaId = (req.session as any)?.userId;
+  const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
   const { vehicleType, vehicleModel, vehicleYear, damageCategories, description,
@@ -261,7 +273,7 @@ router.post("/orders", async (req, res) => {
 
 // GET /api/pengguna/orders/:id — poll status order
 router.get("/orders/:id", async (req, res) => {
-  const penggunaId = (req.session as any)?.userId;
+  const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
   const orderId = parseInt(req.params.id);
@@ -312,7 +324,7 @@ router.get("/orders/:id", async (req, res) => {
 
 // DELETE /api/pengguna/orders/:id — batalkan order
 router.delete("/orders/:id", async (req, res) => {
-  const penggunaId = (req.session as any)?.userId;
+  const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
   const orderId = parseInt(req.params.id);

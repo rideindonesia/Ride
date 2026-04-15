@@ -67,6 +67,10 @@ router.post("/login", async (req, res) => {
   (req.session as Record<string, unknown>).userId = user.id;
   (req.session as Record<string, unknown>).userRole = user.role;
 
+  const cookieName = user.role === "pengguna" ? "ride-p-uid" : "ride-m-uid";
+  const cookieOpts = { httpOnly: true, signed: true, maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: "lax" as const };
+  res.cookie(cookieName, String(user.id), cookieOpts);
+
   res.json({
     user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role },
     message: "Berhasil masuk",
@@ -74,7 +78,21 @@ router.post("/login", async (req, res) => {
 });
 
 router.get("/me", async (req, res) => {
-  const userId = (req.session as Record<string, unknown>).userId as number | undefined;
+  // Prefer signed role cookies (survive cross-role login on same device)
+  const pUid = (req as any).signedCookies?.["ride-p-uid"];
+  const mUid = (req as any).signedCookies?.["ride-m-uid"];
+  const sessionUid = (req.session as Record<string, unknown>).userId as number | undefined;
+  const sessionRole = (req.session as Record<string, unknown>).userRole as string | undefined;
+
+  let userId: number | undefined;
+  if (sessionUid) {
+    userId = sessionUid; // session wins (most recently logged-in)
+  } else if (pUid) {
+    userId = parseInt(pUid);
+  } else if (mUid) {
+    userId = parseInt(mUid);
+  }
+
   if (!userId) {
     res.status(401).json({ error: "Belum login" });
     return;
@@ -90,7 +108,10 @@ router.get("/me", async (req, res) => {
 });
 
 router.post("/logout", (req, res) => {
+  const role = (req.session as Record<string, unknown>).userRole as string | undefined;
   req.session.destroy(() => {
+    res.clearCookie("ride-p-uid");
+    res.clearCookie("ride-m-uid");
     res.json({ message: "Berhasil keluar" });
   });
 });
