@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable } from "@workspace/db";
-import { eq, and, gt, sql, avg, count } from "drizzle-orm";
+import { eq, and, gt, sql, avg, count, or, desc } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 
@@ -319,6 +319,41 @@ router.get("/orders/:id", async (req, res) => {
     totalAmount: order.totalAmount,
     platformFee: order.platformFee,
     mitra: mitraInfo,
+  });
+});
+
+// GET /api/pengguna/active-order — get current active order (pending/accepted)
+router.get("/active-order", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const [order] = await db.select()
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.penggunaId, penggunaId),
+      or(eq(ordersTable.status, "pending"), eq(ordersTable.status, "accepted"))
+    ))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(1);
+
+  if (!order) { res.json({ order: null }); return; }
+
+  let mitraName: string | null = null;
+  if (order.mitraId) {
+    const [mitraUser] = await db.select({ name: usersTable.name })
+      .from(usersTable).where(eq(usersTable.id, order.mitraId));
+    mitraName = mitraUser?.name ?? null;
+  }
+
+  res.json({
+    order: {
+      id: order.id,
+      orderNo: order.orderNo,
+      status: order.status,
+      vehicleModel: order.vehicleModel,
+      damageCategories: order.damageCategories,
+      mitraName,
+    }
   });
 });
 

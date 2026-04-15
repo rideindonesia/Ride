@@ -71,7 +71,10 @@ export default function DashboardPengguna() {
   const [pickLat, setPickLat] = useState<number | null>(null);
   const [pickLng, setPickLng] = useState<number | null>(null);
   const [notifCount] = useState(0);
-  const [activeOrder] = useState<null | { service: string; status: string }>(null);
+  const [activeOrder, setActiveOrder] = useState<null | {
+    id: number; orderNo: string; status: string;
+    vehicleModel: string; damageCategories: string[]; mitraName: string | null;
+  }>(null);
   const [showAllServices, setShowAllServices] = useState(false);
 
   const mapRef = useRef<HTMLDivElement>(null);
@@ -94,6 +97,18 @@ export default function DashboardPengguna() {
       })
       .catch(() => navigate("/login"));
   }, [navigate]);
+
+  // Poll active order every 5s
+  useEffect(() => {
+    const fetch_ = () =>
+      fetch("/api/pengguna/active-order", { credentials: "include" })
+        .then(r => r.json())
+        .then(d => setActiveOrder(d.order ?? null))
+        .catch(() => {});
+    fetch_();
+    const t = setInterval(fetch_, 5000);
+    return () => clearInterval(t);
+  }, []);
 
   // GPS watch
   useEffect(() => {
@@ -306,25 +321,38 @@ export default function DashboardPengguna() {
 
         <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
 
-          {/* Active order card - only show when there's an active order */}
+          {/* Active order card */}
           {activeOrder && (
-            <div style={{ borderRadius: 16, background: "#1a3a5c", padding: 16, cursor: "pointer" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div
+              onClick={() => navigate("/order/bengkel")}
+              style={{ borderRadius: 16, background: "linear-gradient(135deg, #0d2137 0%, #1a3a5c 100%)", padding: 16, cursor: "pointer", border: "1.5px solid rgba(26,122,106,0.4)", boxShadow: "0 4px 16px rgba(26,58,92,0.25)" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 4, background: "#22c55e" }} />
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: "#22c55e", boxShadow: "0 0 6px #22c55e" }} />
                   <span style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>Order Sedang Berjalan</span>
                 </div>
-                <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 16 }}>›</span>
+                <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 18 }}>›</span>
               </div>
-              <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 12, padding: 12, display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🔧</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{activeOrder.service}</div>
-                  <div style={{ color: "#5fd3c4", fontSize: 12, marginTop: 2 }}>● Sedang mencari mitra...</div>
+              <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🔧</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{activeOrder.vehicleModel || "Bengkel Panggilan"}</div>
+                  <div style={{ color: "#5fd3c4", fontSize: 12, marginTop: 2 }}>
+                    {activeOrder.status === "accepted" && activeOrder.mitraName
+                      ? `🏍️ ${activeOrder.mitraName} menuju lokasi`
+                      : "🔍 Mencari mitra terdekat..."}
+                  </div>
+                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 2 }}>#{activeOrder.orderNo}</div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ background: "#f59e0b", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700 }}>Mencari</div>
-                  <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 4 }}>Ketuk untuk lihat</div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{
+                    background: activeOrder.status === "accepted" ? "#1a7a6a" : "#f59e0b",
+                    color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700
+                  }}>
+                    {activeOrder.status === "accepted" ? "✅ Diterima" : "🔍 Mencari"}
+                  </div>
+                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 4 }}>Ketuk untuk lihat</div>
                 </div>
               </div>
             </div>
