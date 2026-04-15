@@ -130,14 +130,25 @@ router.get("/dashboard", requireMitra, async (req, res) => {
     .from(ordersTable)
     .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")));
 
-  // Online status
+  // Online status + service type from location
   const [locRow] = await db.select({ isOnline: mitraLocationsTable.isOnline, serviceType: mitraLocationsTable.serviceType })
     .from(mitraLocationsTable)
     .where(eq(mitraLocationsTable.userId, mitraId))
     .limit(1);
 
   // User info
-  const [userRow] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, mitraId));
+  const [userRow] = await db.select({ name: usersTable.name, email: usersTable.email })
+    .from(usersTable).where(eq(usersTable.id, mitraId));
+
+  // Get serviceType from mitra_applications if not in location row
+  let serviceType = locRow?.serviceType ?? null;
+  if (!serviceType) {
+    const [appRow] = await db.select({ serviceType: mitraApplicationsTable.serviceType })
+      .from(mitraApplicationsTable)
+      .where(eq(mitraApplicationsTable.email, userRow?.email ?? ""))
+      .limit(1);
+    serviceType = appRow?.serviceType ?? null;
+  }
 
   // Weekly chart (last 7 days)
   const weeklyRaw = await db.select({
@@ -221,14 +232,32 @@ router.get("/dashboard", requireMitra, async (req, res) => {
     value: monthlyMap[m] ?? 0,
   }));
 
+  // Platform fee status — computed: unpaid if current week has fees not yet settled
+  const currentWeekStart = new Date();
+  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+  currentWeekStart.setHours(0, 0, 0, 0);
+  const [currentWeekFee] = await db.select({ fee: sum(ordersTable.platformFee) })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      eq(ordersTable.status, "done"),
+      gte(ordersTable.createdAt, currentWeekStart),
+    ));
+  const pendingFeeAmount = Number(currentWeekFee?.fee) || 0;
+  const platformFeeStatus = pendingFeeAmount > 0 ? "belum_lunas" : "lunas";
+  const platformFeePending = pendingFeeAmount;
+
+  const ratingValue = ratingRow?.rating != null ? parseFloat(Number(ratingRow.rating).toFixed(1)) : null;
+
   res.json({
     name: userRow?.name ?? "",
-    serviceType: locRow?.serviceType ?? "bengkel",
+    serviceType,
     isOnline: locRow?.isOnline ?? false,
     todayIncome: Number(todayStats?.income) || 0,
     todayOrders: Number(todayStats?.orders) || 0,
-    rating: parseFloat((Number(ratingRow?.rating) || 4.8).toFixed(1)),
-    platformFeeStatus: "lunas",
+    rating: ratingValue,
+    platformFeeStatus,
+    platformFeePending,
     weeklyChart,
     weeklyTotal: weeklyChart.reduce((s, d) => s + d.value, 0),
     weeklyBest: Math.max(...weeklyChart.map(d => d.value), 0),
@@ -241,24 +270,34 @@ router.get("/dashboard", requireMitra, async (req, res) => {
 // PATCH /api/mitra/toggle-online
 router.patch("/toggle-online", requireMitra, async (req, res) => {
   const mitraId = (req.session as any).userId as number;
-  const { isOnline } = req.body;
+  const { isOnline, lat, lng } = req.body;
 
-  const existing = await db.select({ id: mitraLocationsTable.id })
+  const existing = await db.select({ id: mitraLocationsTable.id, lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
     .from(mitraLocationsTable)
     .where(eq(mitraLocationsTable.userId, mitraId))
     .limit(1);
 
   if (existing.length > 0) {
-    await db.update(mitraLocationsTable)
-      .set({ isOnline: !!isOnline, updatedAt: new Date() })
-      .where(eq(mitraLocationsTable.userId, mitraId));
+    const updates: Record<string, unknown> = { isOnline: !!isOnline, updatedAt: new Date() };
+    if (typeof lat === "number" && typeof lng === "number") {
+      updates.lat = lat;
+      updates.lng = lng;
+    }
+    await db.update(mitraLocationsTable).set(updates).where(eq(mitraLocationsTable.userId, mitraId));
   } else {
+    // Lookup service type from mitra profile
+    const [userRow] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, mitraId));
+    const [appRow] = await db.select({ serviceType: mitraApplicationsTable.serviceType })
+      .from(mitraApplicationsTable)
+      .where(eq(mitraApplicationsTable.email, userRow?.email ?? ""))
+      .limit(1);
+
     await db.insert(mitraLocationsTable).values({
       userId: mitraId,
-      lat: -1.2654,
-      lng: 116.8312,
+      lat: typeof lat === "number" ? lat : 0,
+      lng: typeof lng === "number" ? lng : 0,
       isOnline: !!isOnline,
-      serviceType: "bengkel",
+      serviceType: appRow?.serviceType ?? null,
     });
   }
 

@@ -50,6 +50,7 @@ interface DashData {
   todayOrders: number;
   rating: number;
   platformFeeStatus: string;
+  platformFeePending: number;
   weeklyChart: ChartBar[];
   weeklyTotal: number;
   weeklyBest: number;
@@ -166,10 +167,20 @@ export default function DashboardMitra() {
     const next = !isOnline;
     setIsOnline(next);
     try {
+      let lat: number | undefined, lng: number | undefined;
+      if (next && navigator.geolocation) {
+        await new Promise<void>(resolve => {
+          navigator.geolocation.getCurrentPosition(
+            pos => { lat = pos.coords.latitude; lng = pos.coords.longitude; resolve(); },
+            () => resolve(),
+            { enableHighAccuracy: true, timeout: 4000 }
+          );
+        });
+      }
       await fetch(`${BASE}/api/mitra/toggle-online`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isOnline: next }),
+        body: JSON.stringify({ isOnline: next, lat, lng }),
       });
     } catch { setIsOnline(!next); }
     finally { setTogglingOnline(false); }
@@ -358,10 +369,12 @@ export default function DashboardMitra() {
           {[
             { icon: "💰", label: "Pendapatan Hari Ini", value: fmtRp(data?.todayIncome ?? 0), color: "#1a7a6a" },
             { icon: "📋", label: "Order Hari Ini", value: `${data?.todayOrders ?? 0} Order`, color: "#1a7a6a" },
-            { icon: "⭐", label: "Rating Saya", value: `${data?.rating ?? "4.8"} / 5.0`, color: "#f5a623" },
+            { icon: "⭐", label: "Rating Saya", value: data?.rating != null ? `${data.rating} / 5.0` : "Belum ada", color: "#f5a623" },
             {
               icon: "🏷️", label: "Platform Fee",
-              value: data?.platformFeeStatus === "lunas" ? "Lunas ✓" : "Belum Lunas",
+              value: data?.platformFeeStatus === "lunas"
+                ? "Lunas ✓"
+                : `Tagihan ${fmtRp(data?.platformFeePending ?? 0)}`,
               color: data?.platformFeeStatus === "lunas" ? "#1a7a6a" : "#ea580c",
             },
           ].map(s => (
