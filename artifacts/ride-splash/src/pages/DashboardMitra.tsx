@@ -60,7 +60,7 @@ interface DashData {
     totalAmount: number; platformFee: number; penggunaName: string; createdAt: string;
   }[];
   platformFeeHistory: {
-    weekStart: string; weekEnd: string; omset: number; fee: number;
+    weekStart: string; weekEnd: string; omset: number; fee: number; isPaid: boolean;
   }[];
 }
 
@@ -492,9 +492,15 @@ export default function DashboardMitra() {
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{f.weekStart} – {f.weekEnd}</div>
                     <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>Omset: {fmtRp(Number(f.omset))} · Fee: {fmtRp(Number(f.fee))}</div>
                   </div>
-                  <div style={{ padding: "4px 12px", borderRadius: 8, background: "rgba(26,122,106,0.1)", border: "1px solid rgba(26,122,106,0.25)" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1a7a6a" }}>✅ Lunas</span>
-                  </div>
+                  {f.isPaid ? (
+                    <div style={{ padding: "4px 12px", borderRadius: 8, background: "rgba(26,122,106,0.1)", border: "1px solid rgba(26,122,106,0.25)" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#1a7a6a" }}>✅ Lunas</span>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "4px 12px", borderRadius: 8, background: "rgba(234,88,12,0.1)", border: "1px solid rgba(234,88,12,0.25)" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#ea580c" }}>⏳ Proses</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

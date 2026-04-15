@@ -114,6 +114,10 @@ router.get("/dashboard", requireMitra, async (req, res) => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
+  const currentWeekStart = new Date();
+  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+  currentWeekStart.setHours(0, 0, 0, 0);
+
   // Today stats
   const [todayStats] = await db.select({
     income: sum(ordersTable.totalAmount),
@@ -195,9 +199,10 @@ router.get("/dashboard", requireMitra, async (req, res) => {
     .limit(10);
 
   // Platform fee history (group by 7-day periods)
-  const feeHistory = await db.select({
+  const feeHistoryRaw = await db.select({
     weekStart: sql<string>`to_char(date_trunc('week', ${ordersTable.createdAt}), 'DD Mon YYYY')`,
     weekEnd: sql<string>`to_char(date_trunc('week', ${ordersTable.createdAt}) + interval '6 days', 'DD Mon YYYY')`,
+    weekEpoch: sql<string>`extract(epoch from date_trunc('week', ${ordersTable.createdAt}))`,
     omset: sum(ordersTable.totalAmount),
     fee: sum(ordersTable.platformFee),
   }).from(ordersTable)
@@ -205,6 +210,15 @@ router.get("/dashboard", requireMitra, async (req, res) => {
     .groupBy(sql`date_trunc('week', ${ordersTable.createdAt})`)
     .orderBy(desc(sql`date_trunc('week', ${ordersTable.createdAt})`))
     .limit(6);
+
+  // Compute isPaid in JS: weeks that ended before the current week start are considered paid
+  const feeHistory = feeHistoryRaw.map(f => ({
+    weekStart: f.weekStart,
+    weekEnd: f.weekEnd,
+    omset: f.omset,
+    fee: f.fee,
+    isPaid: Number(f.weekEpoch) * 1000 < currentWeekStart.getTime(),
+  }));
 
   // Days mapping for Indonesian
   const dayMap: Record<string, string> = {
@@ -233,9 +247,6 @@ router.get("/dashboard", requireMitra, async (req, res) => {
   }));
 
   // Platform fee status — computed: unpaid if current week has fees not yet settled
-  const currentWeekStart = new Date();
-  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
-  currentWeekStart.setHours(0, 0, 0, 0);
   const [currentWeekFee] = await db.select({ fee: sum(ordersTable.platformFee) })
     .from(ordersTable)
     .where(and(
