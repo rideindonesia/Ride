@@ -946,14 +946,6 @@ export default function OrderBengkel() {
                 ))}
               </div>
 
-              {/* Pickup address */}
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 14px", background: "#f0f8f6", borderRadius: 12 }}>
-                <span style={{ fontSize: 14 }}>📍</span>
-                <div>
-                  <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 700, marginBottom: 2 }}>Lokasi Penjemputan</div>
-                  <div style={{ fontSize: 13, color: "#1a2a3a", lineHeight: 1.4 }}>{autoAddress || "Lokasi yang dipilih"}</div>
-                </div>
-              </div>
             </div>
           </div>
 
