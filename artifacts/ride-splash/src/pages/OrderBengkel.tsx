@@ -388,18 +388,16 @@ export default function OrderBengkel() {
     return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
   }, [orderStatus, orderId]);
 
-  // Step 4+5: poll order state for live tracking & paymentData
+  // Step 4: poll mitra location + phase untuk live tracking (butuh pinLat/pinLng untuk map)
   useEffect(() => {
-    if (step !== 4 && step !== 5) return;
-    if (!orderId) return;
-    // pinLat/pinLng hanya dibutuhkan step 4 untuk hitung jarak; step 5 cukup orderId
+    if (step !== 4 || !orderId || !pinLat || !pinLng) return;
     const poll = async () => {
       try {
         const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
         const data = await res.json();
         const mLat: number | null = data.mitra?.lat ?? null;
         const mLng: number | null = data.mitra?.lng ?? null;
-        if (step === 4 && mLat && mLng && pinLat && pinLng) {
+        if (mLat && mLng) {
           setMitraTrackLat(mLat);
           setMitraTrackLng(mLng);
           const dist = haversineDist(mLat, mLng, pinLat, pinLng);
@@ -416,6 +414,24 @@ export default function OrderBengkel() {
     trackingPollRef.current = setInterval(poll, 4000);
     return () => { if (trackingPollRef.current) clearInterval(trackingPollRef.current); };
   }, [step, orderId, pinLat, pinLng]);
+
+  // Step 5: poll paymentData secara terpisah (hanya butuh orderId)
+  const step5PollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (step !== 5 || !orderId) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/pengguna/orders/${orderId}?t=${Date.now()}`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.paymentData) setPaymentData(data.paymentData);
+        if (data.status === "done") { setOrderStatus("done"); setOrderTotal(data.totalAmount); }
+      } catch { /* ignore */ }
+    };
+    poll();
+    step5PollRef.current = setInterval(poll, 3000);
+    return () => { if (step5PollRef.current) clearInterval(step5PollRef.current); };
+  }, [step, orderId]);
 
   // Step 4: init & update tracking Leaflet map
   useEffect(() => {
