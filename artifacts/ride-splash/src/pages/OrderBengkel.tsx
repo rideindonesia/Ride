@@ -820,7 +820,7 @@ export default function OrderBengkel() {
                   style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e8a0a0", background: "#fff5f5", color: "#c0392b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                 >✕ Batalkan</button>
                 <button
-                  onClick={() => mitraConfirmed && setStep(4)}
+                  onClick={() => { if (mitraConfirmed) { setChatOpen(false); setStep(4); } }}
                   disabled={!mitraConfirmed}
                   style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: mitraConfirmed ? "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)" : "#d0d8e0", color: mitraConfirmed ? "#fff" : "#a0aab4", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "pointer" : "not-allowed", boxShadow: mitraConfirmed ? "0 4px 14px rgba(26,58,92,0.3)" : "none", transition: "all 0.3s ease" }}
                 >Lanjut →</button>
