@@ -7,7 +7,9 @@ import crypto from "crypto";
 const router = Router();
 
 function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password + "ride_salt_2024").digest("hex");
+  const salt = process.env.SESSION_SECRET;
+  if (!salt) throw new Error("SESSION_SECRET tidak ditemukan");
+  return crypto.createHash("sha256").update(password + salt).digest("hex");
 }
 
 router.post("/register", async (req, res) => {
