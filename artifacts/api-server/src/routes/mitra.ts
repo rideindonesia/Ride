@@ -2,8 +2,8 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { db, mitraApplicationsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable } from "@workspace/db";
+import { eq, and, gte, desc, sql, avg, count, sum } from "drizzle-orm";
 import crypto from "crypto";
 
 const router = Router();
@@ -94,6 +94,233 @@ router.post("/apply", uploadFields, async (req, res) => {
     message: "Pendaftaran berhasil dikirim",
     application,
   });
+});
+
+// Middleware: require mitra session
+function requireMitra(req: any, res: any, next: any) {
+  const userId = req.session?.userId;
+  const role = req.session?.userRole;
+  if (!userId || role !== "mitra") {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+}
+
+// GET /api/mitra/dashboard
+router.get("/dashboard", requireMitra, async (req, res) => {
+  const mitraId = (req.session as any).userId as number;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  // Today stats
+  const [todayStats] = await db.select({
+    income: sum(ordersTable.totalAmount),
+    orders: count(ordersTable.id),
+  }).from(ordersTable)
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      eq(ordersTable.status, "done"),
+      gte(ordersTable.createdAt, todayStart),
+    ));
+
+  // Overall rating
+  const [ratingRow] = await db.select({ rating: avg(ordersTable.rating) })
+    .from(ordersTable)
+    .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")));
+
+  // Online status
+  const [locRow] = await db.select({ isOnline: mitraLocationsTable.isOnline, serviceType: mitraLocationsTable.serviceType })
+    .from(mitraLocationsTable)
+    .where(eq(mitraLocationsTable.userId, mitraId))
+    .limit(1);
+
+  // User info
+  const [userRow] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, mitraId));
+
+  // Weekly chart (last 7 days)
+  const weeklyRaw = await db.select({
+    day: sql<string>`to_char(${ordersTable.createdAt}, 'Dy')`,
+    dayNum: sql<number>`EXTRACT(DOW FROM ${ordersTable.createdAt})`,
+    total: sum(ordersTable.totalAmount),
+  }).from(ordersTable)
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      eq(ordersTable.status, "done"),
+      gte(ordersTable.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+    ))
+    .groupBy(sql`to_char(${ordersTable.createdAt}, 'Dy')`, sql`EXTRACT(DOW FROM ${ordersTable.createdAt})`)
+    .orderBy(sql`EXTRACT(DOW FROM ${ordersTable.createdAt})`);
+
+  // Monthly chart (last 6 months)
+  const monthlyRaw = await db.select({
+    month: sql<string>`to_char(${ordersTable.createdAt}, 'Mon')`,
+    monthNum: sql<number>`EXTRACT(MONTH FROM ${ordersTable.createdAt})`,
+    total: sum(ordersTable.totalAmount),
+  }).from(ordersTable)
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      eq(ordersTable.status, "done"),
+      gte(ordersTable.createdAt, new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)),
+    ))
+    .groupBy(sql`to_char(${ordersTable.createdAt}, 'Mon')`, sql`EXTRACT(MONTH FROM ${ordersTable.createdAt})`)
+    .orderBy(sql`EXTRACT(MONTH FROM ${ordersTable.createdAt})`);
+
+  // Recent orders (last 10 done)
+  const recentOrders = await db.select({
+    id: ordersTable.id,
+    orderNo: ordersTable.orderNo,
+    vehicleModel: ordersTable.vehicleModel,
+    vehicleYear: ordersTable.vehicleYear,
+    totalAmount: ordersTable.totalAmount,
+    platformFee: ordersTable.platformFee,
+    penggunaName: usersTable.name,
+    createdAt: ordersTable.createdAt,
+  }).from(ordersTable)
+    .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
+    .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(10);
+
+  // Platform fee history (group by 7-day periods)
+  const feeHistory = await db.select({
+    weekStart: sql<string>`to_char(date_trunc('week', ${ordersTable.createdAt}), 'DD Mon YYYY')`,
+    weekEnd: sql<string>`to_char(date_trunc('week', ${ordersTable.createdAt}) + interval '6 days', 'DD Mon YYYY')`,
+    omset: sum(ordersTable.totalAmount),
+    fee: sum(ordersTable.platformFee),
+  }).from(ordersTable)
+    .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")))
+    .groupBy(sql`date_trunc('week', ${ordersTable.createdAt})`)
+    .orderBy(desc(sql`date_trunc('week', ${ordersTable.createdAt})`))
+    .limit(6);
+
+  // Days mapping for Indonesian
+  const dayMap: Record<string, string> = {
+    Mon: "Sen", Tue: "Sel", Wed: "Rab", Thu: "Kam", Fri: "Jum", Sat: "Sab", Sun: "Min",
+  };
+  const dayOrder = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const today = new Date().getDay();
+  const last7Days = Array.from({ length: 7 }, (_, i) => dayOrder[(today - 6 + i + 7) % 7]);
+  const weeklyMap = Object.fromEntries(weeklyRaw.map(r => [r.day?.trim(), Number(r.total) || 0]));
+  const weeklyChart = last7Days.map(d => ({
+    label: dayMap[d] ?? d,
+    value: weeklyMap[d] ?? 0,
+  }));
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthMapId: Record<string, string> = {
+    Jan: "Jan", Feb: "Feb", Mar: "Mar", Apr: "Apr", May: "Mei", Jun: "Jun",
+    Jul: "Jul", Aug: "Agu", Sep: "Sep", Oct: "Okt", Nov: "Nov", Dec: "Des",
+  };
+  const monthlyMap = Object.fromEntries(monthlyRaw.map(r => [r.month?.trim(), Number(r.total) || 0]));
+  const thisMonth = new Date().getMonth();
+  const last6Months = Array.from({ length: 6 }, (_, i) => monthNames[(thisMonth - 5 + i + 12) % 12]);
+  const monthlyChart = last6Months.map(m => ({
+    label: monthMapId[m] ?? m,
+    value: monthlyMap[m] ?? 0,
+  }));
+
+  res.json({
+    name: userRow?.name ?? "",
+    serviceType: locRow?.serviceType ?? "bengkel",
+    isOnline: locRow?.isOnline ?? false,
+    todayIncome: Number(todayStats?.income) || 0,
+    todayOrders: Number(todayStats?.orders) || 0,
+    rating: parseFloat((Number(ratingRow?.rating) || 4.8).toFixed(1)),
+    platformFeeStatus: "lunas",
+    weeklyChart,
+    weeklyTotal: weeklyChart.reduce((s, d) => s + d.value, 0),
+    weeklyBest: Math.max(...weeklyChart.map(d => d.value), 0),
+    monthlyChart,
+    recentOrders,
+    platformFeeHistory: feeHistory,
+  });
+});
+
+// PATCH /api/mitra/toggle-online
+router.patch("/toggle-online", requireMitra, async (req, res) => {
+  const mitraId = (req.session as any).userId as number;
+  const { isOnline } = req.body;
+
+  const existing = await db.select({ id: mitraLocationsTable.id })
+    .from(mitraLocationsTable)
+    .where(eq(mitraLocationsTable.userId, mitraId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    await db.update(mitraLocationsTable)
+      .set({ isOnline: !!isOnline, updatedAt: new Date() })
+      .where(eq(mitraLocationsTable.userId, mitraId));
+  } else {
+    await db.insert(mitraLocationsTable).values({
+      userId: mitraId,
+      lat: -1.2654,
+      lng: 116.8312,
+      isOnline: !!isOnline,
+      serviceType: "bengkel",
+    });
+  }
+
+  res.json({ isOnline: !!isOnline });
+});
+
+// GET /api/mitra/incoming-orders
+router.get("/incoming-orders", requireMitra, async (req, res) => {
+  const mitraId = (req.session as any).userId as number;
+
+  const [locRow] = await db.select({ serviceType: mitraLocationsTable.serviceType })
+    .from(mitraLocationsTable)
+    .where(eq(mitraLocationsTable.userId, mitraId))
+    .limit(1);
+
+  const incoming = await db.select({
+    id: ordersTable.id,
+    orderNo: ordersTable.orderNo,
+    serviceType: ordersTable.serviceType,
+    vehicleType: ordersTable.vehicleType,
+    vehicleModel: ordersTable.vehicleModel,
+    vehicleYear: ordersTable.vehicleYear,
+    damageCategories: ordersTable.damageCategories,
+    pickupAddress: ordersTable.pickupAddress,
+    totalAmount: ordersTable.totalAmount,
+    platformFee: ordersTable.platformFee,
+    penggunaName: usersTable.name,
+    createdAt: ordersTable.createdAt,
+  }).from(ordersTable)
+    .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
+    .where(and(
+      eq(ordersTable.status, "pending"),
+      eq(ordersTable.mitraId, mitraId),
+    ))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(1);
+
+  res.json({ incoming: incoming[0] ?? null });
+});
+
+// PATCH /api/mitra/orders/:id/accept
+router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
+  const mitraId = (req.session as any).userId as number;
+  const orderId = parseInt(req.params.id);
+
+  await db.update(ordersTable)
+    .set({ status: "accepted", updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+
+  res.json({ ok: true });
+});
+
+// PATCH /api/mitra/orders/:id/reject
+router.patch("/orders/:id/reject", requireMitra, async (req, res) => {
+  const mitraId = (req.session as any).userId as number;
+  const orderId = parseInt(req.params.id);
+
+  await db.update(ordersTable)
+    .set({ status: "cancelled", mitraId: null as unknown as number, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+
+  res.json({ ok: true });
 });
 
 export default router;

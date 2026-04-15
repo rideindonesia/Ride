@@ -6,6 +6,7 @@ import AuthForm from "@/pages/AuthForm";
 import RegisterPengguna from "@/pages/RegisterPengguna";
 import RegisterMitra from "@/pages/RegisterMitra";
 import DashboardPengguna from "@/pages/DashboardPengguna";
+import DashboardMitra from "@/pages/DashboardMitra";
 import OrderBengkel from "@/pages/OrderBengkel";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ function Router() {
       </Route>
       <Route path="/register/form" component={RegisterFormRouter} />
       <Route path="/dashboard/pengguna" component={DashboardPengguna} />
+      <Route path="/dashboard/mitra" component={DashboardMitra} />
       <Route path="/order/bengkel" component={OrderBengkel} />
     </Switch>
   );
