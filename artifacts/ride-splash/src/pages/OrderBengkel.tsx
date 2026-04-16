@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
@@ -125,6 +126,7 @@ export default function OrderBengkel() {
   type PaymentData = { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string };
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
@@ -1328,7 +1330,7 @@ export default function OrderBengkel() {
                         📄 Struk
                       </button>
                       <button
-                        onClick={() => navigate(`/review/${orderId}`)}
+                        onClick={() => setShowReviewModal(true)}
                         style={{ padding: "10px 22px", borderRadius: 12, border: "2px solid #f59e0b", background: "#fff", color: "#d97706", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                         ⭐ Beri Ulasan
                       </button>
@@ -1364,6 +1366,7 @@ export default function OrderBengkel() {
           </>
         );
       })()}
+    {showReviewModal && <ReviewModal orderId={orderId} onClose={() => setShowReviewModal(false)} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
@@ -128,6 +129,7 @@ export default function OrderElektronik() {
   type PaymentData = { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string };
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
@@ -714,7 +716,7 @@ export default function OrderElektronik() {
                     <div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 6 }}>Pembayaran Berhasil!</div>
                     <div style={{ fontSize: 12, color: "#4a9a7a" }}>Terima kasih telah menggunakan RIDE</div>
                     <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}>
-                      <button onClick={() => navigate(`/review/${orderId}`)} style={{ padding: "10px 22px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#f5a623,#e8950a)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>⭐ Beri Ulasan</button>
+                      <button onClick={() => setShowReviewModal(true)} style={{ padding: "10px 22px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#f5a623,#e8950a)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>⭐ Beri Ulasan</button>
                       <button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "10px 22px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: "#fff", color: "#1a2a3a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏠 Beranda</button>
                     </div>
                   </div>
@@ -738,6 +740,7 @@ export default function OrderElektronik() {
           </>
         );
       })()}
+    {showReviewModal && <ReviewModal orderId={orderId} onClose={() => setShowReviewModal(false)} />}
     </div>
   );
 }

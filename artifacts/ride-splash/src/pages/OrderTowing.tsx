@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
@@ -130,6 +131,7 @@ export default function OrderTowing() {
   type PaymentData = { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string };
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
@@ -998,7 +1000,7 @@ export default function OrderTowing() {
           {(paymentConfirmed || orderStatus === "done") && (
             <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px 28px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100 }}>
               <button
-                onClick={() => navigate(`/review/${orderId}`)}
+                onClick={() => setShowReviewModal(true)}
                 style={{ width: "100%", padding: "17px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${ACCENT_DARK}, ${ACCENT})`, color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
               >
                 ⭐ Beri Ulasan Driver
@@ -1007,6 +1009,7 @@ export default function OrderTowing() {
           )}
         </>
       )}
+    {showReviewModal && <ReviewModal orderId={orderId} onClose={() => setShowReviewModal(false)} />}
     </div>
   );
 }

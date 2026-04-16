@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
@@ -109,6 +110,7 @@ export default function OrderCuci() {
   type PaymentData = { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string };
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
@@ -517,7 +519,7 @@ export default function OrderCuci() {
                     </div>
                   </>
                 )}
-                {paymentConfirmed && <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 16, padding: "24px 16px", textAlign: "center" as const, marginBottom: 16 }}><div style={{ fontSize: 40, marginBottom: 10 }}>🎉</div><div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 6 }}>Pembayaran Berhasil!</div><div style={{ fontSize: 12, color: "#4a9a7a" }}>Terima kasih telah menggunakan RIDE</div><div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}><button onClick={() => navigate(`/review/${orderId}`)} style={{ padding: "10px 22px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#f5a623,#e8950a)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>⭐ Beri Ulasan</button><button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "10px 22px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: "#fff", color: "#1a2a3a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏠 Beranda</button></div></div>}
+                {paymentConfirmed && <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 16, padding: "24px 16px", textAlign: "center" as const, marginBottom: 16 }}><div style={{ fontSize: 40, marginBottom: 10 }}>🎉</div><div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 6 }}>Pembayaran Berhasil!</div><div style={{ fontSize: 12, color: "#4a9a7a" }}>Terima kasih telah menggunakan RIDE</div><div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}><button onClick={() => setShowReviewModal(true)} style={{ padding: "10px 22px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#f5a623,#e8950a)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>⭐ Beri Ulasan</button><button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "10px 22px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: "#fff", color: "#1a2a3a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏠 Beranda</button></div></div>}
               </div>
             </div>
             <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px 28px", background: "#fff", borderTop: "1px solid #e8f0f8", zIndex: 100 }}>
@@ -528,6 +530,7 @@ export default function OrderCuci() {
           </>
         );
       })()}
+    {showReviewModal && <ReviewModal orderId={orderId} onClose={() => setShowReviewModal(false)} />}
     </div>
   );
 }
