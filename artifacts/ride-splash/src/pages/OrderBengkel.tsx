@@ -885,16 +885,13 @@ export default function OrderBengkel() {
                           chatMessages.map(m => {
                             const isMine = m.senderRole === "pengguna";
                             return (
-                              <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
-                                <div style={{
-                                  maxWidth: "78%", padding: "9px 13px", borderRadius: isMine ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                                  background: isMine ? "linear-gradient(135deg, #1a3a5c, #1a7a6a)" : "#f0f4f8",
-                                  color: isMine ? "#fff" : "#1a2a3a", fontSize: 13, lineHeight: 1.4,
-                                }}>
-                                  {m.message}
+                              <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: isMine ? "#1a7a6a" : "#7a8a9a", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>{isMine ? "Saya" : "Mitra"}</span>
+                                  <span style={{ fontSize: 10, color: "#b0bec5" }}>{new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
                                 </div>
-                                <div style={{ fontSize: 10, color: "#b0bec5", marginTop: 2 }}>
-                                  {new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                <div style={{ padding: "9px 13px", borderRadius: "4px 12px 12px 12px", background: isMine ? "#e8f5f2" : "#f0f4f8", borderLeft: `3px solid ${isMine ? "#1a7a6a" : "#c0cdd8"}`, color: "#1a2a3a", fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>
+                                  {m.message}
                                 </div>
                               </div>
                             );
@@ -1056,8 +1053,9 @@ export default function OrderBengkel() {
                     ) : chatMessages.map(m => {
                       const isMine = m.senderRole === "pengguna";
                       return (
-                        <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
-                          <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "linear-gradient(135deg,#1a3a5c,#1a7a6a)" : "#f0f4f8", color: isMine ? "#fff" : "#1a2a3a", fontSize: 13 }}>
+                        <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: isMine ? "#1a7a6a" : "#7a8a9a", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>{isMine ? "Saya" : "Mitra"}</span>
+                          <div style={{ padding: "8px 12px", borderRadius: "4px 12px 12px 12px", background: isMine ? "#e8f5f2" : "#f0f4f8", borderLeft: `3px solid ${isMine ? "#1a7a6a" : "#c0cdd8"}`, color: "#1a2a3a", fontSize: 13, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
                             {m.message}
                           </div>
                         </div>
