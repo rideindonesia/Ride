@@ -88,25 +88,34 @@ router.post("/:orderId", requireAuth, async (req, res) => {
     res.status(403).json({ error: "Akses ditolak" }); return;
   }
 
-  // Determine which of our identities belongs to this order, and derive the role.
-  // Mitra cookie takes priority over session when determining sender role to avoid
-  // cross-role collisions (e.g. pengguna session still active on same device).
-  const mUidRaw = req.signedCookies?.["ride-m-uid"];
-  const mUid = mUidRaw && mUidRaw !== false ? parseInt(mUidRaw) : NaN;
-  const isMitraCookie = !isNaN(mUid) && mUid > 0 && mUid === order.mitraId;
+  // Determine senderRole using active SESSION first (most reliable),
+  // then fall back to signed cookies for cases without an active session.
+  const sessionUserId = (req.session as Record<string, unknown>).userId as number | undefined;
+  const sessionRole   = (req.session as Record<string, unknown>).userRole as string | undefined;
 
   let senderId: number;
   let senderRole: "pengguna" | "mitra";
 
-  if (isMitraCookie) {
-    senderId = mUid;
-    senderRole = "mitra";
-  } else if (order.penggunaId && ids.has(order.penggunaId)) {
-    senderId = order.penggunaId;
-    senderRole = "pengguna";
+  if (sessionRole === "mitra" && sessionUserId === order.mitraId) {
+    senderId    = sessionUserId;
+    senderRole  = "mitra";
+  } else if (sessionRole === "pengguna" && sessionUserId === order.penggunaId) {
+    senderId    = sessionUserId;
+    senderRole  = "pengguna";
   } else {
-    senderId = order.mitraId!;
-    senderRole = "mitra";
+    // Fallback: signed cookies (no active session, e.g. SSO/cookie-only flow)
+    const mUidRaw = req.signedCookies?.["ride-m-uid"];
+    const mUid    = mUidRaw && mUidRaw !== false ? parseInt(mUidRaw) : NaN;
+    const pUidRaw = req.signedCookies?.["ride-p-uid"];
+    const pUid    = pUidRaw && pUidRaw !== false ? parseInt(pUidRaw) : NaN;
+
+    if (!isNaN(mUid) && mUid === order.mitraId) {
+      senderId = mUid; senderRole = "mitra";
+    } else if (!isNaN(pUid) && pUid === order.penggunaId) {
+      senderId = pUid; senderRole = "pengguna";
+    } else {
+      res.status(403).json({ error: "Tidak dapat menentukan pengirim" }); return;
+    }
   }
 
   const [msg] = await db.insert(chatMessagesTable).values({
