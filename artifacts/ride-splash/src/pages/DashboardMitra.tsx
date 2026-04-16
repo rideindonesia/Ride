@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
+import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -239,6 +240,12 @@ export default function DashboardMitra() {
       const d = await res.json();
       setData(d);
       setIsOnline(d.isOnline ?? false);
+      // Connect socket and identify as mitra with service type
+      try {
+        const meRes = await fetch(`${BASE}/api/auth/me`, { credentials: "include" });
+        const me = await meRes.json();
+        if (me.id) identifySocket(me.id, "mitra", d.serviceType ?? "bengkel");
+      } catch {}
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [navigate]);
@@ -295,12 +302,34 @@ export default function DashboardMitra() {
     fetchDashboard();
     fetchIncoming();
     fetchActiveOrder();
+    // Backup polling (reduced to 30s) — primary incoming order via socket
     pollRef.current = setInterval(() => {
       fetchDashboard();
       fetchIncoming();
-    }, 15000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [fetchDashboard, fetchIncoming, fetchActiveOrder]);
+    }, 30000);
+
+    // Socket: real-time incoming order notification for mitra
+    const onNewOrder = (data: any) => {
+      if (seenOrderIds.current.has(data.id)) return;
+      seenOrderIds.current.add(data.id);
+      setIncoming(data);
+      setIncomingTimer(30);
+      pushNotif({
+        type: "order",
+        icon: getSvcCfg(data.serviceType).emoji,
+        title: "Pesanan Masuk!",
+        body: `${data.penggunaName} — ${data.vehicleModel} ${data.vehicleYear}`,
+        orderId: data.id,
+      });
+    };
+    socket.on("order:new", onNewOrder);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      socket.off("order:new", onNewOrder);
+      socket.disconnect();
+    };
+  }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif]);
 
   // Fetch mitra profile detail (dokumen, phone, dll)
   useEffect(() => {
@@ -361,20 +390,37 @@ export default function DashboardMitra() {
 
   const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
 
-  // Poll chat messages when active order accepted
+  // Real-time chat via socket (no more polling)
   useEffect(() => {
     if (!activeOrder) return;
-    const fetchMsgs = async () => {
-      try {
-        const res = await fetch(`${BASE}/api/chat/${activeOrder.id}`, { credentials: "include" });
-        const data = await res.json();
-        setChatMsgs(data.messages ?? []);
+    const orderId = activeOrder.id;
+
+    // Fetch initial messages
+    fetch(`${BASE}/api/chat/${orderId}`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => {
+        setChatMsgs(d.messages ?? []);
         setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-      } catch { /* ignore */ }
+      }).catch(() => {});
+
+    // Join socket room for real-time chat
+    joinOrderRoom(orderId);
+
+    const onChat = (data: any) => {
+      if (data.orderId !== orderId) return;
+      setChatMsgs(prev => {
+        if (prev.some((m: any) => m.id === data.id)) return prev;
+        const next = [...prev, data];
+        setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        return next;
+      });
     };
-    fetchMsgs();
-    chatPollRef.current = setInterval(fetchMsgs, 3000);
-    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
+    socket.on("chat:message", onChat);
+
+    return () => {
+      leaveOrderRoom(orderId);
+      socket.off("chat:message", onChat);
+    };
   }, [activeOrder?.id]);
 
   const sendChat = async () => {
@@ -418,6 +464,7 @@ export default function DashboardMitra() {
       setChatMsgs([]);
       setChatOpen(false);
       setMitraPhase("diterima");
+      joinOrderRoom(orderId);
     }
     pushNotif({ type: "system", icon: "✅", title: "Pesanan Diterima", body: "Anda telah menerima pesanan. Segera menuju lokasi pelanggan." });
     fetchDashboard();

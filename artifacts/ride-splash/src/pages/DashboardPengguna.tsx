@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
 
 const SERVICE_ROUTES: Record<string, string> = {
   ride_auto: "/order/bengkel",
@@ -234,13 +235,16 @@ export default function DashboardPengguna() {
     fetch("/api/auth/me", { credentials: "include" })
       .then(r => r.json())
       .then(d => {
-        if (d.id) setUser({ id: d.id, name: d.name });
-        else navigate("/login");
+        if (d.id) {
+          setUser({ id: d.id, name: d.name });
+          identifySocket(d.id, "pengguna");
+        } else navigate("/login");
       })
       .catch(() => navigate("/login"));
+    return () => { socket.disconnect(); };
   }, [navigate]);
 
-  // Poll active order every 5s
+  // Poll active order every 30s (backup) — primary update via socket
   useEffect(() => {
     const fetch_ = () =>
       fetch("/api/pengguna/active-order", { credentials: "include" })
@@ -248,8 +252,49 @@ export default function DashboardPengguna() {
         .then(d => setActiveOrder(d.order ?? null))
         .catch(() => {});
     fetch_();
-    const t = setInterval(fetch_, 5000);
+    const t = setInterval(fetch_, 30000);
     return () => clearInterval(t);
+  }, []);
+
+  // Socket: real-time order events for pengguna
+  useEffect(() => {
+    const onAccepted = (data: any) => {
+      setActiveOrder(prev => prev ? {
+        ...prev,
+        status: "accepted",
+        mitraId: data.mitraId,
+        mitraName: data.mitraName,
+        mitraLat: data.mitraLat,
+        mitraLng: data.mitraLng,
+      } : prev);
+      // Refresh full order data
+      fetch("/api/pengguna/active-order", { credentials: "include" })
+        .then(r => r.json()).then(d => { if (d.order) setActiveOrder(d.order); }).catch(() => {});
+    };
+    const onPhase = (data: any) => {
+      setActiveOrder(prev => prev && prev.id === data.orderId ? { ...prev, trackingPhase: data.phase } : prev);
+    };
+    const onPayment = (data: any) => {
+      setActiveOrder(prev => prev && prev.id === data.orderId ? { ...prev, paymentData: data.paymentData } : prev);
+    };
+    const onDone = (data: any) => {
+      setActiveOrder(prev => prev && prev.id === data.orderId ? { ...prev, status: "done" } : prev);
+      // Refresh full order + history
+      fetch("/api/pengguna/active-order", { credentials: "include" })
+        .then(r => r.json()).then(d => setActiveOrder(d.order ?? null)).catch(() => {});
+      fetch("/api/pengguna/order-history", { credentials: "include" })
+        .then(r => r.json()).then(d => { if (Array.isArray(d.orders)) setOrderHistory(d.orders); }).catch(() => {});
+    };
+    socket.on("order:accepted", onAccepted);
+    socket.on("order:phase", onPhase);
+    socket.on("order:payment", onPayment);
+    socket.on("order:done", onDone);
+    return () => {
+      socket.off("order:accepted", onAccepted);
+      socket.off("order:phase", onPhase);
+      socket.off("order:payment", onPayment);
+      socket.off("order:done", onDone);
+    };
   }, []);
 
   // Fetch order history
@@ -365,21 +410,40 @@ export default function DashboardPengguna() {
     else setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal upload foto" });
   };
 
-  // Poll chat msgs for active order every 3s
+  // Join order room and listen to chat via socket when activeOrder changes
   useEffect(() => {
     if (!activeOrder) { setChatMsgs([]); return; }
-    const poll = () =>
-      fetch(`/api/chat/${activeOrder.id}`, { credentials: "include" })
-        .then(r => r.json())
-        .then(d => {
-          if (Array.isArray(d.messages)) {
-            setChatMsgs(d.messages);
-            setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-          }
-        }).catch(() => {});
-    poll();
-    const t = setInterval(poll, 3000);
-    return () => clearInterval(t);
+    const orderId = activeOrder.id;
+
+    // Fetch initial messages
+    fetch(`/api/chat/${orderId}`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.messages)) {
+          setChatMsgs(d.messages);
+          setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        }
+      }).catch(() => {});
+
+    // Join socket room for real-time chat
+    joinOrderRoom(orderId);
+
+    // Listen for incoming chat messages
+    const onChat = (data: any) => {
+      if (data.orderId !== orderId) return;
+      setChatMsgs(prev => {
+        if (prev.some(m => m.id === data.id)) return prev;
+        const next = [...prev, data];
+        setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        return next;
+      });
+    };
+    socket.on("chat:message", onChat);
+
+    return () => {
+      leaveOrderRoom(orderId);
+      socket.off("chat:message", onChat);
+    };
   }, [activeOrder?.id]);
 
   const sendChat = async () => {

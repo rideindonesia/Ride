@@ -6,6 +6,7 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { io } from "../socket";
 
 // Profile photo upload setup
 const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
@@ -270,10 +271,11 @@ router.post("/orders", async (req, res) => {
 
   const orderNo = `ORD${Date.now().toString().slice(-8)}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 
+  const svcType = serviceType ?? "bengkel";
   const [order] = await db.insert(ordersTable).values({
     orderNo,
     penggunaId,
-    serviceType: serviceType ?? "bengkel",
+    serviceType: svcType,
     vehicleType,
     vehicleModel,
     vehicleYear,
@@ -285,6 +287,23 @@ router.post("/orders", async (req, res) => {
     pickupLng: typeof pickupLng === "number" ? pickupLng : null,
     status: "pending",
   }).returning({ id: ordersTable.id, orderNo: ordersTable.orderNo });
+
+  // Notify all online mitra of this service type in real-time
+  try {
+    const [pengguna] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+    io?.to(`service:${svcType}`).emit("order:new", {
+      id: order.id,
+      orderNo: order.orderNo,
+      serviceType: svcType,
+      vehicleType,
+      vehicleModel,
+      vehicleYear,
+      damageCategories: Array.isArray(damageCategories) ? damageCategories : [],
+      pickupAddress,
+      penggunaName: pengguna?.name ?? "",
+      createdAt: new Date().toISOString(),
+    });
+  } catch {}
 
   res.json({ orderId: order.id, orderNo: order.orderNo });
 });

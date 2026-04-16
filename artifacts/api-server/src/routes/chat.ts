@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, chatMessagesTable, ordersTable } from "@workspace/db";
 import { eq, and, asc } from "drizzle-orm";
+import { io } from "../socket";
 
 const router = Router();
 
@@ -80,6 +81,18 @@ router.post("/:orderId", requireAuth, async (req, res) => {
     senderRole,
     message: message.trim(),
   }).returning({ id: chatMessagesTable.id, createdAt: chatMessagesTable.createdAt });
+
+  // Emit real-time chat event to both parties in the order room
+  try {
+    io?.to(`order:${orderId}`).emit("chat:message", {
+      id: msg.id,
+      orderId,
+      senderId: userId,
+      senderRole,
+      message: message.trim(),
+      createdAt: msg.createdAt,
+    });
+  } catch {}
 
   res.json({ ok: true, messageId: msg.id, senderRole });
 });

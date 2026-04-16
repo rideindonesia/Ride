@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 
@@ -118,6 +119,13 @@ export default function OrderCuci() {
   const trackingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const step5PollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Identify socket as pengguna on mount
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include" })
+      .then(r => r.json()).then(me => { if (me.id) identifySocket(me.id, "pengguna"); }).catch(() => {});
+    return () => { socket.disconnect(); };
+  }, []);
+
   useEffect(() => {
     if (!navigator.geolocation) return;
     const id = navigator.geolocation.watchPosition(pos => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); }, () => {}, { enableHighAccuracy: true, maximumAge: 10000 });
@@ -176,20 +184,19 @@ export default function OrderCuci() {
   useEffect(() => {
     if (step !== 3 || !orderId || orderStatus !== "pending") return;
     const lat = pinLat ?? userLat ?? 0, lng = pinLng ?? userLng ?? 0;
-    const doPoll = async () => {
-      try {
-        const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }); if (!res.ok) return;
-        const od = await res.json();
-        if (od.status === "accepted" && od.mitra) {
-          if (orderPollRef.current) clearInterval(orderPollRef.current);
-          const dist = calcDist(lat, lng, od.mitra.lat ?? 0, od.mitra.lng ?? 0);
-          setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: od.mitra.lat ?? 0, lng: od.mitra.lng ?? 0, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: Math.round((dist*2000+10000)/500)*500, etaMin: Math.max(5, Math.round(dist*2+5)) });
-          setOrderStatus("accepted");
-        } else if (od.status === "cancelled") { if (orderPollRef.current) clearInterval(orderPollRef.current); setOrderStatus("cancelled"); }
-      } catch { }
+    const applyOd = (od: any) => {
+      if (od.status === "accepted" && od.mitra) {
+        if (orderPollRef.current) clearInterval(orderPollRef.current);
+        const dist = calcDist(lat, lng, od.mitra.lat ?? 0, od.mitra.lng ?? 0);
+        setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: od.mitra.lat ?? 0, lng: od.mitra.lng ?? 0, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: Math.round((dist*2000+10000)/500)*500, etaMin: Math.max(5, Math.round(dist*2+5)) });
+        setOrderStatus("accepted");
+      } else if (od.status === "cancelled") { if (orderPollRef.current) clearInterval(orderPollRef.current); setOrderStatus("cancelled"); }
     };
-    doPoll(); orderPollRef.current = setInterval(doPoll, 3000);
-    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); };
+    const doPoll = async () => { try { const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }); if (!res.ok) return; applyOd(await res.json()); } catch { } };
+    const onAccepted = (data: any) => { if (data.orderId !== orderId) return; fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }).then(r => r.json()).then(applyOd).catch(() => {}); };
+    socket.on("order:accepted", onAccepted);
+    doPoll(); orderPollRef.current = setInterval(doPoll, 30000);
+    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); socket.off("order:accepted", onAccepted); };
   }, [step, orderId, orderStatus, pinLat, pinLng, userLat, userLng]);
 
   const sendChatMessage = useCallback(async () => {
@@ -200,9 +207,11 @@ export default function OrderCuci() {
 
   useEffect(() => {
     if ((orderStatus !== "accepted" && step !== 4) || !orderId) return;
-    const fetchMsgs = async () => { try { const res = await fetch(`/api/chat/${orderId}`, { credentials: "include" }); if (!res.ok) return; const d = await res.json(); setChatMessages(d.messages ?? []); setTimeout(() => { const el = chatBottomRef.current?.parentElement; if (el) el.scrollTop = el.scrollHeight; }, 50); } catch { } };
-    fetchMsgs(); chatPollRef.current = setInterval(fetchMsgs, 3000);
-    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
+    fetch(`/api/chat/${orderId}`, { credentials: "include" }).then(r => r.json()).then(d => { setChatMessages(d.messages ?? []); setTimeout(() => { const el = chatBottomRef.current?.parentElement; if (el) el.scrollTop = el.scrollHeight; }, 50); }).catch(() => {});
+    joinOrderRoom(orderId);
+    const onChat = (data: any) => { if (data.orderId !== orderId) return; setChatMessages(prev => { if (prev.some((m: any) => m.id === data.id)) return prev; const next = [...prev, data]; setTimeout(() => { const el = chatBottomRef.current?.parentElement; if (el) el.scrollTop = el.scrollHeight; }, 50); return next; }); };
+    socket.on("chat:message", onChat);
+    return () => { leaveOrderRoom(orderId); socket.off("chat:message", onChat); };
   }, [orderStatus, orderId]);
 
   useEffect(() => {
@@ -217,15 +226,22 @@ export default function OrderCuci() {
         if (data.trackingPhase === "selesai") setStep(5);
       } catch { }
     };
+    const onPhase = (data: any) => { if (data.orderId !== orderId) return; setTrackingPhase(data.phase); if (data.phase === "selesai") setStep(5); };
+    const onPayment = (data: any) => { if (data.orderId !== orderId) return; setPaymentData(data.paymentData); };
+    const onDone = (data: any) => { if (data.orderId !== orderId) return; setOrderStatus("done"); };
+    socket.on("order:phase", onPhase); socket.on("order:payment", onPayment); socket.on("order:done", onDone);
     poll(); trackingPollRef.current = setInterval(poll, 4000);
-    return () => { if (trackingPollRef.current) clearInterval(trackingPollRef.current); };
+    return () => { if (trackingPollRef.current) clearInterval(trackingPollRef.current); socket.off("order:phase", onPhase); socket.off("order:payment", onPayment); socket.off("order:done", onDone); };
   }, [step, orderId, pinLat, pinLng]);
 
   useEffect(() => {
     if (step !== 5 || !orderId) return;
+    const onPayment = (data: any) => { if (data.orderId !== orderId) return; setPaymentData(data.paymentData); };
+    const onDone = (data: any) => { if (data.orderId !== orderId) return; setOrderStatus("done"); };
+    socket.on("order:payment", onPayment); socket.on("order:done", onDone);
     const poll = async () => { try { const res = await fetch(`/api/pengguna/orders/${orderId}?t=${Date.now()}`, { credentials: "include" }); if (!res.ok) return; const data = await res.json(); if (data.paymentData) setPaymentData(data.paymentData); if (data.status === "done") setOrderStatus("done"); } catch { } };
-    poll(); step5PollRef.current = setInterval(poll, 3000);
-    return () => { if (step5PollRef.current) clearInterval(step5PollRef.current); };
+    poll(); step5PollRef.current = setInterval(poll, 30000);
+    return () => { if (step5PollRef.current) clearInterval(step5PollRef.current); socket.off("order:payment", onPayment); socket.off("order:done", onDone); };
   }, [step, orderId]);
 
   useEffect(() => {

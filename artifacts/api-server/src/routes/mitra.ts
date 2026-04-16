@@ -5,6 +5,7 @@ import fs from "fs";
 import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable } from "@workspace/db";
 import { eq, and, or, gt, gte, desc, sql, avg, count, sum } from "drizzle-orm";
 import crypto from "crypto";
+import { io } from "../socket";
 
 const router = Router();
 
@@ -416,10 +417,28 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
   const orderId = parseInt(req.params.id);
 
-  // Assign mitraId + set accepted (order was pending with no mitra yet)
-  await db.update(ordersTable)
+  // Assign mitraId + set accepted
+  const [updated] = await db.update(ordersTable)
     .set({ status: "accepted", mitraId, updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")));
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")))
+    .returning({ penggunaId: ordersTable.penggunaId, orderNo: ordersTable.orderNo, serviceType: ordersTable.serviceType });
+
+  // Notify pengguna in real-time
+  try {
+    if (updated) {
+      const [mitraUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, mitraId)).limit(1);
+      const [mitraLoc] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
+        .from(mitraLocationsTable).where(eq(mitraLocationsTable.userId, mitraId)).limit(1);
+      io?.to(`user:${updated.penggunaId}`).emit("order:accepted", {
+        orderId,
+        orderNo: updated.orderNo,
+        mitraId,
+        mitraName: mitraUser?.name ?? "",
+        mitraLat: mitraLoc?.lat ?? null,
+        mitraLng: mitraLoc?.lng ?? null,
+      });
+    }
+  } catch {}
 
   res.json({ ok: true });
 });
@@ -444,9 +463,17 @@ router.patch("/orders/:id/phase", requireMitra, async (req, res) => {
   const valid = ["menuju", "tiba", "pengerjaan", "selesai"];
   if (!valid.includes(phase)) { res.status(400).json({ error: "Phase tidak valid" }); return; }
 
-  await db.update(ordersTable)
+  const [updated] = await db.update(ordersTable)
     .set({ trackingPhase: phase, updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
+    .returning({ penggunaId: ordersTable.penggunaId });
+
+  // Notify pengguna of phase change in real-time
+  try {
+    if (updated) {
+      io?.to(`user:${updated.penggunaId}`).emit("order:phase", { orderId, phase });
+    }
+  } catch {}
 
   res.json({ ok: true });
 });
@@ -456,10 +483,19 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
   const orderId = parseInt(req.params.id);
   const { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod } = req.body;
+  const paymentData = { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod };
 
-  await db.update(ordersTable)
-    .set({ paymentData: { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod }, updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+  const [updated] = await db.update(ordersTable)
+    .set({ paymentData, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
+    .returning({ penggunaId: ordersTable.penggunaId });
+
+  // Notify pengguna of payment details in real-time
+  try {
+    if (updated) {
+      io?.to(`user:${updated.penggunaId}`).emit("order:payment", { orderId, paymentData });
+    }
+  } catch {}
 
   res.json({ ok: true });
 });
@@ -470,9 +506,17 @@ router.patch("/orders/:id/done", requireMitra, async (req, res) => {
   const orderId = parseInt(req.params.id);
   const { totalAmount } = req.body;
 
-  await db.update(ordersTable)
+  const [updated] = await db.update(ordersTable)
     .set({ status: "done", totalAmount: totalAmount ?? null, updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)));
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
+    .returning({ penggunaId: ordersTable.penggunaId });
+
+  // Notify pengguna order is done
+  try {
+    if (updated) {
+      io?.to(`user:${updated.penggunaId}`).emit("order:done", { orderId, totalAmount });
+    }
+  } catch {}
 
   res.json({ ok: true });
 });

@@ -13,6 +13,7 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 - **Backend Mitra**: GET /api/mitra/profile-detail (docs status), PUT /api/mitra/change-password ✅
 - **DB Schema**: profilePhotoPath + walletBalance di usersTable; walletTransactionsTable (topup/withdraw) ✅
 - **Static uploads**: /uploads/* served dari api-server ✅
+- **Socket.io (real-time)**: Singleton socket.ts (frontend), HTTP+Socket.io server (backend index.ts), identifySocket/joinOrderRoom/leaveOrderRoom utilities. Events: `order:new` (mitra broadcast), `order:accepted/phase/payment/done` (pengguna user room), `chat:message` (order room). DashboardPengguna, DashboardMitra, dan semua 6 Order pages (Bengkel/Cuci/Barber/Elektronik/Inspeksi/Towing) sudah socket-integrated. Polling direduksi ke 30s backup. ✅
 
 ## Stack
 
