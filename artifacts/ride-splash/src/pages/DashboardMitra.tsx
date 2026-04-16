@@ -558,6 +558,12 @@ export default function DashboardMitra() {
       {/* Header */}
       <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 14px 16px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Back button (non-beranda tabs) */}
+          {activeTab !== "beranda" && (
+            <button onClick={() => setActiveTab("beranda")} style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff", flexShrink: 0, letterSpacing: "-1px" }}>
+              &lt;-
+            </button>
+          )}
           {/* Avatar */}
           <div style={{ width: 48, height: 48, borderRadius: 16, background: "rgba(255,255,255,0.15)", border: "2px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
             {(data?.name ?? "M").charAt(0).toUpperCase()}
