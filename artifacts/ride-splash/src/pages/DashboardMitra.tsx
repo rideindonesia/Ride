@@ -1305,35 +1305,65 @@ export default function DashboardMitra() {
                         </div>
 
                         {/* RINCIAN PENDAPATAN */}
-                        {pd && (
-                          <div style={{ background: "#f8fafc", borderTop: "1px solid #f0f4f8", padding: "14px 16px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>RINCIAN PENDAPATAN</div>
-                            {[
-                              { label: cfg.jasaLabel, val: pd.biayaJasa },
-                              ...(cfg.showSparepart && pd.biayaSparepart > 0 ? [{ label: cfg.sparepartLabel, val: pd.biayaSparepart }] : []),
-                              { label: "Biaya Panggilan", val: pd.biayaPanggilan },
-                              { label: "Biaya Layanan & Admin", val: pd.biayaLayanan },
-                            ].map(row => (
-                              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                                <span style={{ fontSize: 13, color: "#4a5a6a" }}>{row.label}</span>
-                                <span style={{ fontSize: 13, color: "#4a5a6a" }}>{fmtRp(row.val)}</span>
+                        {pd && (() => {
+                          const feePanggilan = Math.round(pd.biayaPanggilan * 0.15);
+                          const feeLayanan = pd.biayaLayanan;
+                          const totalSetoran = feePanggilan + feeLayanan;
+                          return (
+                            <>
+                              <div style={{ background: "#f8fafc", borderTop: "1px solid #f0f4f8", padding: "14px 16px" }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>RINCIAN PENDAPATAN</div>
+                                {[
+                                  { label: cfg.jasaLabel, val: pd.biayaJasa },
+                                  ...(cfg.showSparepart && pd.biayaSparepart > 0 ? [{ label: cfg.sparepartLabel, val: pd.biayaSparepart }] : []),
+                                  { label: "Biaya Panggilan", val: pd.biayaPanggilan },
+                                  { label: "Biaya Layanan & Admin", val: pd.biayaLayanan },
+                                ].map(row => (
+                                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                                    <span style={{ fontSize: 13, color: "#4a5a6a" }}>{row.label}</span>
+                                    <span style={{ fontSize: 13, color: "#4a5a6a" }}>{fmtRp(row.val)}</span>
+                                  </div>
+                                ))}
+                                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 0", borderTop: "1px solid #e0e8f0", marginTop: 4 }}>
+                                  <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total Diterima</span>
+                                  <span style={{ fontSize: 14, fontWeight: 800, color: "#1a7a6a" }}>{fmtRp(pd.total)}</span>
+                                </div>
                               </div>
-                            ))}
-                            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 0", borderTop: "1px solid #e0e8f0", marginTop: 4 }}>
-                              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total Diterima</span>
-                              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a7a6a" }}>{fmtRp(pd.total)}</span>
-                            </div>
-                          </div>
-                        )}
 
-                        {/* PLATFORM FEE */}
-                        <div style={{ background: "#fff8f0", borderTop: "1px solid #f0f4f8", padding: "14px 16px" }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>PLATFORM FEE KE RIDE</div>
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 13, color: "#7a8a9a" }}>Platform Fee (20%)</span>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(o.platformFee)}</span>
-                          </div>
-                        </div>
+                              {/* PLATFORM FEE */}
+                              <div style={{ background: "#fff8f0", borderTop: "1px solid #fde8d0", padding: "14px 16px" }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 12 }}>PLATFORM FEE KE RIDE</div>
+
+                                {/* Row 1: Biaya Panggilan × 15% */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                                  <div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>Biaya Panggilan × 15%</div>
+                                    <div style={{ fontSize: 11, color: "#ea580c", marginTop: 2 }}>Kontribusi ke platform RIDE</div>
+                                  </div>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(feePanggilan)}</span>
+                                </div>
+
+                                {/* Row 2: Biaya Layanan & Admin */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                                  <div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>Biaya Layanan & Admin</div>
+                                    <div style={{ fontSize: 11, color: "#ea580c", marginTop: 2 }}>Per order selesai</div>
+                                  </div>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(feeLayanan)}</span>
+                                </div>
+
+                                {/* Total Setoran */}
+                                <div style={{ borderTop: "1px dashed #fbbf78", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                  <div>
+                                    <div style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total Setoran</div>
+                                    <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 3 }}>⏳ Belum Dibayar</div>
+                                  </div>
+                                  <span style={{ fontSize: 15, fontWeight: 800, color: "#dc2626" }}>{fmtRp(totalSetoran)}</span>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
