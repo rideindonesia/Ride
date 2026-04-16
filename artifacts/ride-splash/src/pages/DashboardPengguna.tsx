@@ -347,8 +347,6 @@ export default function DashboardPengguna() {
     else localStorage.removeItem("ride-default-alamat");
   }, [defaultAlamatId]);
 
-  // Level badge helper
-  const getLevel = (n: number) => n >= 20 ? { label: "Gold ⭐⭐⭐", color: "#c8960c", bg: "#fff9e6", border: "#f5a623" } : n >= 5 ? { label: "Silver ⭐⭐", color: "#6b7280", bg: "#f5f7fa", border: "#9aa5b4" } : { label: "New ⭐", color: "#1a7a6a", bg: "#e8f5f2", border: "#1a7a6a" };
 
   // Handle profile save (name + phone/email with OTP)
   const handleProfileSave = async () => {
@@ -1140,7 +1138,6 @@ export default function DashboardPengguna() {
 
           {/* ── HERO PROFIL ── */}
           {(() => {
-            const level = getLevel(orderHistory.length);
             const photoUrl = photoPreview ?? (profile?.profilePhotoPath ? profile.profilePhotoPath : null);
             return (
               <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #1a7a6a 100%)", borderRadius: 22, padding: "24px 18px 20px", marginBottom: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
@@ -1152,9 +1149,6 @@ export default function DashboardPengguna() {
                     <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>{profile?.name ?? user?.name ?? "Memuat..."}</div>
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{profile?.email ?? ""}</div>
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>{profile?.phone ?? "—"}</div>
-                    <div style={{ display: "inline-flex", alignItems: "center", marginTop: 5, background: level.bg, borderRadius: 8, padding: "2px 8px" }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: level.color }}>{level.label}</span>
-                    </div>
                   </div>
                   <button onClick={() => setOpenAkunSection(openAkunSection === "profil" ? null : "profil")}
                     style={{ background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.3)", borderRadius: 12, padding: "7px 13px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
