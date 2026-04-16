@@ -69,18 +69,18 @@ type OrderHistory = {
   id: number; orderNo: string; serviceType: string; vehicleModel: string; vehicleYear: string;
   damageCategories: string[] | null; pickupAddress: string | null;
   totalAmount: number; paymentData: { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string } | null;
-  createdAt: string; rating?: number | null;
+  createdAt: string; rating?: number | null; reviewComment?: string | null; mitraName?: string | null;
 };
 
-const SVC_CFG: Record<string, { emoji: string; label: string }> = {
-  bengkel:   { emoji: "🔧", label: "Ride Auto" },
-  elektronik:{ emoji: "💡", label: "Ride Service" },
-  cuci:      { emoji: "🚿", label: "Ride Wash" },
-  barber:    { emoji: "✂️", label: "Ride Barber" },
-  inspeksi:  { emoji: "🔍", label: "Ride Inspection" },
-  towing:    { emoji: "🚛", label: "Ride Towing" },
+const SVC_CFG: Record<string, { emoji: string; label: string; serviceLabel: string; route: string }> = {
+  bengkel:   { emoji: "🔧", label: "Ride Auto",        serviceLabel: "Bengkel Panggilan",   route: "/order/bengkel" },
+  elektronik:{ emoji: "💡", label: "Ride Service",     serviceLabel: "Elektronik Panggilan", route: "/order/elektronik" },
+  cuci:      { emoji: "🚿", label: "Ride Wash",        serviceLabel: "Cuci Kendaraan",      route: "/order/cuci" },
+  barber:    { emoji: "✂️", label: "Ride Barber",      serviceLabel: "Barber Panggilan",    route: "/order/barber" },
+  inspeksi:  { emoji: "🔍", label: "Ride Inspection",  serviceLabel: "Inspeksi Kendaraan",  route: "/order/inspeksi" },
+  towing:    { emoji: "🚛", label: "Ride Towing",      serviceLabel: "Towing & Derek",      route: "/order/towing" },
 };
-const getSvc = (t: string) => SVC_CFG[t] ?? { emoji: "🔧", label: t };
+const getSvc = (t: string) => SVC_CFG[t] ?? { emoji: "🔧", label: t, serviceLabel: t, route: "/" };
 const fmtRp = (n: number | null | undefined) => "Rp " + (n ?? 0).toLocaleString("id-ID");
 const fmtDate = (s: string) => {
   const d = new Date(s);
@@ -856,65 +856,119 @@ export default function DashboardPengguna() {
                 <div style={{ fontSize: 13, color: "#9aa5b4" }}>Order yang sudah selesai akan tampil di sini</div>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {orderHistory.map(o => {
                   const svc = getSvc(o.serviceType);
                   const isOpen = expandedHistoryId === o.id;
                   const pd = o.paymentData;
                   const keluhan = Array.isArray(o.damageCategories) ? o.damageCategories.join(", ") : "-";
+                  const mitraInitial = o.mitraName ? o.mitraName.charAt(0).toUpperCase() : svc.emoji;
+                  const hasMitraName = !!o.mitraName;
                   return (
-                    <div key={o.id} style={{ background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 2px 10px rgba(0,0,0,0.07)" }}>
+                    <div key={o.id} style={{ background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
+                      {/* Card header */}
                       <button onClick={() => setExpandedHistoryId(isOpen ? null : o.id)} style={{ width: "100%", padding: "14px 16px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left" as const }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{ width: 46, height: 46, borderRadius: 16, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{svc.emoji}</div>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                          {/* Mitra avatar */}
+                          <div style={{ width: 46, height: 46, borderRadius: 23, background: hasMitraName ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(26,122,106,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: hasMitraName ? 18 : 22, fontWeight: 800, color: hasMitraName ? "#fff" : "#1a7a6a", flexShrink: 0 }}>
+                            {hasMitraName ? mitraInitial : svc.emoji}
+                          </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                              <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>{svc.label}</span>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: "#1a7a6a", background: "rgba(26,122,106,0.1)", borderRadius: 20, padding: "2px 8px" }}>✓ Selesai</span>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a" }}>Mitra: {o.mitraName ?? "—"}</span>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#1a7a6a", background: "rgba(26,122,106,0.1)", borderRadius: 20, padding: "2px 8px", flexShrink: 0 }}>✓ Selesai</span>
                             </div>
                             <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear}</div>
                             <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>🕐 {fmtDate(o.createdAt)}</div>
-                          </div>
-                          <div style={{ textAlign: "right" as const, flexShrink: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: "#1a3a5c" }}>{fmtRp(o.totalAmount)}</div>
-                            <div style={{ fontSize: 18, color: "#b0bec5", marginTop: 4 }}>{isOpen ? "▲" : "▼"}</div>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+                              <div style={{ display: "flex", gap: 1 }}>
+                                {[1,2,3,4,5].map(s => (
+                                  <span key={s} style={{ fontSize: 13, color: s <= (o.rating ?? 0) ? "#f59e0b" : "#e0e8f0" }}>★</span>
+                                ))}
+                              </div>
+                              <span style={{ fontSize: 15, fontWeight: 800, color: "#1a3a5c" }}>{fmtRp(o.totalAmount)}</span>
+                            </div>
                           </div>
                         </div>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                          <span style={{ fontSize: 13, color: "#b0bec5" }}>{isOpen ? "▲" : "▼"}</span>
+                        </div>
                       </button>
+
+                      {/* Expanded content */}
                       {isOpen && (
                         <div style={{ borderTop: "1px solid #f0f4f8" }}>
-                          <div style={{ padding: "14px 16px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>DETAIL ORDER</div>
-                            {[{ label: "No. Order", val: o.orderNo }, { label: "Layanan", val: svc.label }].map(row => (
-                              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                                <span style={{ fontSize: 13, color: "#7a8a9a" }}>{row.label}</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>{row.val}</span>
+
+                          {/* DETAIL PESANAN */}
+                          <div style={{ padding: "14px 16px 10px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 12 }}>DETAIL PESANAN</div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                              <span style={{ fontSize: 13, color: "#7a8a9a" }}>No. Order</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{o.orderNo}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                              <span style={{ fontSize: 13, color: "#7a8a9a" }}>Layanan</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{svc.serviceLabel ?? svc.label}</span>
+                            </div>
+                            {o.pickupAddress && (
+                              <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 10 }}>
+                                <span style={{ fontSize: 13, flexShrink: 0 }}>📍</span>
+                                <span style={{ fontSize: 13, color: "#1a3a5c", lineHeight: 1.4 }}>{o.pickupAddress}</span>
                               </div>
-                            ))}
-                            {keluhan !== "-" && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 13, color: "#7a8a9a" }}>Keluhan: </span><span style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>{keluhan}</span></div>}
-                            {o.pickupAddress && <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 8 }}><span style={{ fontSize: 13 }}>📍</span><span style={{ fontSize: 13, color: "#1a3a5c" }}>{o.pickupAddress}</span></div>}
-                            {pd && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 13, color: "#7a8a9a" }}>Metode Bayar</span><span style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>{pd.paymentMethod?.toUpperCase() ?? "-"}</span></div>}
+                            )}
+                            {keluhan !== "-" && (
+                              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 12px", marginBottom: 2 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>📋 Catatan</div>
+                                <div style={{ fontSize: 13, color: "#1a2a3a" }}>{keluhan}</div>
+                              </div>
+                            )}
                           </div>
+
+                          {/* RINCIAN BIAYA */}
                           {pd && (
-                            <div style={{ background: "#f8fafc", borderTop: "1px solid #f0f4f8", padding: "14px 16px" }}>
-                              <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>RINCIAN BIAYA</div>
+                            <div style={{ margin: "0 16px 14px", border: "1.5px solid #e0e8f0", borderRadius: 14, overflow: "hidden" }}>
                               {[
-                                { label: "Biaya Jasa", val: pd.biayaJasa },
-                                ...(pd.biayaSparepart > 0 ? [{ label: "Biaya Sparepart", val: pd.biayaSparepart }] : []),
-                                { label: "Biaya Panggilan", val: pd.biayaPanggilan },
-                                { label: "Biaya Layanan & Admin", val: pd.biayaLayanan },
+                                { label: "Biaya Panggilan", sub: "Ongkos kedatangan mitra", val: pd.biayaPanggilan },
+                                { label: "Biaya Jasa", sub: "Disepakati langsung dengan mitra", val: pd.biayaJasa },
+                                ...(pd.biayaSparepart > 0 ? [{ label: "Sparepart", sub: "Suku cadang yang diganti", val: pd.biayaSparepart }] : []),
+                                { label: "Biaya Layanan & Admin", sub: "Biaya platform Ride", val: pd.biayaLayanan },
                               ].map(row => (
-                                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                                  <span style={{ fontSize: 13, color: "#4a5a6a" }}>{row.label}</span>
-                                  <span style={{ fontSize: 13, color: "#4a5a6a" }}>{fmtRp(row.val)}</span>
+                                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #f0f4f8" }}>
+                                  <div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>{row.label}</div>
+                                    <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>{row.sub}</div>
+                                  </div>
+                                  <span style={{ fontSize: 13, color: "#4a5a6a", fontWeight: 600 }}>{fmtRp(row.val)}</span>
                                 </div>
                               ))}
-                              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 0", borderTop: "1px solid #e0e8f0", marginTop: 4 }}>
-                                <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total</span>
-                                <span style={{ fontSize: 14, fontWeight: 800, color: "#1a3a5c" }}>{fmtRp(pd.total)}</span>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#f0faf7" }}>
+                                <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Total Bayar</span>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: "#1a7a6a" }}>{fmtRp(pd.total)}</span>
                               </div>
                             </div>
                           )}
+
+                          {/* ULASAN ANDA */}
+                          {o.rating != null && (
+                            <div style={{ margin: "0 16px 10px", background: "#fffbeb", border: "1.5px solid #fde68a", borderRadius: 14, padding: "12px 14px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                                <div style={{ display: "flex", gap: 1 }}>
+                                  {[1,2,3,4,5].map(s => <span key={s} style={{ fontSize: 14, color: s <= o.rating! ? "#f59e0b" : "#e0e8f0" }}>★</span>)}
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "#d97706" }}>Ulasan Anda untuk Mitra</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: "#4a5a6a" }}>Rating: {o.rating}/5</div>
+                              {o.reviewComment && <div style={{ fontSize: 12, color: "#4a5a6a", fontStyle: "italic" as const, marginTop: 4 }}>"{o.reviewComment}"</div>}
+                            </div>
+                          )}
+
+                          {/* PESAN LAGI */}
+                          <div style={{ padding: "4px 16px 16px" }}>
+                            <button onClick={() => navigate(svc.route ?? "/")}
+                              style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                              🔄 Pesan Lagi
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

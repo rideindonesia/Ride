@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, walletTransactionsTable } from "@workspace/db";
-import { eq, and, gt, sql, avg, count, or, desc } from "drizzle-orm";
+import { eq, and, gt, sql, avg, count, or, desc, aliasedTable } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import multer from "multer";
@@ -492,6 +492,8 @@ router.get("/order-history", async (req, res) => {
   const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
+  const mitraUsers = aliasedTable(usersTable, "mitra_users");
+
   const orders = await db.select({
     id: ordersTable.id,
     orderNo: ordersTable.orderNo,
@@ -503,7 +505,11 @@ router.get("/order-history", async (req, res) => {
     totalAmount: ordersTable.totalAmount,
     paymentData: ordersTable.paymentData,
     createdAt: ordersTable.createdAt,
+    rating: ordersTable.rating,
+    reviewComment: ordersTable.reviewComment,
+    mitraName: mitraUsers.name,
   }).from(ordersTable)
+    .leftJoin(mitraUsers, eq(ordersTable.mitraId, mitraUsers.id))
     .where(and(eq(ordersTable.penggunaId, penggunaId), eq(ordersTable.status, "done")))
     .orderBy(desc(ordersTable.createdAt))
     .limit(20);
