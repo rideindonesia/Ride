@@ -1010,7 +1010,7 @@ export default function DashboardMitra() {
                             <div style={{ fontSize: 10, color: "#9aa5b4", marginBottom: 6 }}>{sub}</div>
                             <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
                               <span style={{ padding: "0 8px", fontSize: 12, color: "#9aa5b4", background: "#f8fafc", borderRight: "1px solid #e0e8f0", alignSelf: "stretch", display: "flex", alignItems: "center" }}>Rp</span>
-                              <input type="number" inputMode="numeric" value={val} onChange={e => { set(e.target.value); setRincianSent(false); }}
+                              <input type="text" inputMode="numeric" value={val === "" ? "" : Number(val).toLocaleString("id-ID")} onChange={e => { const raw = e.target.value.replace(/\D/g, ""); set(raw); setRincianSent(false); }}
                                 style={{ flex: 1, padding: "10px 8px", border: "none", outline: "none", fontSize: 14, fontWeight: 700, color: "#1a2a3a", width: 0 }} />
                             </div>
                           </div>
