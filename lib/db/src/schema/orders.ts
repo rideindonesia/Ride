@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, json, doublePrecision, real, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, json, doublePrecision, real, timestamp, varchar, boolean } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const ordersTable = pgTable("orders", {
@@ -17,6 +17,7 @@ export const ordersTable = pgTable("orders", {
   pickupLat: doublePrecision("pickup_lat"),
   pickupLng: doublePrecision("pickup_lng"),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
+  penggunaConfirmed: boolean("pengguna_confirmed").default(false).notNull(),
   trackingPhase: varchar("tracking_phase", { length: 20 }).default("menuju"),
   paymentData: json("payment_data").$type<{ biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string } | null>(),
   totalAmount: integer("total_amount"),

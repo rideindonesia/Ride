@@ -140,6 +140,7 @@ export default function DashboardMitra() {
   // Mitra order phase: diterima → chat → menuju → tiba → pengerjaan → selesai
   type MitraPhase = "diterima" | "chat" | "menuju" | "tiba" | "pengerjaan" | "selesai";
   const [mitraPhase, setMitraPhase] = useState<MitraPhase>("diterima");
+  const [penggunaConfirmed, setPenggunaConfirmed] = useState(false);
   const [etaSecs, setEtaSecs] = useState(0);
   const etaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [biayaJasa, setBiayaJasa] = useState("");
@@ -260,6 +261,8 @@ export default function DashboardMitra() {
       const o = d.order;
       // Jangan override kalau sudah ada activeOrder (mitra baru saja accept)
       setActiveOrder(prev => prev ? prev : o);
+      // Restore penggunaConfirmed dari DB
+      if (o.penggunaConfirmed) setPenggunaConfirmed(true);
       // Restore phase dari DB
       const phaseMap: Record<string, string> = { menuju: "menuju", tiba: "tiba", pengerjaan: "pengerjaan", selesai: "selesai" };
       const dbPhase = phaseMap[o.trackingPhase ?? ""] ?? "diterima";
@@ -324,9 +327,15 @@ export default function DashboardMitra() {
     };
     socket.on("order:new", onNewOrder);
 
+    const onPenggunaConfirmed = () => {
+      setPenggunaConfirmed(true);
+    };
+    socket.on("order:confirmed", onPenggunaConfirmed);
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       socket.off("order:new", onNewOrder);
+      socket.off("order:confirmed", onPenggunaConfirmed);
       socket.disconnect();
     };
   }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif]);
@@ -820,17 +829,26 @@ export default function DashboardMitra() {
                         >➤</button>
                       </div>
                     </div>
-                    {/* Hint konsumen setuju */}
-                    <div style={{ background: "#fff8e1", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 15 }}>👋</span>
-                      <span style={{ fontSize: 12, color: "#7a5a00", fontWeight: 600 }}>Konsumen setuju! Siap berangkat.</span>
-                    </div>
-                    <button
-                      onClick={startJourney}
-                      style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                    >
-                      🚗 Mulai Perjalanan
-                    </button>
+                    {/* Tunggu konfirmasi pengguna atau tampilkan aksi */}
+                    {!penggunaConfirmed ? (
+                      <div style={{ background: "#f0f4f8", borderRadius: 12, padding: "12px 14px", display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: 15 }}>⏳</span>
+                        <span style={{ fontSize: 12, color: "#4a5a6a", fontWeight: 600 }}>Menunggu konsumen menyetujui dan memanggil Anda...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ background: "#fff8e1", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontSize: 15 }}>👋</span>
+                          <span style={{ fontSize: 12, color: "#7a5a00", fontWeight: 600 }}>Konsumen setuju! Siap berangkat.</span>
+                        </div>
+                        <button
+                          onClick={startJourney}
+                          style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                        >
+                          🚗 Mulai Perjalanan
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -947,6 +965,7 @@ export default function DashboardMitra() {
                     if (chatPollRef.current) clearInterval(chatPollRef.current);
                     if (etaTimerRef.current) clearInterval(etaTimerRef.current);
                     setActiveOrder(null); setChatMsgs([]); setMitraPhase("diterima"); setEtaSecs(0);
+                    setPenggunaConfirmed(false);
                     setBiayaJasa(""); setBiayaSparepart("0"); setPaymentMethod("cash");
                     setProofPhoto(null); setProofPreview(null); setRincianSent(false);
                     pushNotif({ type: "system", icon: "🎉", title: "Pembayaran Selesai", body: `Total: ${fmtIdr(total)}` });

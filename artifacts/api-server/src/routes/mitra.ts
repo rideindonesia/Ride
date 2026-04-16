@@ -393,6 +393,7 @@ router.get("/active-order", requireMitra, async (req, res) => {
     totalAmount: ordersTable.totalAmount,
     platformFee: ordersTable.platformFee,
     trackingPhase: ordersTable.trackingPhase,
+    penggunaConfirmed: ordersTable.penggunaConfirmed,
     paymentData: ordersTable.paymentData,
     penggunaName: usersTable.name,
     createdAt: ordersTable.createdAt,

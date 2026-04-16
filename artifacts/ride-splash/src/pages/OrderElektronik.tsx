@@ -539,7 +539,7 @@ export default function OrderElektronik() {
                       </div>
                     </div>
                   )}
-                  <button onClick={() => setMitraConfirmed(true)} disabled={mitraConfirmed}
+                  <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}/confirm`, { method: "PATCH", credentials: "include" }).catch(() => {}); setMitraConfirmed(true); }} disabled={mitraConfirmed}
                     style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: mitraConfirmed ? "#a5d6a7" : "linear-gradient(135deg, #2e7d32, #43a047)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "default" : "pointer" }}>
                     {mitraConfirmed ? "✅ Teknisi Dikonfirmasi" : "✅ Setuju & Panggil Teknisi"}
                   </button>

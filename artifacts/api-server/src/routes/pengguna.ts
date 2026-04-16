@@ -405,6 +405,30 @@ router.get("/active-order", async (req, res) => {
   });
 });
 
+// PATCH /api/pengguna/orders/:id/confirm — pengguna setuju & panggil mitra
+router.patch("/orders/:id/confirm", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orderId = parseInt(req.params.id);
+  if (isNaN(orderId)) { res.status(400).json({ error: "ID tidak valid" }); return; }
+
+  const [order] = await db.update(ordersTable)
+    .set({ penggunaConfirmed: true, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId), eq(ordersTable.status, "accepted")))
+    .returning({ mitraId: ordersTable.mitraId });
+
+  if (!order) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+
+  try {
+    if (order.mitraId) {
+      io?.to(`user:${order.mitraId}`).emit("order:confirmed", { orderId });
+    }
+  } catch {}
+
+  res.json({ ok: true });
+});
+
 // POST /api/pengguna/orders/:id/review — kirim ulasan & rating
 router.post("/orders/:id/review", async (req, res) => {
   const penggunaId = getPenggunaId(req);
