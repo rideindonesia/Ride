@@ -174,8 +174,63 @@ export default function DashboardMitra() {
   const [mCpLoading, setMCpLoading] = useState(false);
   const [mCpMsg, setMCpMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [mNotifSettings, setMNotifSettings] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("ride-notif-m") ?? "null") ?? { pesanan: true, chat: true, promo: false }; } catch { return { pesanan: true, chat: true, promo: false }; }
+    try { return JSON.parse(localStorage.getItem("ride-notif-m") ?? "null") ?? { pesanan: true, chat: true, promo: false, ringtone: true }; } catch { return { pesanan: true, chat: true, promo: false, ringtone: true }; }
   });
+
+  // Photo upload mitra
+  const [mPhotoFile, setMPhotoFile] = useState<File | null>(null);
+  const [mPhotoPreview, setMPhotoPreview] = useState<string | null>(null);
+  const [mPhotoUploading, setMPhotoUploading] = useState(false);
+  const [mPhotoMsg, setMPhotoMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const mPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  // Keamanan mitra sub-section
+  const [mKeamananSub, setMKeamananSub] = useState<string | null>(null);
+  const [mEditPhone, setMEditPhone] = useState("");
+
+  // Pengaturan layanan
+  const [workRadius, setWorkRadius] = useState<number>(() => {
+    try { return Number(localStorage.getItem("ride-m-radius") ?? "10"); } catch { return 10; }
+  });
+  const [baseTariff, setBaseTariff] = useState<string>(() => {
+    try { return localStorage.getItem("ride-m-tariff") ?? "50000"; } catch { return "50000"; }
+  });
+  const [baseTariffSaving, setBaseTariffSaving] = useState(false);
+  const [baseTariffMsg, setBaseTariffMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [operationalHours, setOperationalHours] = useState<Record<string, { open: string; close: string; active: boolean }>>(() => {
+    try {
+      const saved = localStorage.getItem("ride-m-ophours");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      Senin: { open: "08:00", close: "20:00", active: true },
+      Selasa: { open: "08:00", close: "20:00", active: true },
+      Rabu: { open: "08:00", close: "20:00", active: true },
+      Kamis: { open: "08:00", close: "20:00", active: true },
+      Jumat: { open: "08:00", close: "20:00", active: true },
+      Sabtu: { open: "09:00", close: "18:00", active: true },
+      Minggu: { open: "10:00", close: "16:00", active: false },
+    };
+  });
+  const [serviceCategories, setServiceCategories] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("ride-m-svccat");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { bengkel: true, elektronik: false, cuci: false, barber: false, inspeksi: false, towing: false };
+  });
+
+  // Report mitra
+  const [mReportInput, setMReportInput] = useState("");
+  const [mReportType, setMReportType] = useState("teknis");
+  const [mReportLoading, setMReportLoading] = useState(false);
+  const [mReportMsg, setMReportMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  // Login history mitra (simulated)
+  const mLoginHistory = [
+    { device: "Chrome · Android", time: "16 Apr 2026, 10:30 WIB", current: true },
+    { device: "Chrome · Windows", time: "14 Apr 2026, 18:45 WIB", current: false },
+  ];
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -259,6 +314,12 @@ export default function DashboardMitra() {
   useEffect(() => {
     localStorage.setItem("ride-notif-m", JSON.stringify(mNotifSettings));
   }, [mNotifSettings]);
+
+  // Sync pengaturan layanan to localStorage
+  useEffect(() => { localStorage.setItem("ride-m-radius", String(workRadius)); }, [workRadius]);
+  useEffect(() => { localStorage.setItem("ride-m-tariff", baseTariff); }, [baseTariff]);
+  useEffect(() => { localStorage.setItem("ride-m-ophours", JSON.stringify(operationalHours)); }, [operationalHours]);
+  useEffect(() => { localStorage.setItem("ride-m-svccat", JSON.stringify(serviceCategories)); }, [serviceCategories]);
 
   // Countdown timer for incoming order
   useEffect(() => {
@@ -1320,267 +1381,632 @@ export default function DashboardMitra() {
         </>}
 
         {/* ══ AKUN TAB ══ */}
-        {activeTab === "akun" && <div style={{ padding: "0 0 12px" }}>
-          {/* Hero profil mitra */}
-          {(() => {
-            const cfg = getSvcCfg(data?.serviceType);
-            const statusMap: Record<string, { label: string; color: string; bg: string }> = {
-              approved: { label: "Terverifikasi ✓", color: "#1a7a6a", bg: "#e8f5f2" },
-              pending: { label: "Dalam Review ⏳", color: "#d97706", bg: "#fef3c7" },
-              rejected: { label: "Ditolak ✗", color: "#e74c3c", bg: "#fde8e8" },
-            };
-            const accStatus = mitraProfile?.accountStatus ?? "pending";
-            const sMap = statusMap[accStatus] ?? statusMap["pending"];
-            const monthlyRevenue = (data?.recentOrders ?? []).reduce((s: number, o: any) => s + (o.totalAmount ?? 0), 0);
-            const monthlyFee = (data?.recentOrders ?? []).reduce((s: number, o: any) => s + (o.platformFee ?? 0), 0);
-            const monthlyNet = monthlyRevenue - monthlyFee;
-            return (
-              <>
-                <div style={{ background: `linear-gradient(135deg, ${cfg.color} 0%, #1a3a5c 100%)`, borderRadius: 22, padding: "24px 18px 20px", marginBottom: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 62, height: 62, borderRadius: 20, background: "rgba(255,255,255,0.18)", border: "2.5px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, color: "#fff", flexShrink: 0 }}>
-                      {(data?.name ?? "M").charAt(0).toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>{data?.name ?? "Memuat..."}</div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", marginTop: 2 }}>{cfg.label} · {mitraProfile?.operatingCity ?? serviceLabel(data?.serviceType ?? "")}</div>
-                      <div style={{ display: "inline-flex", alignItems: "center", marginTop: 6, background: sMap.bg, borderRadius: 8, padding: "3px 8px" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: sMap.color }}>{sMap.label}</span>
-                      </div>
-                    </div>
+        {activeTab === "akun" && (() => {
+          const statusMap: Record<string, { label: string; color: string; bg: string }> = {
+            approved: { label: "Aktif ✓", color: "#1a7a6a", bg: "#e8f5f2" },
+            pending: { label: "Pending Verifikasi ⏳", color: "#d97706", bg: "#fef3c7" },
+            rejected: { label: "Dibekukan ✗", color: "#e74c3c", bg: "#fde8e8" },
+          };
+          const accStatus = mitraProfile?.accountStatus ?? "pending";
+          const sMap = statusMap[accStatus] ?? statusMap["pending"];
+          const totalOrders = mitraProfile?.totalDoneOrders ?? (data?.recentOrders?.length ?? 0);
+          const monthlyRevenue = (data?.recentOrders ?? []).reduce((s: number, o: any) => s + (o.totalAmount ?? 0), 0);
+          const monthlyFee = (data?.recentOrders ?? []).reduce((s: number, o: any) => s + (o.platformFee ?? 0), 0);
+          const monthlyNet = monthlyRevenue - monthlyFee;
+          const avgPerOrder = totalOrders > 0 ? Math.round(monthlyNet / totalOrders) : 0;
+          const photoUrl = mPhotoPreview ?? null;
+          const svcEmoji: Record<string,string> = { bengkel:"🔧", elektronik:"💡", cuci:"🚿", barber:"✂️", inspeksi:"🔍", towing:"🚛" };
+
+          return (
+          <div style={{ padding: "0 0 12px" }}>
+            {/* ── Hero Profil Mitra ── */}
+            <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #1a7a6a 100%)", borderRadius: 22, padding: "24px 18px 20px", marginBottom: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div onClick={() => mPhotoInputRef.current?.click()} style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.18)", border: "2.5px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, color: "#fff", flexShrink: 0, cursor: "pointer", overflow: "hidden" }}>
+                  {photoUrl ? <img src={photoUrl} alt="foto" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (data?.name ?? "M").charAt(0).toUpperCase()}
+                </div>
+                <input ref={mPhotoInputRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e => {
+                  const f = e.target.files?.[0]; if (f) { setMPhotoFile(f); const rd = new FileReader(); rd.onload = ev => setMPhotoPreview(ev.target?.result as string); rd.readAsDataURL(f); }
+                }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>{data?.name ?? "Memuat..."}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>
+                    {svcEmoji[data?.serviceType ?? ""] ?? "🔧"} {serviceLabel(data?.serviceType ?? "")} · {mitraProfile?.phone ?? mitraProfile?.operatingCity ?? "—"}
                   </div>
-                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", marginTop: 6, background: sMap.bg, borderRadius: 8, padding: "3px 8px" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: sMap.color }}>{sMap.label}</span>
+                  </div>
+                </div>
+              </div>
+              {mPhotoFile && (
+                <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                  <button disabled={mPhotoUploading} onClick={async () => {
+                    if (!mPhotoFile) return; setMPhotoUploading(true); setMPhotoMsg(null);
+                    const fd = new FormData(); fd.append("photo", mPhotoFile);
+                    const r = await fetch(`${BASE}/api/mitra/upload-photo`, { method:"POST", credentials:"include", body:fd }).catch(() => null);
+                    setMPhotoUploading(false);
+                    if (r?.ok) { setMPhotoFile(null); setMPhotoMsg({ type:"ok", text:"Foto berhasil diperbarui!" }); }
+                    else setMPhotoMsg({ type:"err", text:"Gagal upload foto" });
+                  }} style={{ flex:1, background:"#fff", border:"none", borderRadius:10, padding:"8px 0", fontSize:12, fontWeight:800, color:"#1a7a6a", cursor:"pointer" }}>
+                    {mPhotoUploading ? "Mengupload..." : "Upload Foto"}
+                  </button>
+                  <button onClick={() => { setMPhotoFile(null); setMPhotoPreview(null); }} style={{ flex:1, background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.3)", borderRadius:10, padding:"8px 0", fontSize:12, fontWeight:700, color:"#fff", cursor:"pointer" }}>Batal</button>
+                </div>
+              )}
+              {mPhotoMsg && <div style={{ fontSize:11, color: mPhotoMsg.type==="ok"?"#a0f0d0":"#ffaaaa", marginTop:6 }}>{mPhotoMsg.text}</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                {[
+                  { val: data?.rating != null ? Number(data.rating).toFixed(1) : "—", label: "Rating" },
+                  { val: totalOrders, label: "Total Order" },
+                  { val: mitraProfile?.createdAt ? new Date(mitraProfile.createdAt).getFullYear() : "—", label: "Bergabung" },
+                ].map(s => (
+                  <div key={s.label} style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "8px 0", textAlign: "center" as const }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{s.val}</div>
+                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Ringkasan Penghasilan ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Ringkasan Penghasilan</div>
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection === "penghasilan" ? null : "penghasilan")}
+                  style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                  <span style={{ fontSize: 20 }}>📊</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Ringkasan Penghasilan</div>
+                    <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Omset, fee, dan bersih bulan ini</div>
+                  </div>
+                  <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "penghasilan" ? "∨" : "›"}</span>
+                </button>
+                {openAkunSection === "penghasilan" && (
+                  <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                      {[
+                        { label: "Total Omset Bulan Ini", val: fmtRp(monthlyRevenue), color: "#d97706" },
+                        { label: "Total Platform Fee", val: fmtRp(monthlyFee), color: "#e74c3c" },
+                        { label: "Penghasilan Bersih", val: fmtRp(monthlyNet), color: "#1a7a6a" },
+                        { label: "Rata-rata per Order", val: fmtRp(avgPerOrder), color: "#1a3a5c" },
+                      ].map(item => (
+                        <div key={item.label} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px" }}>
+                          <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>{item.label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: item.color }}>{item.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: 11, color: "#9aa5b4", textAlign: "center" as const }}>Platform fee 5% dari biaya jasa per order</div>
+                    <button onClick={() => setActiveTab("beranda")}
+                      style={{ width:"100%", marginTop:10, background:"#f0f4f8", border:"none", borderRadius:10, padding:"9px 0", fontSize:13, fontWeight:700, color:"#1a3a5c", cursor:"pointer" }}>
+                      📈 Lihat Grafik Detail di Beranda
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Dokumen & Verifikasi ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Dokumen & Verifikasi</div>
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection === "dokumen" ? null : "dokumen")}
+                  style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                  <span style={{ fontSize: 20 }}>📂</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Dokumen & Verifikasi</div>
+                    <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Status verifikasi semua dokumen</div>
+                  </div>
+                  <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "dokumen" ? "∨" : "›"}</span>
+                </button>
+                {openAkunSection === "dokumen" && (
+                  <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
                     {[
-                      { val: data?.rating != null ? Number(data.rating).toFixed(1) : "—", label: "Rating", unit: "" },
-                      { val: mitraProfile?.totalDoneOrders ?? (data?.recentOrders?.length ?? 0), label: "Total Order", unit: "" },
-                      { val: mitraProfile?.createdAt ? new Date(mitraProfile.createdAt).getFullYear() : "—", label: "Bergabung", unit: "" },
-                    ].map(s => (
-                      <div key={s.label} style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "8px 0", textAlign: "center" as const }}>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{s.val}</div>
-                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{s.label}</div>
+                      { key: "ktp", label: "KTP", icon: "🪪", optional: false },
+                      { key: "sim", label: "SIM", icon: "🚗", optional: false },
+                      { key: "stnk", label: "STNK Kendaraan", icon: "📋", optional: false },
+                      { key: "fotoKendaraan", label: "Foto Kendaraan", icon: "🚙", optional: false },
+                      { key: "sertifikat", label: "Sertifikat Keahlian", icon: "🏆", optional: true },
+                    ].map((doc, i) => {
+                      const docData = mitraProfile?.documents?.[doc.key as keyof typeof mitraProfile.documents];
+                      const status = docData?.status ?? "pending";
+                      const uploaded = docData?.uploaded ?? false;
+                      const isRejected = status === "rejected";
+                      return (
+                        <div key={doc.key} style={{ padding: "10px 0", borderTop: i > 0 ? "1px solid #f0f4f8" : "none" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ fontSize: 20 }}>{doc.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{doc.label}</div>
+                                {doc.optional && <span style={{ fontSize:9, color:"#9aa5b4", fontWeight:700 }}>(opsional)</span>}
+                              </div>
+                              <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>{uploaded ? "Dokumen diunggah" : "Belum diunggah"}</div>
+                            </div>
+                            <div style={{ borderRadius: 8, padding: "3px 8px", background: status === "approved" ? "#e8f5f2" : isRejected ? "#fde8e8" : "#fef3c7", fontSize: 11, fontWeight: 700, color: status === "approved" ? "#1a7a6a" : isRejected ? "#e74c3c" : "#d97706", flexShrink:0 }}>
+                              {status === "approved" ? "✅ Terverifikasi" : isRejected ? "❌ Ditolak" : "⏳ Menunggu"}
+                            </div>
+                          </div>
+                          {isRejected && (
+                            <div style={{ background:"#fff5f5", borderRadius:8, padding:"6px 10px", marginTop:6, fontSize:11, color:"#e74c3c" }}>
+                              📝 Catatan: Dokumen tidak terbaca / tidak sesuai. Harap unggah ulang.
+                            </div>
+                          )}
+                          {(isRejected || !uploaded) && (
+                            <button style={{ marginTop:6, background:"none", border:"1px solid #1a3a5c", borderRadius:8, padding:"4px 12px", fontSize:11, fontWeight:700, color:"#1a3a5c", cursor:"pointer" }}>
+                              📤 Unggah {isRejected ? "Ulang" : "Dokumen"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {!mitraProfile && <div style={{ fontSize:12, color:"#9aa5b4", padding:"8px 0" }}>Memuat data dokumen...</div>}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Pengaturan Layanan ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Pengaturan Layanan</div>
+              {/* Radius */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection === "radius" ? null : "radius")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>📍</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Radius Jangkauan Kerja</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Saat ini: {workRadius} km dari lokasi Anda</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="radius"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "radius" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6, marginTop:8 }}>
+                      <span style={{ fontSize:12, color:"#7a8a9a" }}>1 km</span>
+                      <span style={{ fontSize:14, fontWeight:800, color:"#1a7a6a" }}>{workRadius} km</span>
+                      <span style={{ fontSize:12, color:"#7a8a9a" }}>50 km</span>
+                    </div>
+                    <input type="range" min={1} max={50} value={workRadius} onChange={e => setWorkRadius(Number(e.target.value))}
+                      style={{ width:"100%", accentColor:"#1a7a6a" }} />
+                    <div style={{ fontSize:11, color:"#9aa5b4", marginTop:6, textAlign:"center" as const }}>Geser untuk mengatur jangkauan area kerja Anda</div>
+                  </div>
+                )}
+              </div>
+              {/* Jam Operasional */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection === "jam-ops" ? null : "jam-ops")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>🕐</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Jam Operasional</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Atur jam buka-tutup per hari</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="jam-ops"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "jam-ops" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    {Object.entries(operationalHours).map(([day, val]) => (
+                      <div key={day} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderTop:"1px solid #f0f4f8" }}>
+                        <div onClick={() => setOperationalHours(h => ({ ...h, [day]: { ...h[day], active: !h[day].active } }))}
+                          style={{ width:36, height:20, borderRadius:10, background: val.active?"#1a7a6a":"#d0d9e2", cursor:"pointer", position:"relative" as const, flexShrink:0 }}>
+                          <div style={{ position:"absolute" as const, top:2, left: val.active?17:2, width:16, height:16, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", transition:"left 0.2s" }} />
+                        </div>
+                        <div style={{ width:50, fontSize:12, fontWeight:700, color: val.active?"#1a2a3a":"#b0bec5" }}>{day}</div>
+                        {val.active ? (
+                          <div style={{ flex:1, display:"flex", gap:6, alignItems:"center" }}>
+                            <input type="time" value={val.open} onChange={e => setOperationalHours(h => ({ ...h, [day]: { ...h[day], open: e.target.value } }))}
+                              style={{ flex:1, border:"1.5px solid #e0e8ef", borderRadius:8, padding:"4px 6px", fontSize:12, outline:"none" }} />
+                            <span style={{ fontSize:11, color:"#9aa5b4" }}>—</span>
+                            <input type="time" value={val.close} onChange={e => setOperationalHours(h => ({ ...h, [day]: { ...h[day], close: e.target.value } }))}
+                              style={{ flex:1, border:"1.5px solid #e0e8ef", borderRadius:8, padding:"4px 6px", fontSize:12, outline:"none" }} />
+                          </div>
+                        ) : (
+                          <div style={{ flex:1, fontSize:12, color:"#b0bec5", fontStyle:"italic" }}>Libur</div>
+                        )}
                       </div>
                     ))}
                   </div>
-                </div>
-
-                {/* Menu grup 1: Keuangan */}
-                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Keuangan</div>
-                  <div>
-                    <button onClick={() => setOpenAkunSection(openAkunSection === "penghasilan" ? null : "penghasilan")}
-                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                      <span style={{ fontSize: 20 }}>💰</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Ringkasan Penghasilan</div>
-                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Pendapatan hari ini & rekap order</div>
-                      </div>
-                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "penghasilan" ? "∨" : "›"}</span>
-                    </button>
-                    {openAkunSection === "penghasilan" && (
-                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-                          {[
-                            { label: "Pendapatan Hari Ini", val: fmtRp(data?.todayIncome ?? 0), color: "#1a7a6a" },
-                            { label: "Order Hari Ini", val: `${data?.todayOrders ?? 0} order`, color: "#1a3a5c" },
-                            { label: "Total Omset Riwayat", val: fmtRp(monthlyRevenue), color: "#d97706" },
-                            { label: "Platform Fee", val: fmtRp(monthlyFee), color: "#e74c3c" },
-                            { label: "Pendapatan Bersih", val: fmtRp(monthlyNet), color: "#1a7a6a" },
-                            { label: "Total Selesai", val: `${mitraProfile?.totalDoneOrders ?? (data?.recentOrders?.length ?? 0)} order`, color: "#1a3a5c" },
-                          ].map(item => (
-                            <div key={item.label} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px" }}>
-                              <div style={{ fontSize: 12, color: "#9aa5b4", marginBottom: 4 }}>{item.label}</div>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: item.color }}>{item.val}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{ marginTop: 10, fontSize: 11, color: "#9aa5b4", textAlign: "center" as const }}>Platform fee 5% dari biaya jasa per order</div>
-                      </div>
-                    )}
+                )}
+              </div>
+              {/* Jenis Pekerjaan */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection === "jenis-kerja" ? null : "jenis-kerja")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>🛠️</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Jenis Pekerjaan</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Kategori yang bisa Anda tangani</div>
                   </div>
-                </div>
-
-                {/* Menu grup 2: Profil & Dokumen */}
-                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Profil & Dokumen</div>
-                  <div>
-                    <button onClick={() => setOpenAkunSection(openAkunSection === "dokumen" ? null : "dokumen")}
-                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                      <span style={{ fontSize: 20 }}>📄</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Dokumen & Verifikasi</div>
-                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Status dokumen pendaftaran</div>
-                      </div>
-                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "dokumen" ? "∨" : "›"}</span>
-                    </button>
-                    {openAkunSection === "dokumen" && (
-                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                        {mitraProfile && ([
-                          { key: "ktp" as const, label: "KTP", icon: "🪪" },
-                          { key: "selfieKtp" as const, label: "Selfie dengan KTP", icon: "🤳" },
-                          { key: "sim" as const, label: "SIM", icon: "🚗" },
-                          { key: "sertifikat" as const, label: "Sertifikat / STNK", icon: "📋" },
-                        ]).map(doc => {
-                          const d = mitraProfile.documents[doc.key];
-                          return (
-                            <div key={doc.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: "1px solid #f8fafc" }}>
-                              <span style={{ fontSize: 20 }}>{doc.icon}</span>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{doc.label}</div>
-                                <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>{d.uploaded ? "Dokumen diunggah" : "Belum diunggah"}</div>
-                              </div>
-                              <div style={{ borderRadius: 8, padding: "3px 8px", background: d.status === "approved" ? "#e8f5f2" : d.status === "rejected" ? "#fde8e8" : "#fef3c7", fontSize: 11, fontWeight: 700, color: d.status === "approved" ? "#1a7a6a" : d.status === "rejected" ? "#e74c3c" : "#d97706" }}>
-                                {d.status === "approved" ? "✓ Disetujui" : d.status === "rejected" ? "✗ Ditolak" : "⏳ Review"}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {!mitraProfile && <div style={{ fontSize: 12, color: "#9aa5b4", padding: "8px 0" }}>Memuat data dokumen...</div>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Menu grup 3: Preferensi */}
-                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Preferensi</div>
-                  <div>
-                    <button onClick={() => setOpenAkunSection(openAkunSection === "notif-m" ? null : "notif-m")}
-                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                      <span style={{ fontSize: 20 }}>🔔</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Notifikasi</div>
-                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Kelola pemberitahuan</div>
-                      </div>
-                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "notif-m" ? "∨" : "›"}</span>
-                    </button>
-                    {openAkunSection === "notif-m" && (
-                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                        {([
-                          { key: "pesanan", label: "Order Masuk", desc: "Notifikasi saat ada order baru tersedia" },
-                          { key: "chat", label: "Pesan Chat", desc: "Notifikasi saat pengguna mengirim pesan" },
-                          { key: "promo", label: "Info Mitra", desc: "Update kebijakan dan program insentif" },
-                        ] as const).map(n => (
-                          <div key={n.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: "1px solid #f0f4f8" }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{n.label}</div>
-                              <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 2 }}>{n.desc}</div>
-                            </div>
-                            <div onClick={() => setMNotifSettings((s: any) => ({ ...s, [n.key]: !s[n.key] }))}
-                              style={{ width: 42, height: 24, borderRadius: 12, background: mNotifSettings[n.key] ? "#1a7a6a" : "#d0d9e2", cursor: "pointer", position: "relative" as const, transition: "background 0.2s", flexShrink: 0 }}>
-                              <div style={{ position: "absolute" as const, top: 3, left: mNotifSettings[n.key] ? 20 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.2)", transition: "left 0.2s" }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Menu grup 4: Keamanan */}
-                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Keamanan</div>
-                  <div>
-                    <button onClick={() => setOpenAkunSection(openAkunSection === "keamanan-m" ? null : "keamanan-m")}
-                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                      <span style={{ fontSize: 20 }}>🔐</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Keamanan Akun</div>
-                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Ganti password akun mitra</div>
-                      </div>
-                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "keamanan-m" ? "∨" : "›"}</span>
-                    </button>
-                    {openAkunSection === "keamanan-m" && (
-                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                        {(["mCpOld", "mCpNew", "mCpConfirm"] as const).map((k, i) => (
-                          <input key={k} type="password"
-                            value={k === "mCpOld" ? mCpOld : k === "mCpNew" ? mCpNew : mCpConfirm}
-                            onChange={e => { if (k === "mCpOld") setMCpOld(e.target.value); else if (k === "mCpNew") setMCpNew(e.target.value); else setMCpConfirm(e.target.value); }}
-                            placeholder={["Password lama", "Password baru (min. 8 karakter)", "Konfirmasi password baru"][i]}
-                            style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "9px 12px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 8, outline: "none" }} />
-                        ))}
-                        {mCpMsg && <div style={{ fontSize: 12, color: mCpMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{mCpMsg.text}</div>}
-                        <button disabled={mCpLoading} onClick={async () => {
-                          setMCpMsg(null);
-                          if (!mCpOld || !mCpNew || !mCpConfirm) { setMCpMsg({ type: "err", text: "Semua field wajib diisi" }); return; }
-                          if (mCpNew !== mCpConfirm) { setMCpMsg({ type: "err", text: "Konfirmasi password tidak cocok" }); return; }
-                          if (mCpNew.length < 8) { setMCpMsg({ type: "err", text: "Password baru minimal 8 karakter" }); return; }
-                          setMCpLoading(true);
-                          const r = await fetch(`${BASE}/api/mitra/change-password`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: mCpOld, newPassword: mCpNew }) });
-                          const d = await r.json();
-                          setMCpLoading(false);
-                          if (d.ok) { setMCpMsg({ type: "ok", text: "Password berhasil diubah!" }); setMCpOld(""); setMCpNew(""); setMCpConfirm(""); }
-                          else setMCpMsg({ type: "err", text: d.error ?? "Gagal mengubah password" });
-                        }} style={{ width: "100%", background: mCpLoading ? "#b2dfdb" : "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                          {mCpLoading ? "Menyimpan..." : "Ubah Password"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Menu grup 5: Bantuan & Legal */}
-                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Bantuan & Legal</div>
-                  {[
-                    { id: "bantuan-m", icon: "🆘", label: "Bantuan Mitra", sub: "FAQ dan panduan mitra" },
-                    { id: "legal-m", icon: "📜", label: "Legal & Kemitraan", sub: "Perjanjian mitra dan kebijakan" },
-                    { id: "tentang-m", icon: "ℹ️", label: "Tentang RIDE", sub: "Versi 1.0.0" },
-                  ].map(item => (
-                    <div key={item.id}>
-                      <button onClick={() => setOpenAkunSection(openAkunSection === item.id ? null : item.id)}
-                        style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                        <span style={{ fontSize: 20 }}>{item.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{item.label}</div>
-                          <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{item.sub}</div>
-                        </div>
-                        <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === item.id ? "∨" : "›"}</span>
-                      </button>
-                      {openAkunSection === "bantuan-m" && item.id === "bantuan-m" && (
-                        <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                          {[
-                            { q: "Bagaimana cara menerima order?", a: "Aktifkan status Online di halaman Beranda. Order masuk akan tampil sebagai notifikasi, Anda punya 30 detik untuk menerima atau menolak." },
-                            { q: "Kapan pendapatan saya masuk?", a: "Pendapatan dihitung dari setiap order yang berhasil diselesaikan dikurangi platform fee 5% dari biaya jasa." },
-                            { q: "Apa yang harus dilakukan jika ada masalah dengan pengguna?", a: "Hubungi kami via email mitra@ride.app atau WhatsApp 0800-RIDE-MITRA untuk eskalasi dalam 1x24 jam." },
-                            { q: "Bagaimana jika pengguna tidak bayar?", a: "Laporkan melalui fitur Bantuan. Tim kami akan meninjau dan menyelesaikan dalam 3 hari kerja." },
-                          ].map((faq, i) => (
-                            <div key={i} style={{ padding: "10px 0", borderTop: i === 0 ? "none" : "1px solid #f0f4f8" }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: "#1a3a5c", marginBottom: 4 }}>Q: {faq.q}</div>
-                              <div style={{ fontSize: 12, color: "#5a6a7a", lineHeight: 1.5 }}>{faq.a}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {openAkunSection === "legal-m" && item.id === "legal-m" && (
-                        <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8", fontSize: 12, color: "#7a8a9a", lineHeight: 1.6 }}>
-                          Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar 5% dari biaya jasa berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan.
-                        </div>
-                      )}
-                      {openAkunSection === "tentang-m" && item.id === "tentang-m" && (
-                        <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                          <div style={{ textAlign: "center" as const, padding: "12px 0" }}>
-                            <div style={{ fontSize: 28, fontWeight: 900, color: "#1a3a5c", letterSpacing: -1 }}>RIDE</div>
-                            <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 4 }}>Super App Jasa Panggilan</div>
-                            <div style={{ fontSize: 11, color: "#b0bec5", marginTop: 2 }}>Versi 1.0.0 · Mitra App · Build 2026</div>
-                          </div>
-                          <div style={{ fontSize: 12, color: "#7a8a9a", lineHeight: 1.6 }}>Terima kasih telah menjadi bagian dari ekosistem RIDE. Bersama Anda, kami menghadirkan layanan jasa berkualitas ke seluruh penjuru kota.</div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Tombol Keluar */}
-                <button onClick={async () => { await fetch(`${BASE}/api/auth/logout`, { method: "POST", credentials: "include" }); navigate("/"); }}
-                  style={{ width: "100%", background: "#fff0f0", borderRadius: 16, padding: "14px 16px", border: "1.5px solid #fde8e8", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 8px rgba(231,76,60,0.07)" }}>
-                  <span style={{ fontSize: 22 }}>🚪</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#e74c3c" }}>Keluar dari Akun</span>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="jenis-kerja"?"∨":"›"}</span>
                 </button>
-                <div style={{ height: 8 }} />
-              </>
-            );
-          })()}
-        </div>}
+                {openAkunSection === "jenis-kerja" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    {[
+                      { key:"bengkel", label:"Bengkel / Mekanik", emoji:"🔧" },
+                      { key:"elektronik", label:"Service Elektronik", emoji:"💡" },
+                      { key:"cuci", label:"Cuci Kendaraan", emoji:"🚿" },
+                      { key:"barber", label:"Pangkas Rambut", emoji:"✂️" },
+                      { key:"inspeksi", label:"Inspeksi Kendaraan", emoji:"🔍" },
+                      { key:"towing", label:"Towing / Derek", emoji:"🚛" },
+                    ].map(cat => (
+                      <div key={cat.key} onClick={() => setServiceCategories(s => ({ ...s, [cat.key]: !s[cat.key] }))}
+                        style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderTop:"1px solid #f0f4f8", cursor:"pointer" }}>
+                        <span style={{ fontSize:20 }}>{cat.emoji}</span>
+                        <div style={{ flex:1, fontSize:13, fontWeight:600, color:"#1a2a3a" }}>{cat.label}</div>
+                        <div style={{ width:22, height:22, borderRadius:6, border:`2px solid ${serviceCategories[cat.key]?"#1a7a6a":"#d0d9e2"}`, background: serviceCategories[cat.key]?"#1a7a6a":"#fff", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                          {serviceCategories[cat.key] && <span style={{ fontSize:13, color:"#fff", lineHeight:1 }}>✓</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Tarif Dasar */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection === "tarif" ? null : "tarif")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>💵</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Tarif Jasa Dasar</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Saat ini: {fmtRp(Number(baseTariff))}</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="tarif"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "tarif" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    <div style={{ fontSize:12, color:"#7a8a9a", marginBottom:8, marginTop:8 }}>Tarif minimal yang Anda kenakan kepada pelanggan (belum termasuk sparepart).</div>
+                    <input value={baseTariff} onChange={e => setBaseTariff(e.target.value.replace(/\D/g,""))} placeholder="Nominal tarif (misal: 50000)"
+                      style={{ width:"100%", border:"1.5px solid #e0e8ef", borderRadius:10, padding:"9px 12px", fontSize:14, boxSizing:"border-box" as const, marginBottom:8, outline:"none" }} />
+                    {baseTariffMsg && <div style={{ fontSize:12, color: baseTariffMsg.type==="ok"?"#1a7a6a":"#e74c3c", marginBottom:8 }}>{baseTariffMsg.text}</div>}
+                    <button disabled={baseTariffSaving} onClick={async () => {
+                      setBaseTariffSaving(true); setBaseTariffMsg(null);
+                      await new Promise(r => setTimeout(r, 600));
+                      setBaseTariffSaving(false);
+                      setBaseTariffMsg({ type:"ok", text:"Tarif dasar berhasil disimpan!" });
+                    }} style={{ width:"100%", background:"#1a7a6a", color:"#fff", border:"none", borderRadius:10, padding:"10px 0", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                      {baseTariffSaving ? "Menyimpan..." : "Simpan Tarif"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Notifikasi ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Notifikasi</div>
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection === "notif-m" ? null : "notif-m")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>🔔</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Pengaturan Notifikasi</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Kelola pemberitahuan masuk</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="notif-m"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "notif-m" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    {[
+                      { key:"pesanan", label:"Notifikasi Order Masuk", desc:"Notifikasi saat ada order baru tersedia" },
+                      { key:"chat", label:"Notifikasi Chat Pelanggan", desc:"Notifikasi saat pelanggan mengirim pesan" },
+                      { key:"promo", label:"Pengumuman dari RIDE", desc:"Update kebijakan dan program insentif mitra" },
+                      { key:"ringtone", label:"Nada Dering / Getaran", desc:"Suara & getar saat order baru masuk" },
+                    ].map(n => (
+                      <div key={n.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderTop:"1px solid #f0f4f8" }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:"#1a2a3a" }}>{n.label}</div>
+                          <div style={{ fontSize:11, color:"#9aa5b4", marginTop:2 }}>{n.desc}</div>
+                        </div>
+                        <div onClick={() => setMNotifSettings((s: any) => ({ ...s, [n.key]: !s[n.key] }))}
+                          style={{ width:42, height:24, borderRadius:12, background: mNotifSettings[n.key]?"#1a7a6a":"#d0d9e2", cursor:"pointer", position:"relative" as const, transition:"background 0.2s", flexShrink:0 }}>
+                          <div style={{ position:"absolute" as const, top:3, left: mNotifSettings[n.key]?20:3, width:18, height:18, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 4px rgba(0,0,0,0.2)", transition:"left 0.2s" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Keamanan Akun ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Keamanan Akun</div>
+              {/* Ganti Password */}
+              <div>
+                <button onClick={() => setMKeamananSub(mKeamananSub==="password"?null:"password")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>🔑</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Ganti Password</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Ubah kata sandi akun mitra</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{mKeamananSub==="password"?"∨":"›"}</span>
+                </button>
+                {mKeamananSub === "password" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    {(["mCpOld","mCpNew","mCpConfirm"] as const).map((k,i) => (
+                      <input key={k} type="password"
+                        value={k==="mCpOld"?mCpOld:k==="mCpNew"?mCpNew:mCpConfirm}
+                        onChange={e => { if(k==="mCpOld") setMCpOld(e.target.value); else if(k==="mCpNew") setMCpNew(e.target.value); else setMCpConfirm(e.target.value); }}
+                        placeholder={["Password lama","Password baru (min. 8 karakter)","Konfirmasi password baru"][i]}
+                        style={{ width:"100%", border:"1.5px solid #e0e8ef", borderRadius:10, padding:"9px 12px", fontSize:13, boxSizing:"border-box" as const, marginBottom:8, outline:"none" }} />
+                    ))}
+                    {mCpMsg && <div style={{ fontSize:12, color: mCpMsg.type==="ok"?"#1a7a6a":"#e74c3c", marginBottom:8 }}>{mCpMsg.text}</div>}
+                    <button disabled={mCpLoading} onClick={async () => {
+                      setMCpMsg(null);
+                      if (!mCpOld||!mCpNew||!mCpConfirm) { setMCpMsg({ type:"err", text:"Semua field wajib diisi" }); return; }
+                      if (mCpNew!==mCpConfirm) { setMCpMsg({ type:"err", text:"Konfirmasi password tidak cocok" }); return; }
+                      if (mCpNew.length<8) { setMCpMsg({ type:"err", text:"Password baru minimal 8 karakter" }); return; }
+                      setMCpLoading(true);
+                      const r = await fetch(`${BASE}/api/mitra/change-password`, { method:"PUT", credentials:"include", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ currentPassword:mCpOld, newPassword:mCpNew }) });
+                      const d = await r.json();
+                      setMCpLoading(false);
+                      if (d.ok) { setMCpMsg({ type:"ok", text:"Password berhasil diubah!" }); setMCpOld(""); setMCpNew(""); setMCpConfirm(""); }
+                      else setMCpMsg({ type:"err", text: d.error??"Gagal mengubah password" });
+                    }} style={{ width:"100%", background: mCpLoading?"#b2dfdb":"#1a3a5c", color:"#fff", border:"none", borderRadius:10, padding:"10px 0", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                      {mCpLoading?"Menyimpan...":"Ubah Password"}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Ubah Nomor HP */}
+              <div>
+                <button onClick={() => setMKeamananSub(mKeamananSub==="ubah-hp"?null:"ubah-hp")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>📱</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Ubah Nomor HP</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Saat ini: {mitraProfile?.phone ?? "—"}</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{mKeamananSub==="ubah-hp"?"∨":"›"}</span>
+                </button>
+                {mKeamananSub === "ubah-hp" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    <input value={mEditPhone} onChange={e => setMEditPhone(e.target.value.replace(/\D/g,""))} placeholder="Nomor HP baru (08xxxxxxxxxx)"
+                      style={{ width:"100%", border:"1.5px solid #e0e8ef", borderRadius:10, padding:"9px 12px", fontSize:13, boxSizing:"border-box" as const, marginBottom:10, outline:"none" }} />
+                    <button style={{ width:"100%", background:"#1a3a5c", color:"#fff", border:"none", borderRadius:10, padding:"10px 0", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                      Kirim Kode OTP
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Riwayat Login */}
+              <div>
+                <button onClick={() => setMKeamananSub(mKeamananSub==="riwayat-login"?null:"riwayat-login")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>🖥️</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Riwayat Login</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Perangkat & waktu masuk terakhir</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{mKeamananSub==="riwayat-login"?"∨":"›"}</span>
+                </button>
+                {mKeamananSub === "riwayat-login" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    {mLoginHistory.map((item, i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderTop: i>0?"1px solid #f0f4f8":"none" }}>
+                        <div style={{ width:36, height:36, borderRadius:10, background: item.current?"#e8f5f2":"#f0f4f8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
+                          {item.device.includes("Android")||item.device.includes("iPhone")?"📱":"💻"}
+                        </div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <div style={{ fontSize:12, fontWeight:700, color:"#1a2a3a" }}>{item.device}</div>
+                            {item.current && <span style={{ background:"#1a7a6a", color:"#fff", fontSize:9, fontWeight:800, borderRadius:5, padding:"1px 6px" }}>SAAT INI</span>}
+                          </div>
+                          <div style={{ fontSize:11, color:"#9aa5b4", marginTop:2 }}>{item.time}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Bantuan & Dukungan ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Bantuan & Dukungan</div>
+              {/* FAQ Mitra */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection==="bantuan-m"?null:"bantuan-m")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>❓</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>FAQ Khusus Mitra</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Pertanyaan umum untuk mitra</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="bantuan-m"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "bantuan-m" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    {[
+                      { q:"Bagaimana cara menerima order?", a:"Aktifkan status Online di halaman Beranda. Order masuk akan tampil sebagai notifikasi, Anda punya 30 detik untuk menerima atau menolak." },
+                      { q:"Kapan pendapatan saya masuk?", a:"Pendapatan dihitung dari setiap order yang berhasil diselesaikan dikurangi platform fee 5% dari biaya jasa." },
+                      { q:"Apa yang harus dilakukan jika ada masalah dengan pengguna?", a:"Hubungi Tim Mitra RIDE atau laporkan melalui menu Laporkan Masalah Teknis." },
+                      { q:"Bagaimana jika pengguna tidak bayar?", a:"Laporkan melalui fitur Bantuan. Tim kami akan meninjau dan menyelesaikan dalam 3 hari kerja." },
+                    ].map((faq, i) => (
+                      <div key={i} style={{ padding:"10px 0", borderTop: i===0?"none":"1px solid #f0f4f8" }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:"#1a3a5c", marginBottom:4 }}>Q: {faq.q}</div>
+                        <div style={{ fontSize:12, color:"#5a6a7a", lineHeight:1.5 }}>{faq.a}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Chat Tim Mitra */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection==="chat-tim"?null:"chat-tim")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>🎧</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Chat dengan Tim Mitra RIDE</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Hubungi tim dukungan mitra kami</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="chat-tim"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "chat-tim" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    <div style={{ background:"#f0faf8", borderRadius:12, padding:"12px", marginBottom:10 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#1a7a6a", marginBottom:4 }}>🟢 Tim Mitra Online · Respons ~10 menit</div>
+                      <div style={{ fontSize:11, color:"#5a7a6a" }}>Tim Mitra RIDE siap membantu Anda Senin–Sabtu pukul 08.00–21.00 WIB.</div>
+                    </div>
+                    <a href="mailto:mitra@ride.app" style={{ display:"block", background:"#1a3a5c", color:"#fff", textDecoration:"none", borderRadius:10, padding:"10px 0", fontSize:13, fontWeight:700, textAlign:"center" as const }}>
+                      ✉️ Email Tim Mitra
+                    </a>
+                  </div>
+                )}
+              </div>
+              {/* WhatsApp */}
+              <div>
+                <a href="https://wa.me/6280081433277" target="_blank" rel="noreferrer" style={{ textDecoration:"none" }}>
+                  <div style={{ width:"100%", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, borderTop:"1px solid #f0f4f8" }}>
+                    <span style={{ fontSize:20 }}>📲</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Hubungi via WhatsApp</div>
+                      <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Chat langsung di WhatsApp Mitra RIDE</div>
+                    </div>
+                    <span style={{ fontSize:16, color:"#25D366", fontWeight:800 }}>›</span>
+                  </div>
+                </a>
+              </div>
+              {/* Laporkan Masalah Teknis */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection==="laporan-m"?null:"laporan-m")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>🚨</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Laporkan Masalah Teknis</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Bug, error, atau masalah aplikasi</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="laporan-m"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "laporan-m" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    <select value={mReportType} onChange={e => setMReportType(e.target.value)}
+                      style={{ width:"100%", border:"1.5px solid #e0e8ef", borderRadius:10, padding:"9px 10px", fontSize:13, marginBottom:8, outline:"none", background:"#fff" }}>
+                      <option value="teknis">Bug / Error aplikasi</option>
+                      <option value="order">Masalah pada order</option>
+                      <option value="pembayaran">Masalah pembayaran mitra</option>
+                      <option value="lainnya">Lainnya</option>
+                    </select>
+                    <textarea value={mReportInput} onChange={e => setMReportInput(e.target.value)} placeholder="Jelaskan masalah secara detail..."
+                      style={{ width:"100%", border:"1.5px solid #e0e8ef", borderRadius:10, padding:"9px 12px", fontSize:13, boxSizing:"border-box" as const, resize:"none", height:80, marginBottom:10, outline:"none" }} />
+                    {mReportMsg && <div style={{ fontSize:12, color: mReportMsg.type==="ok"?"#1a7a6a":"#e74c3c", marginBottom:8 }}>{mReportMsg.text}</div>}
+                    <button disabled={mReportLoading||!mReportInput.trim()} onClick={async () => {
+                      setMReportLoading(true); setMReportMsg(null);
+                      await new Promise(r => setTimeout(r, 800));
+                      setMReportLoading(false);
+                      setMReportMsg({ type:"ok", text:"Laporan berhasil dikirim! Tim teknis kami akan merespons dalam 1x24 jam." });
+                      setMReportInput("");
+                    }} style={{ width:"100%", background: mReportLoading?"#b2dfdb":"#e74c3c", color:"#fff", border:"none", borderRadius:10, padding:"10px 0", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                      {mReportLoading?"Mengirim...":"Kirim Laporan"}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Panduan Mitra */}
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection==="panduan-m"?null:"panduan-m")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>📖</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Panduan Penggunaan Aplikasi</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Panduan lengkap untuk mitra RIDE</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="panduan-m"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "panduan-m" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    {[
+                      { step:"1", title:"Aktifkan Status Online", desc:"Tap tombol 'Go Online' di Beranda untuk mulai menerima order." },
+                      { step:"2", title:"Terima Order", desc:"Saat order masuk, Anda punya 30 detik untuk menerima. Tap 'Terima Order'." },
+                      { step:"3", title:"Perjalanan & Pengerjaan", desc:"Update status perjalanan, tiba, dan mulai pengerjaan sesuai progres." },
+                      { step:"4", title:"Selesaikan & Foto Bukti", desc:"Upload foto bukti pekerjaan selesai, lalu masukkan biaya jasa." },
+                      { step:"5", title:"Terima Pembayaran", desc:"Konfirmasi pembayaran dari pelanggan (cash/transfer/QRIS)." },
+                    ].map((s, i) => (
+                      <div key={i} style={{ display:"flex", gap:12, padding:"10px 0", borderTop: i>0?"1px solid #f0f4f8":"none" }}>
+                        <div style={{ width:28, height:28, borderRadius:"50%", background:"#1a7a6a", color:"#fff", fontSize:12, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{s.step}</div>
+                        <div>
+                          <div style={{ fontSize:12, fontWeight:700, color:"#1a2a3a", marginBottom:2 }}>{s.title}</div>
+                          <div style={{ fontSize:11, color:"#5a6a7a", lineHeight:1.5 }}>{s.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Legal & Kemitraan ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Legal & Kemitraan</div>
+              {[
+                { id:"perjanjian-m", icon:"📋", label:"Perjanjian Kemitraan RIDE", sub:"Syarat & ketentuan sebagai mitra", content:"Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar 5% dari biaya jasa berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan. Perjanjian ini berlaku selama akun mitra aktif." },
+                { id:"kebijakan-m", icon:"💼", label:"Kebijakan Platform & Komisi", sub:"Sistem komisi dan kebijakan mitra", content:"Platform fee RIDE adalah 5% dari total biaya jasa per order (tidak termasuk biaya sparepart). Fee dihitung otomatis saat order selesai dan disetujui pelanggan. RIDE berhak mengubah kebijakan komisi dengan pemberitahuan 14 hari sebelumnya. Mitra dengan performa tinggi (rating ≥4.8, order ≥50) dapat mengajukan program mitra unggulan dengan fee lebih rendah." },
+                { id:"privasi-m", icon:"🛡️", label:"Kebijakan Privasi", sub:"Data dan keamanan informasi mitra", content:"Data pribadi mitra disimpan dengan enkripsi dan tidak dibagikan kepada pihak ketiga tanpa izin. Kami menggunakan data lokasi hanya selama sesi layanan aktif. Dokumen verifikasi digunakan hanya untuk keperluan verifikasi identitas mitra. Untuk penghapusan data, hubungi mitra@ride.app." },
+              ].map(item => (
+                <div key={item.id}>
+                  <button onClick={() => setOpenAkunSection(openAkunSection===item.id?null:item.id)}
+                    style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                    <span style={{ fontSize:20 }}>{item.icon}</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>{item.label}</div>
+                      <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>{item.sub}</div>
+                    </div>
+                    <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection===item.id?"∨":"›"}</span>
+                  </button>
+                  {openAkunSection===item.id && (
+                    <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8", fontSize:12, color:"#7a8a9a", lineHeight:1.7 }}>
+                      {item.content}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* ── Tentang Aplikasi ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Tentang Aplikasi</div>
+              <div>
+                <button onClick={() => setOpenAkunSection(openAkunSection==="tentang-m"?null:"tentang-m")}
+                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
+                  <span style={{ fontSize:20 }}>ℹ️</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Tentang RIDE</div>
+                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Versi 1.0.0 · Mitra App</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="tentang-m"?"∨":"›"}</span>
+                </button>
+                {openAkunSection === "tentang-m" && (
+                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
+                    <div style={{ textAlign:"center" as const, padding:"12px 0 8px" }}>
+                      <div style={{ fontSize:30, fontWeight:900, color:"#1a3a5c", letterSpacing:-1 }}>RIDE</div>
+                      <div style={{ fontSize:12, color:"#9aa5b4", marginTop:4 }}>Super App Jasa Panggilan</div>
+                      <div style={{ fontSize:11, color:"#b0bec5", marginTop:2 }}>Versi 1.0.0 · Mitra App · Build 2026</div>
+                    </div>
+                    <div style={{ background:"#f0faf8", borderRadius:12, padding:"12px", marginBottom:10 }}>
+                      <div style={{ fontSize:11, fontWeight:800, color:"#1a7a6a", marginBottom:4 }}>No. Registrasi Mitra</div>
+                      <div style={{ fontSize:16, fontWeight:900, color:"#1a3a5c", letterSpacing:2 }}>RIDE-M-{String(mitraProfile?.id ?? "0000").padStart(4,"0")}</div>
+                      <div style={{ fontSize:10, color:"#7a8a9a", marginTop:4 }}>Gunakan nomor ini saat menghubungi tim RIDE</div>
+                    </div>
+                    <div style={{ fontSize:12, color:"#7a8a9a", lineHeight:1.7 }}>
+                      RIDE menghubungkan pengguna dengan mitra jasa profesional di bidang bengkel, elektronik, cuci kendaraan, barber, inspeksi, dan towing. Terima kasih telah menjadi bagian dari ekosistem RIDE — bersama Anda, kami menghadirkan layanan jasa berkualitas ke seluruh penjuru kota.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tombol Keluar */}
+            <button onClick={async () => { await fetch(`${BASE}/api/auth/logout`, { method:"POST", credentials:"include" }); navigate("/"); }}
+              style={{ width:"100%", background:"#fff0f0", borderRadius:16, padding:"14px 16px", border:"1.5px solid #fde8e8", cursor:"pointer", display:"flex", alignItems:"center", gap:14, boxShadow:"0 2px 8px rgba(231,76,60,0.07)" }}>
+              <span style={{ fontSize:22 }}>🚪</span>
+              <span style={{ fontSize:14, fontWeight:700, color:"#e74c3c" }}>Keluar dari Akun</span>
+            </button>
+            <div style={{ height: 8 }} />
+          </div>
+          );
+        })()}
 
       </div>
 
