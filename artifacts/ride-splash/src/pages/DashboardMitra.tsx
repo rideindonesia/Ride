@@ -1221,6 +1221,37 @@ export default function DashboardMitra() {
           </div>
         )}
 
+        {/* Order Terbaru */}
+        {(data?.recentOrders?.length ?? 0) > 0 && (
+          <div style={{ background: "#fff", borderRadius: 18, padding: "18px 16px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>📋 Order Terbaru</div>
+            {data!.recentOrders.slice(0, 5).map((o, i) => {
+              const dt = new Date(o.createdAt);
+              const dtStr = dt.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+              return (
+                <div key={o.id}>
+                  {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "10px 0" }} />}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: "#f0f4f8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ fontSize: 20 }}>🔧</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{o.penggunaName}</div>
+                      <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {o.vehicleModel} {o.vehicleYear} · {dtStr}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" as const, flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(o.totalAmount ?? 0)}</div>
+                      <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>Fee: {fmtRp(o.platformFee ?? 0)}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         </>}
 
         {/* ══ PESANAN TAB: Order Aktif — empty state ══ */}
