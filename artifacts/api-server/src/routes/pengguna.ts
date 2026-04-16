@@ -426,6 +426,30 @@ router.get("/orders/:id/receipt", async (req, res) => {
 });
 
 // DELETE /api/pengguna/orders/:id — batalkan order
+// GET /api/pengguna/order-history — riwayat order selesai milik pengguna
+router.get("/order-history", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orders = await db.select({
+    id: ordersTable.id,
+    orderNo: ordersTable.orderNo,
+    serviceType: ordersTable.serviceType,
+    vehicleModel: ordersTable.vehicleModel,
+    vehicleYear: ordersTable.vehicleYear,
+    damageCategories: ordersTable.damageCategories,
+    pickupAddress: ordersTable.pickupAddress,
+    totalAmount: ordersTable.totalAmount,
+    paymentData: ordersTable.paymentData,
+    createdAt: ordersTable.createdAt,
+  }).from(ordersTable)
+    .where(and(eq(ordersTable.penggunaId, penggunaId), eq(ordersTable.status, "done")))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(20);
+
+  res.json({ orders });
+});
+
 router.delete("/orders/:id", async (req, res) => {
   const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
