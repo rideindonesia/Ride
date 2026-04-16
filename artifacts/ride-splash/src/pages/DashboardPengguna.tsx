@@ -1018,11 +1018,11 @@ export default function DashboardPengguna() {
                     : chatMsgs.map(m => {
                         const isMe = m.senderRole === "pengguna";
                         return (
-                          <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: isMe ? "#1a7a6a" : "#7a8a9a", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>{isMe ? "Saya" : "Mitra"}</span>
-                            <div style={{ padding: "8px 12px", borderRadius: "4px 12px 12px 12px", background: isMe ? "#e8f5f2" : "#f0f4f8", borderLeft: `3px solid ${isMe ? "#1a7a6a" : "#c0cdd8"}`, color: "#1a2a3a", fontSize: 13, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+                          <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 2 }}>
+                            <div style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: isMe ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMe ? "#1a7a6a" : "#fff", color: isMe ? "#fff" : "#1a2a3a", fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                               {m.message}
                             </div>
+                            <span style={{ fontSize: 10, color: "#b0bec5" }}>{new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
                           </div>
                         );
                       })
@@ -1077,11 +1077,11 @@ export default function DashboardPengguna() {
                               : chatHistoryMsgs.map(m => {
                                   const isMe = m.senderRole === "pengguna";
                                   return (
-                                    <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                                      <span style={{ fontSize: 10, fontWeight: 700, color: isMe ? "#1a7a6a" : "#7a8a9a", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>{isMe ? "Saya" : "Mitra"}</span>
-                                      <div style={{ padding: "7px 11px", borderRadius: "4px 10px 10px 10px", background: isMe ? "#e8f5f2" : "#f0f4f8", borderLeft: `3px solid ${isMe ? "#1a7a6a" : "#c0cdd8"}`, color: "#1a2a3a", fontSize: 12, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+                                    <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 2 }}>
+                                      <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMe ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMe ? "#1a7a6a" : "#fff", color: isMe ? "#fff" : "#1a2a3a", fontSize: 12, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                                         {m.message}
                                       </div>
+                                      <span style={{ fontSize: 10, color: "#b0bec5" }}>{new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
                                     </div>
                                   );
                                 })
