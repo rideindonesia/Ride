@@ -1010,10 +1010,6 @@ export default function OrderBengkel() {
                   📏 {trackDist != null ? (trackDist < 1 ? `${Math.round(trackDist * 1000)} m` : `${trackDist.toFixed(1)} km`) : `${acceptedMitra.dist < 1 ? `${Math.round(acceptedMitra.dist * 1000)} m` : `${acceptedMitra.dist.toFixed(1)} km`}`}
                 </div>
               </div>
-              {/* "Mitra dalam perjalanan" badge */}
-              <div style={{ position: "absolute", top: 12, left: 12, zIndex: 500, background: "#1a7a6a", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-                🏍️ Mitra dalam perjalanan...
-              </div>
               {/* Legend */}
               <div style={{ position: "absolute", bottom: 12, left: 12, zIndex: 500, display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: "#1a3a5c", display: "flex", alignItems: "center", gap: 6 }}>
