@@ -332,10 +332,25 @@ export default function DashboardMitra() {
     };
     socket.on("order:confirmed", onPenggunaConfirmed);
 
+    // When pengguna cancels / picks a different mitra, clear active order immediately
+    const onOrderCancelled = (data: { orderId: number }) => {
+      setActiveOrder(prev => {
+        if (prev && prev.id === data.orderId) {
+          pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain." });
+          return null;
+        }
+        return prev;
+      });
+      setChatMsgs([]);
+      setPenggunaConfirmed(false);
+    };
+    socket.on("order:cancelled", onOrderCancelled);
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       socket.off("order:new", onNewOrder);
       socket.off("order:confirmed", onPenggunaConfirmed);
+      socket.off("order:cancelled", onOrderCancelled);
       socket.disconnect();
     };
   }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif]);
