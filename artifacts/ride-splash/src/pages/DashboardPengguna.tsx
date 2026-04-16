@@ -615,11 +615,11 @@ export default function DashboardPengguna() {
 
       {/* Sub-page top bar — shown for non-beranda tabs */}
       {activeTab !== "beranda" && (
-        <div style={{ background: "#fff", padding: "44px 16px 14px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, boxShadow: "0 1px 6px rgba(0,0,0,0.08)" }}>
-          <button onClick={() => setActiveTab("beranda")} style={{ width: 36, height: 36, borderRadius: 10, background: "#f0f4f8", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#1a3a5c", flexShrink: 0 }}>
+        <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "44px 16px 14px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+          <button onClick={() => setActiveTab("beranda")} style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff", flexShrink: 0 }}>
             ←
           </button>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1a3a5c" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>
             {activeTab === "pesanan" ? "Pesanan" : activeTab === "chat" ? "Chat" : "Akun Saya"}
           </div>
         </div>
