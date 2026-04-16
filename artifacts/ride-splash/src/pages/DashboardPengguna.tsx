@@ -613,8 +613,20 @@ export default function DashboardPengguna() {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", fontFamily: "'Inter', sans-serif", overflow: "hidden" }}>
 
-      {/* Header dark */}
-      <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "48px 14px 16px", flexShrink: 0 }}>
+      {/* Sub-page top bar — shown for non-beranda tabs */}
+      {activeTab !== "beranda" && (
+        <div style={{ background: "#fff", padding: "44px 16px 14px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, boxShadow: "0 1px 6px rgba(0,0,0,0.08)" }}>
+          <button onClick={() => setActiveTab("beranda")} style={{ width: 36, height: 36, borderRadius: 10, background: "#f0f4f8", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#1a3a5c", flexShrink: 0 }}>
+            ←
+          </button>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1a3a5c" }}>
+            {activeTab === "pesanan" ? "Pesanan" : activeTab === "chat" ? "Chat" : "Akun Saya"}
+          </div>
+        </div>
+      )}
+
+      {/* Header dark — Beranda only */}
+      {activeTab === "beranda" && <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "48px 14px 16px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -646,7 +658,7 @@ export default function DashboardPengguna() {
           <span style={{ fontSize: 16, color: "rgba(255,255,255,0.5)" }}>🔍</span>
           <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>Cari layanan yang kamu butuhkan...</span>
         </div>
-      </div>
+      </div>}
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
