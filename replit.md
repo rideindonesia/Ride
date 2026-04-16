@@ -15,6 +15,27 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 - **Static uploads**: /uploads/* served dari api-server ✅
 - **Socket.io (real-time)**: Singleton socket.ts (frontend), HTTP+Socket.io server (backend index.ts), identifySocket/joinOrderRoom/leaveOrderRoom utilities. Events: `order:new` (mitra broadcast), `order:accepted/phase/payment/done` (pengguna user room), `chat:message` (order room). DashboardPengguna, DashboardMitra, dan semua 6 Order pages (Bengkel/Cuci/Barber/Elektronik/Inspeksi/Towing) sudah socket-integrated. Polling direduksi ke 30s backup. ✅
 
+## Demo Accounts
+
+### Pengguna (User) — Password: `demo1234`
+| Nama | Email |
+|------|-------|
+| Demo Pengguna | demo.pengguna@ride.app |
+| Ahmad Rizki | ahmad.rizki@ride.app |
+
+### Mitra (Service Provider) — Password: `mitra1234`
+| Nama | Email | Layanan |
+|------|-------|---------|
+| Budi Santoso | budi.santoso@ride.app | Bengkel |
+| Doni Prasetyo | doni.prasetyo@ride.app | Elektronik |
+| Wahyu Sanjaya | wahyu.sanjaya@ride.app | Cuci Kendaraan |
+| Anto Wijaya | anto.wijaya@ride.app | Barber (Pangkas) |
+| Heru Gunawan | heru.gunawan@ride.app | Inspeksi |
+| Rudi Hermawan | rudi.hermawan@ride.app | Towing / Derek |
+
+> Seed via `POST /api/seed/demo` (akun + mitra_locations + mitra_applications)
+> Seed orders via `POST /api/seed/orders` (18 historical orders untuk Budi Bengkel)
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces

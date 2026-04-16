@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraLocationsTable, mitraApplicationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -12,44 +12,90 @@ function hashPassword(password: string): string {
 }
 
 const DEMO_PENGGUNA = [
-  { name: "Demo Pengguna", phone: "+6281355446677", email: "demo.pengguna@ride.app", password: "demo1234", role: "pengguna" as const },
-  { name: "Ahmad Rizki", phone: "+6281311112222", email: "ahmad.rizki@ride.app", password: "demo1234", role: "pengguna" as const },
-  { name: "Sari Dewi", phone: "+6281333334444", email: "sari.dewi@ride.app", password: "demo1234", role: "pengguna" as const },
-  { name: "Joko Susanto", phone: "+6281355556666", email: "joko.susanto@ride.app", password: "demo1234", role: "pengguna" as const },
+  { name: "Demo Pengguna",  phone: "+6281355446677", email: "demo.pengguna@ride.app",  password: "demo1234", role: "pengguna" as const },
+  { name: "Ahmad Rizki",    phone: "+6281311112222", email: "ahmad.rizki@ride.app",    password: "demo1234", role: "pengguna" as const },
 ];
 
 const DEMO_MITRA = [
-  { name: "Budi Santoso", phone: "+6281234567890", email: "budi.santoso@ride.app", password: "mitra1234", role: "mitra" as const, service: "bengkel" },
-  { name: "Rudi Hermawan", phone: "+6282198765432", email: "rudi.hermawan@ride.app", password: "mitra1234", role: "mitra" as const, service: "etowing" },
-  { name: "Doni Prasetyo", phone: "+6283188889999", email: "doni.prasetyo@ride.app", password: "mitra1234", role: "mitra" as const, service: "elektronik" },
-  { name: "Anto Wijaya", phone: "+6285211223344", email: "anto.wijaya@ride.app", password: "mitra1234", role: "mitra" as const, service: "pangkas" },
-  { name: "Wahyu Sanjaya", phone: "+6287812345678", email: "wahyu.sanjaya@ride.app", password: "mitra1234", role: "mitra" as const, service: "cuci_kendaraan" },
-  { name: "Heru Gunawan", phone: "+6289934567890", email: "heru.gunawan@ride.app", password: "mitra1234", role: "mitra" as const, service: "inspeksi" },
+  { name: "Budi Santoso",   phone: "+6281234567890", email: "budi.santoso@ride.app",   password: "mitra1234", role: "mitra" as const, service: "bengkel",    lat: -1.2584, lng: 116.8302 },
+  { name: "Doni Prasetyo",  phone: "+6283188889999", email: "doni.prasetyo@ride.app",  password: "mitra1234", role: "mitra" as const, service: "elektronik", lat: -1.2704, lng: 116.8402 },
+  { name: "Wahyu Sanjaya",  phone: "+6287812345678", email: "wahyu.sanjaya@ride.app",  password: "mitra1234", role: "mitra" as const, service: "cuci",       lat: -1.2504, lng: 116.8212 },
+  { name: "Anto Wijaya",    phone: "+6285211223344", email: "anto.wijaya@ride.app",    password: "mitra1234", role: "mitra" as const, service: "barber",     lat: -1.2754, lng: 116.8312 },
+  { name: "Heru Gunawan",   phone: "+6289934567890", email: "heru.gunawan@ride.app",   password: "mitra1234", role: "mitra" as const, service: "inspeksi",   lat: -1.2654, lng: 116.8452 },
+  { name: "Rudi Hermawan",  phone: "+6282198765432", email: "rudi.hermawan@ride.app",  password: "mitra1234", role: "mitra" as const, service: "towing",     lat: -1.2554, lng: 116.8482 },
 ];
 
 router.post("/demo", async (_req, res) => {
   const all = [...DEMO_PENGGUNA, ...DEMO_MITRA];
-  const results: { phone: string; status: string }[] = [];
+  const results: { name: string; email: string; status: string }[] = [];
 
   for (const u of all) {
+    // Check if user already exists
     const existing = await db.select({ id: usersTable.id })
       .from(usersTable)
-      .where(eq(usersTable.phone, u.phone))
+      .where(eq(usersTable.email, u.email))
       .limit(1);
 
+    let userId: number;
+
     if (existing.length > 0) {
-      results.push({ phone: u.phone, status: "sudah ada" });
-      continue;
+      userId = existing[0].id;
+      results.push({ name: u.name, email: u.email, status: "sudah ada" });
+    } else {
+      const [inserted] = await db.insert(usersTable).values({
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        passwordHash: hashPassword(u.password),
+        role: u.role,
+        walletBalance: u.role === "pengguna" ? 150000 : 0,
+      }).returning({ id: usersTable.id });
+      userId = inserted.id;
+      results.push({ name: u.name, email: u.email, status: "dibuat" });
     }
 
-    await db.insert(usersTable).values({
-      name: u.name,
-      email: u.email,
-      phone: u.phone,
-      passwordHash: hashPassword(u.password),
-      role: u.role,
-    });
-    results.push({ phone: u.phone, status: "dibuat" });
+    // For mitra: seed mitra_locations and mitra_applications
+    if (u.role === "mitra") {
+      const mitraData = DEMO_MITRA.find(m => m.email === u.email)!;
+
+      // Seed mitra_locations (online + koordinat Balikpapan)
+      const existingLoc = await db.select({ id: mitraLocationsTable.id })
+        .from(mitraLocationsTable)
+        .where(eq(mitraLocationsTable.userId, userId))
+        .limit(1);
+
+      if (existingLoc.length === 0) {
+        await db.insert(mitraLocationsTable).values({
+          userId,
+          lat: mitraData.lat,
+          lng: mitraData.lng,
+          isOnline: true,
+          serviceType: mitraData.service,
+        });
+      } else {
+        await db.update(mitraLocationsTable)
+          .set({ lat: mitraData.lat, lng: mitraData.lng, isOnline: true, serviceType: mitraData.service })
+          .where(eq(mitraLocationsTable.userId, userId));
+      }
+
+      // Seed mitra_applications (approved, so profile-detail works)
+      const existingApp = await db.select({ id: mitraApplicationsTable.id })
+        .from(mitraApplicationsTable)
+        .where(eq(mitraApplicationsTable.email, u.email))
+        .limit(1);
+
+      if (existingApp.length === 0) {
+        await db.insert(mitraApplicationsTable).values({
+          name: u.name,
+          phone: u.phone,
+          email: u.email,
+          passwordHash: hashPassword(u.password),
+          serviceType: mitraData.service,
+          operatingCity: "Balikpapan",
+          status: "approved",
+        });
+      }
+    }
   }
 
   res.json({ message: "Seeding selesai", results });
@@ -57,16 +103,13 @@ router.post("/demo", async (_req, res) => {
 
 // Seed historical orders for demo mitra accounts
 router.post("/orders", async (_req, res) => {
-  // Get user IDs
-  const allUsers = await db.select({ id: usersTable.id, phone: usersTable.phone, role: usersTable.role }).from(usersTable);
-  const userMap = Object.fromEntries(allUsers.map(u => [u.phone, u.id]));
+  const allUsers = await db.select({ id: usersTable.id, email: usersTable.email, role: usersTable.role }).from(usersTable);
+  const userMap = Object.fromEntries(allUsers.map(u => [u.email, u.id]));
 
-  const budiId = userMap["+6281234567890"];
+  const budiId = userMap["budi.santoso@ride.app"];
   const penggunaIds = [
-    userMap["+6281355446677"],
-    userMap["+6281311112222"],
-    userMap["+6281333334444"],
-    userMap["+6281355556666"],
+    userMap["demo.pengguna@ride.app"],
+    userMap["ahmad.rizki@ride.app"],
   ].filter(Boolean);
 
   if (!budiId || penggunaIds.length === 0) {
@@ -74,7 +117,6 @@ router.post("/orders", async (_req, res) => {
     return;
   }
 
-  // Check if orders already seeded
   const existingOrders = await db.select({ id: ordersTable.id }).from(ordersTable).where(eq(ordersTable.mitraId, budiId)).limit(1);
   if (existingOrders.length > 0) {
     res.json({ message: "Orders sudah ada", count: 0 });
@@ -93,28 +135,24 @@ router.post("/orders", async (_req, res) => {
   }
 
   const historicalOrders = [
-    // This week
-    { penggunaId: penggunaIds[0], vehicleModel: "Toyota Avanza", vehicleYear: "2019", vehicleType: "mobil", damage: ["Mogok Total"], amount: 295000, days: 0 },
-    { penggunaId: penggunaIds[1], vehicleModel: "Honda Beat", vehicleYear: "2021", vehicleType: "motor", damage: ["Ban Bocor"], amount: 85000, days: 1 },
-    { penggunaId: penggunaIds[2], vehicleModel: "Honda Jazz", vehicleYear: "2018", vehicleType: "mobil", damage: ["Aki Soak"], amount: 180000, days: 2 },
-    // Last week
-    { penggunaId: penggunaIds[3], vehicleModel: "Yamaha NMAX", vehicleYear: "2020", vehicleType: "motor", damage: ["Rantai Putus"], amount: 120000, days: 8 },
-    { penggunaId: penggunaIds[0], vehicleModel: "Toyota Innova", vehicleYear: "2017", vehicleType: "mobil", damage: ["Overheat"], amount: 350000, days: 9 },
-    { penggunaId: penggunaIds[1], vehicleModel: "Honda Vario", vehicleYear: "2022", vehicleType: "motor", damage: ["Mogok Total"], amount: 95000, days: 10 },
-    { penggunaId: penggunaIds[2], vehicleModel: "Daihatsu Sigra", vehicleYear: "2019", vehicleType: "mobil", damage: ["Lampu Mati"], amount: 200000, days: 11 },
-    { penggunaId: penggunaIds[3], vehicleModel: "Honda Scoopy", vehicleYear: "2021", vehicleType: "motor", damage: ["Ban Bocor"], amount: 75000, days: 12 },
-    { penggunaId: penggunaIds[0], vehicleModel: "Suzuki Ertiga", vehicleYear: "2020", vehicleType: "mobil", damage: ["Mogok Total", "Aki Soak"], amount: 380000, days: 13 },
-    // 2 weeks ago
-    { penggunaId: penggunaIds[1], vehicleModel: "Yamaha Aerox", vehicleYear: "2022", vehicleType: "motor", damage: ["Mogok Total"], amount: 110000, days: 16 },
-    { penggunaId: penggunaIds[2], vehicleModel: "Toyota Agya", vehicleYear: "2020", vehicleType: "mobil", damage: ["Overheat"], amount: 220000, days: 17 },
-    { penggunaId: penggunaIds[3], vehicleModel: "Honda BeAT", vehicleYear: "2019", vehicleType: "motor", damage: ["Rantai Putus", "Ban Bocor"], amount: 145000, days: 18 },
-    { penggunaId: penggunaIds[0], vehicleModel: "Mitsubishi Xpander", vehicleYear: "2021", vehicleType: "mobil", damage: ["Mogok Total"], amount: 420000, days: 20 },
-    // 3 weeks ago
-    { penggunaId: penggunaIds[1], vehicleModel: "Honda CB150R", vehicleYear: "2020", vehicleType: "motor", damage: ["Aki Soak"], amount: 130000, days: 23 },
-    { penggunaId: penggunaIds[2], vehicleModel: "Toyota Calya", vehicleYear: "2018", vehicleType: "mobil", damage: ["Lampu Mati", "Mogok Total"], amount: 310000, days: 24 },
-    { penggunaId: penggunaIds[3], vehicleModel: "Yamaha Mio M3", vehicleYear: "2021", vehicleType: "motor", damage: ["Ban Bocor"], amount: 80000, days: 25 },
-    { penggunaId: penggunaIds[0], vehicleModel: "Daihatsu Xenia", vehicleYear: "2019", vehicleType: "mobil", damage: ["Overheat"], amount: 270000, days: 26 },
-    { penggunaId: penggunaIds[1], vehicleModel: "Honda PCX", vehicleYear: "2022", vehicleType: "motor", damage: ["Mogok Total"], amount: 155000, days: 27 },
+    { penggunaId: penggunaIds[0], vehicleModel: "Toyota Avanza",       vehicleYear: "2019", vehicleType: "mobil", damage: ["Mogok Total"],              amount: 295000, days: 0  },
+    { penggunaId: penggunaIds[1], vehicleModel: "Honda Beat",           vehicleYear: "2021", vehicleType: "motor", damage: ["Ban Bocor"],                 amount: 85000,  days: 1  },
+    { penggunaId: penggunaIds[0], vehicleModel: "Honda Jazz",           vehicleYear: "2018", vehicleType: "mobil", damage: ["Aki Soak"],                  amount: 180000, days: 2  },
+    { penggunaId: penggunaIds[1], vehicleModel: "Yamaha NMAX",          vehicleYear: "2020", vehicleType: "motor", damage: ["Rantai Putus"],              amount: 120000, days: 8  },
+    { penggunaId: penggunaIds[0], vehicleModel: "Toyota Innova",        vehicleYear: "2017", vehicleType: "mobil", damage: ["Overheat"],                  amount: 350000, days: 9  },
+    { penggunaId: penggunaIds[1], vehicleModel: "Honda Vario",          vehicleYear: "2022", vehicleType: "motor", damage: ["Mogok Total"],               amount: 95000,  days: 10 },
+    { penggunaId: penggunaIds[0], vehicleModel: "Daihatsu Sigra",       vehicleYear: "2019", vehicleType: "mobil", damage: ["Lampu Mati"],                amount: 200000, days: 11 },
+    { penggunaId: penggunaIds[1], vehicleModel: "Honda Scoopy",         vehicleYear: "2021", vehicleType: "motor", damage: ["Ban Bocor"],                 amount: 75000,  days: 12 },
+    { penggunaId: penggunaIds[0], vehicleModel: "Suzuki Ertiga",        vehicleYear: "2020", vehicleType: "mobil", damage: ["Mogok Total", "Aki Soak"],   amount: 380000, days: 13 },
+    { penggunaId: penggunaIds[1], vehicleModel: "Yamaha Aerox",         vehicleYear: "2022", vehicleType: "motor", damage: ["Mogok Total"],               amount: 110000, days: 16 },
+    { penggunaId: penggunaIds[0], vehicleModel: "Toyota Agya",          vehicleYear: "2020", vehicleType: "mobil", damage: ["Overheat"],                  amount: 220000, days: 17 },
+    { penggunaId: penggunaIds[1], vehicleModel: "Honda BeAT",           vehicleYear: "2019", vehicleType: "motor", damage: ["Rantai Putus", "Ban Bocor"], amount: 145000, days: 18 },
+    { penggunaId: penggunaIds[0], vehicleModel: "Mitsubishi Xpander",   vehicleYear: "2021", vehicleType: "mobil", damage: ["Mogok Total"],               amount: 420000, days: 20 },
+    { penggunaId: penggunaIds[1], vehicleModel: "Honda CB150R",         vehicleYear: "2020", vehicleType: "motor", damage: ["Aki Soak"],                  amount: 130000, days: 23 },
+    { penggunaId: penggunaIds[0], vehicleModel: "Toyota Calya",         vehicleYear: "2018", vehicleType: "mobil", damage: ["Lampu Mati", "Mogok Total"], amount: 310000, days: 24 },
+    { penggunaId: penggunaIds[1], vehicleModel: "Yamaha Mio M3",        vehicleYear: "2021", vehicleType: "motor", damage: ["Ban Bocor"],                 amount: 80000,  days: 25 },
+    { penggunaId: penggunaIds[0], vehicleModel: "Daihatsu Xenia",       vehicleYear: "2019", vehicleType: "mobil", damage: ["Overheat"],                  amount: 270000, days: 26 },
+    { penggunaId: penggunaIds[1], vehicleModel: "Honda PCX",            vehicleYear: "2022", vehicleType: "motor", damage: ["Mogok Total"],               amount: 155000, days: 27 },
   ];
 
   let inserted = 0;
@@ -139,7 +177,6 @@ router.post("/orders", async (_req, res) => {
       updatedAt: createdAt,
     });
     inserted++;
-    // small delay to avoid unique constraint issues on orderNo
     await new Promise(r => setTimeout(r, 5));
   }
 
@@ -148,10 +185,10 @@ router.post("/orders", async (_req, res) => {
 
 // Seed 1 pending/incoming order for Budi to test notification
 router.post("/incoming", async (_req, res) => {
-  const allUsers = await db.select({ id: usersTable.id, phone: usersTable.phone }).from(usersTable);
-  const userMap = Object.fromEntries(allUsers.map(u => [u.phone, u.id]));
-  const budiId = userMap["+6281234567890"];
-  const demoId = userMap["+6281355446677"];
+  const allUsers = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
+  const userMap = Object.fromEntries(allUsers.map(u => [u.email, u.id]));
+  const budiId = userMap["budi.santoso@ride.app"];
+  const demoId = userMap["demo.pengguna@ride.app"];
 
   if (!budiId || !demoId) {
     res.status(400).json({ error: "Run /api/seed/demo first" });
