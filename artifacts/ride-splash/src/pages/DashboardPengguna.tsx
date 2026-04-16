@@ -184,6 +184,36 @@ export default function DashboardPengguna() {
   const [profileSaveLoading, setProfileSaveLoading] = useState(false);
   const [profileSaveMsg, setProfileSaveMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
+  // Default address
+  const [defaultAlamatId, setDefaultAlamatId] = useState<string | null>(() => {
+    try { return localStorage.getItem("ride-default-alamat"); } catch { return null; }
+  });
+
+  // Login history (simulated)
+  const loginHistory = [
+    { device: "Chrome · Android", time: "16 Apr 2026, 10:30 WIB", current: true },
+    { device: "Chrome · Windows", time: "14 Apr 2026, 18:45 WIB", current: false },
+    { device: "Safari · iPhone", time: "10 Apr 2026, 09:12 WIB", current: false },
+  ];
+
+  // Voucher usage history
+  const voucherHistory = [
+    { code: "RIDE5", desc: "Diskon 5%", usedAt: "12 Apr 2026", order: "#RD-20260412" },
+    { code: "GRATIS", desc: "Gratis biaya panggilan", usedAt: "05 Apr 2026", order: "#RD-20260405" },
+  ];
+
+  // Report / ticket
+  const [reportInput, setReportInput] = useState("");
+  const [reportType, setReportType] = useState("order");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportMsg, setReportMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [reportList] = useState([
+    { id: "TKT-001", title: "Order tidak selesai dengan benar", status: "Sedang diproses", date: "15 Apr 2026" },
+  ]);
+
+  // Keamanan sub-section
+  const [keamananSubSection, setKeamananSubSection] = useState<string | null>(null);
+
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const userMarkerRef = useRef<L.CircleMarker | null>(null);
@@ -260,6 +290,12 @@ export default function DashboardPengguna() {
   useEffect(() => {
     localStorage.setItem("ride-paymethods", JSON.stringify(paymentMethods));
   }, [paymentMethods]);
+
+  // Sync default alamat to localStorage
+  useEffect(() => {
+    if (defaultAlamatId) localStorage.setItem("ride-default-alamat", defaultAlamatId);
+    else localStorage.removeItem("ride-default-alamat");
+  }, [defaultAlamatId]);
 
   // Level badge helper
   const getLevel = (n: number) => n >= 20 ? { label: "Gold ⭐⭐⭐", color: "#c8960c", bg: "#fff9e6", border: "#f5a623" } : n >= 5 ? { label: "Silver ⭐⭐", color: "#6b7280", bg: "#f5f7fa", border: "#9aa5b4" } : { label: "New ⭐", color: "#1a7a6a", bg: "#e8f5f2", border: "#1a7a6a" };
@@ -1134,9 +1170,9 @@ export default function DashboardPengguna() {
             </div>
           )}
 
-          {/* Menu grup 1: Aktivitas */}
+          {/* Menu grup 1: Aktivitas & Ulasan */}
           <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Aktivitas</div>
+            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Aktivitas & Ulasan</div>
             {[
               { id: "pesanan-menu", icon: "📋", label: "Riwayat Pesanan", sub: `${orderHistory.length} pesanan selesai`, action: () => { setActiveTab("pesanan"); setPesananSubTab("riwayat"); } },
               { id: "chat-menu", icon: "💬", label: "Riwayat Chat", sub: `${orderHistory.length} percakapan`, action: () => { setActiveTab("chat"); setChatSubTab("riwayat"); } },
@@ -1153,6 +1189,70 @@ export default function DashboardPengguna() {
                 </button>
               </div>
             ))}
+            {/* Ulasan Terakhir */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "ulasan" ? null : "ulasan")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>⭐</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Ulasan & Rating Saya</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>
+                    {orderHistory.filter(o => o.rating).length > 0
+                      ? `${orderHistory.filter(o => o.rating).length} ulasan diberikan · rata-rata ${(Math.round((orderHistory.reduce((s, o) => s + (o.rating ?? 0), 0) / (orderHistory.filter(o => o.rating).length || 1)) * 10) / 10).toFixed(1)} ⭐`
+                      : "Belum ada ulasan diberikan"}
+                  </div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "ulasan" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "ulasan" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  {/* Stats row */}
+                  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                    <div style={{ flex: 1, background: "#f0faf8", borderRadius: 10, padding: "10px 0", textAlign: "center" as const }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: "#1a7a6a" }}>{orderHistory.length}</div>
+                      <div style={{ fontSize: 10, color: "#5a7a6a", marginTop: 2 }}>Total Order</div>
+                    </div>
+                    <div style={{ flex: 1, background: "#fff9e6", borderRadius: 10, padding: "10px 0", textAlign: "center" as const }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: "#c8960c" }}>
+                        {orderHistory.filter(o => o.rating).length > 0
+                          ? (Math.round((orderHistory.reduce((s, o) => s + (o.rating ?? 0), 0) / (orderHistory.filter(o => o.rating).length || 1)) * 10) / 10).toFixed(1)
+                          : "—"}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#9a7a2c", marginTop: 2 }}>Rating Rata-rata</div>
+                    </div>
+                    <div style={{ flex: 1, background: "#f0f4f8", borderRadius: 10, padding: "10px 0", textAlign: "center" as const }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: "#1a3a5c" }}>{orderHistory.filter(o => o.rating).length}</div>
+                      <div style={{ fontSize: 10, color: "#5a6a7a", marginTop: 2 }}>Ulasan Ditulis</div>
+                    </div>
+                  </div>
+                  {/* Last reviews */}
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1a2a3a", marginBottom: 8 }}>Ulasan Terakhir</div>
+                  {orderHistory.filter(o => o.rating).length === 0 && (
+                    <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center" as const, padding: "12px 0" }}>Belum ada ulasan yang diberikan.</div>
+                  )}
+                  {orderHistory.filter(o => o.rating).slice(0, 3).map(o => {
+                    const svc = getSvc(o.serviceType);
+                    return (
+                      <div key={o.id} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <span style={{ fontSize: 16 }}>{svc.emoji}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{svc.label}</div>
+                            <div style={{ fontSize: 10, color: "#9aa5b4" }}>{fmtDate(o.createdAt)}</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 1 }}>
+                            {[1, 2, 3, 4, 5].map(s => (
+                              <span key={s} style={{ fontSize: 12, color: s <= (o.rating ?? 0) ? "#f5a623" : "#d0d9e2" }}>★</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#5a6a7a" }}>{o.vehicleModel}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Menu grup 2: Dompet & Pembayaran */}
@@ -1294,6 +1394,19 @@ export default function DashboardPengguna() {
                       style={{ background: "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Tukar</button>
                   </div>
                   {voucherMsg && <div style={{ fontSize: 11, color: voucherMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginTop: 6 }}>{voucherMsg.text}</div>}
+                  {/* Riwayat Penggunaan Voucher */}
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1a2a3a", marginTop: 14, marginBottom: 6 }}>Riwayat Penggunaan Voucher</div>
+                  {voucherHistory.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4" }}>Belum ada riwayat voucher.</div>}
+                  {voucherHistory.map((v, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid #f0f4f8" }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: "#f0faf8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🎟️</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#1a7a6a" }}>{v.code}</div>
+                        <div style={{ fontSize: 10, color: "#5a7a6a" }}>{v.desc} · {v.order}</div>
+                      </div>
+                      <div style={{ fontSize: 10, color: "#9aa5b4" }}>{v.usedAt}</div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1347,13 +1460,24 @@ export default function DashboardPengguna() {
                   <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
                     {alamatList.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4", padding: "8px 0" }}>Belum ada alamat tersimpan.</div>}
                     {alamatList.map(a => (
-                      <div key={a.id} style={{ background: "#f8fafc", borderRadius: 10, padding: "9px 12px", marginTop: 8, display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{a.label}</div>
-                          <div style={{ fontSize: 11, color: "#7a8a9a", marginTop: 2 }}>{a.address}</div>
+                      <div key={a.id} style={{ background: a.id === defaultAlamatId ? "#f0faf8" : "#f8fafc", borderRadius: 10, padding: "9px 12px", marginTop: 8, border: a.id === defaultAlamatId ? "1.5px solid #1a7a6a" : "1.5px solid transparent" }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{a.label}</div>
+                              {a.id === defaultAlamatId && <span style={{ background: "#1a7a6a", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: 5, padding: "1px 6px" }}>DEFAULT</span>}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#7a8a9a", marginTop: 2 }}>{a.address}</div>
+                          </div>
+                          <button onClick={() => setAlamatList(l => l.filter(x => x.id !== a.id))}
+                            style={{ background: "none", border: "none", color: "#e74c3c", fontSize: 16, cursor: "pointer", padding: 0, flexShrink: 0 }}>×</button>
                         </div>
-                        <button onClick={() => setAlamatList(l => l.filter(x => x.id !== a.id))}
-                          style={{ background: "none", border: "none", color: "#e74c3c", fontSize: 16, cursor: "pointer", padding: 0 }}>×</button>
+                        {a.id !== defaultAlamatId && (
+                          <button onClick={() => setDefaultAlamatId(a.id)}
+                            style={{ marginTop: 6, background: "none", border: "1px solid #1a7a6a", borderRadius: 7, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#1a7a6a", cursor: "pointer" }}>
+                            Jadikan Default
+                          </button>
+                        )}
                       </div>
                     ))}
                     <div style={{ marginTop: 10 }}>
@@ -1395,18 +1519,19 @@ export default function DashboardPengguna() {
 
           {/* Menu grup 3: Keamanan */}
           <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Keamanan</div>
+            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Keamanan Akun</div>
+            {/* Ganti Password */}
             <div>
-              <button onClick={() => setOpenAkunSection(openAkunSection === "keamanan" ? null : "keamanan")}
+              <button onClick={() => setKeamananSubSection(keamananSubSection === "password" ? null : "password")}
                 style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                <span style={{ fontSize: 20 }}>🔐</span>
+                <span style={{ fontSize: 20 }}>🔑</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Keamanan Akun</div>
-                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Ganti password akun</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Ganti Password</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Ubah kata sandi akun</div>
                 </div>
-                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "keamanan" ? "∨" : "›"}</span>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{keamananSubSection === "password" ? "∨" : "›"}</span>
               </button>
-              {openAkunSection === "keamanan" && (
+              {keamananSubSection === "password" && (
                 <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
                   {(["cpOld", "cpNew", "cpConfirm"] as const).map((k, i) => (
                     <input key={k} type="password"
@@ -1433,13 +1558,214 @@ export default function DashboardPengguna() {
                 </div>
               )}
             </div>
+            {/* Ubah Nomor HP */}
+            <div>
+              <button onClick={() => setKeamananSubSection(keamananSubSection === "ubah-hp" ? null : "ubah-hp")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>📱</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Ubah Nomor HP</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Verifikasi OTP diperlukan</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{keamananSubSection === "ubah-hp" ? "∨" : "›"}</span>
+              </button>
+              {keamananSubSection === "ubah-hp" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 10 }}>
+                    Nomor HP saat ini: <strong>{profile?.phone ?? "—"}</strong>
+                  </div>
+                  <input value={editPhone} onChange={e => setEditPhone(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Nomor HP baru (08xxxxxxxxxx)"
+                    style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "9px 12px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 10, outline: "none" }} />
+                  {profileSaveMsg && profileSaveMsg.text.includes("HP") && <div style={{ fontSize: 12, color: profileSaveMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{profileSaveMsg.text}</div>}
+                  <button disabled={!editPhone.trim() || editPhone.trim() === (profile?.phone ?? "")} onClick={async () => {
+                    setProfileSaveMsg(null);
+                    const r = await fetch("/api/pengguna/request-profile-otp", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: "phone", value: editPhone.trim() }) });
+                    const d = await r.json();
+                    if (!d.ok) { setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal kirim OTP" }); return; }
+                    setOtpPending({ field: "phone", value: editPhone.trim(), demoOtp: d.otpDemo });
+                    setOtpInput(""); setOtpMsg(null);
+                  }} style={{ width: "100%", background: "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                    Kirim Kode OTP
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Riwayat Login */}
+            <div>
+              <button onClick={() => setKeamananSubSection(keamananSubSection === "riwayat-login" ? null : "riwayat-login")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>🖥️</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Riwayat Login</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Perangkat & waktu masuk terakhir</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{keamananSubSection === "riwayat-login" ? "∨" : "›"}</span>
+              </button>
+              {keamananSubSection === "riwayat-login" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  {loginHistory.map((item, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: i > 0 ? "1px solid #f0f4f8" : "none" }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: item.current ? "#e8f5f2" : "#f0f4f8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                        {item.device.includes("Android") || item.device.includes("iPhone") ? "📱" : "💻"}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{item.device}</div>
+                          {item.current && <span style={{ background: "#1a7a6a", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: 5, padding: "1px 6px" }}>SAAT INI</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 2 }}>{item.time}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Keluar dari Semua Perangkat */}
+            <div>
+              <button onClick={() => {
+                if (window.confirm("Yakin ingin keluar dari semua perangkat? Anda akan perlu login ulang.")) {
+                  fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => navigate("/login"));
+                }
+              }} style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>🚫</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#e74c3c" }}>Keluar dari Semua Perangkat</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Akhiri semua sesi aktif</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>›</span>
+              </button>
+            </div>
           </div>
 
-          {/* Menu grup 4: Bantuan & Info */}
+          {/* Menu grup 4: Bantuan & Dukungan */}
           <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Bantuan & Info</div>
+            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Bantuan & Dukungan</div>
+            {/* FAQ */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "bantuan" ? null : "bantuan")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>❓</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>FAQ</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Pertanyaan yang sering ditanyakan</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "bantuan" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "bantuan" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  {[
+                    { q: "Bagaimana cara memesan layanan?", a: "Pilih layanan di tab Beranda, isi form detail kendaraan dan lokasi, lalu tunggu mitra terdekat menerima pesanan Anda." },
+                    { q: "Berapa lama mitra sampai?", a: "Estimasi kedatangan mitra adalah 15–45 menit tergantung jarak dan ketersediaan mitra di area Anda." },
+                    { q: "Bagaimana cara membatalkan pesanan?", a: "Anda dapat membatalkan pesanan sebelum mitra menerima. Buka tab Pesanan dan pilih Batalkan Order." },
+                    { q: "Bagaimana jika ada masalah dengan layanan?", a: "Hubungi kami via WhatsApp atau chat CS RIDE untuk penanganan dalam 1x24 jam." },
+                  ].map((faq, i) => (
+                    <div key={i} style={{ padding: "10px 0", borderTop: i === 0 ? "none" : "1px solid #f0f4f8" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#1a3a5c", marginBottom: 4 }}>Q: {faq.q}</div>
+                      <div style={{ fontSize: 12, color: "#5a6a7a", lineHeight: 1.5 }}>{faq.a}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Chat CS RIDE */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "chat-cs" ? null : "chat-cs")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>🎧</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Chat Customer Service RIDE</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Hubungi CS kami langsung</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "chat-cs" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "chat-cs" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  <div style={{ background: "#f0faf8", borderRadius: 12, padding: "12px", marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1a7a6a", marginBottom: 4 }}>🟢 CS Online · Waktu respons ~5 menit</div>
+                    <div style={{ fontSize: 11, color: "#5a7a6a" }}>Tim CS RIDE siap membantu Anda pada hari kerja pukul 08.00–22.00 WIB.</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <a href="https://wa.me/6280081433277" target="_blank" rel="noreferrer"
+                      style={{ flex: 1, background: "#25D366", color: "#fff", textDecoration: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, textAlign: "center" as const }}>
+                      📲 WhatsApp CS
+                    </a>
+                    <a href="mailto:support@ride.app"
+                      style={{ flex: 1, background: "#1a3a5c", color: "#fff", textDecoration: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, textAlign: "center" as const }}>
+                      ✉️ Email CS
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Laporkan Masalah */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "laporan" ? null : "laporan")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>🚨</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Laporkan Masalah</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Laporkan order atau masalah lainnya</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "laporan" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "laporan" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  <select value={reportType} onChange={e => setReportType(e.target.value)}
+                    style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "9px 10px", fontSize: 13, marginBottom: 8, outline: "none", background: "#fff" }}>
+                    <option value="order">Masalah order / layanan</option>
+                    <option value="mitra">Keluhan terhadap mitra</option>
+                    <option value="pembayaran">Masalah pembayaran / saldo</option>
+                    <option value="lainnya">Masalah lainnya</option>
+                  </select>
+                  <textarea value={reportInput} onChange={e => setReportInput(e.target.value)} placeholder="Ceritakan masalah Anda secara detail..."
+                    style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "9px 12px", fontSize: 13, boxSizing: "border-box" as const, resize: "none", height: 80, marginBottom: 10, outline: "none" }} />
+                  {reportMsg && <div style={{ fontSize: 12, color: reportMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{reportMsg.text}</div>}
+                  <button disabled={reportLoading || !reportInput.trim()} onClick={async () => {
+                    setReportLoading(true); setReportMsg(null);
+                    await new Promise(r => setTimeout(r, 800));
+                    setReportLoading(false);
+                    setReportMsg({ type: "ok", text: "Laporan berhasil dikirim! Tim kami akan menindaklanjuti dalam 1x24 jam." });
+                    setReportInput("");
+                  }} style={{ width: "100%", background: reportLoading ? "#b2dfdb" : "#e74c3c", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                    {reportLoading ? "Mengirim..." : "Kirim Laporan"}
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Status Tiket Laporan */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "tiket" ? null : "tiket")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>📌</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Status Tiket Laporan Saya</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{reportList.length} tiket aktif</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "tiket" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "tiket" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  {reportList.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center" as const, padding: "12px 0" }}>Tidak ada tiket laporan aktif.</div>}
+                  {reportList.map(t => (
+                    <div key={t.id} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", marginTop: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: "#1a3a5c" }}>{t.id}</div>
+                        <span style={{ background: "#fff9e6", color: "#c8960c", fontSize: 10, fontWeight: 800, borderRadius: 6, padding: "1px 7px" }}>{t.status}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#1a2a3a" }}>{t.title}</div>
+                      <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 4 }}>Dibuat: {t.date}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Menu grup 5: Tentang Aplikasi */}
+          <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Tentang Aplikasi</div>
             {[
-              { id: "bantuan", icon: "🆘", label: "Bantuan & Dukungan", sub: "FAQ dan hubungi support" },
               { id: "tentang", icon: "ℹ️", label: "Tentang RIDE", sub: "Versi 1.0.0" },
               { id: "syarat", icon: "📜", label: "Syarat & Ketentuan", sub: "Kebijakan penggunaan layanan" },
               { id: "privasi", icon: "🛡️", label: "Kebijakan Privasi", sub: "Data dan keamanan informasi Anda" },
@@ -1454,25 +1780,6 @@ export default function DashboardPengguna() {
                   </div>
                   <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === item.id ? "∨" : "›"}</span>
                 </button>
-                {openAkunSection === "bantuan" && item.id === "bantuan" && (
-                  <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                    {[
-                      { q: "Bagaimana cara memesan layanan?", a: "Pilih layanan di tab Beranda, isi form detail kendaraan dan lokasi, lalu tunggu mitra terdekat menerima pesanan Anda." },
-                      { q: "Berapa lama mitra sampai?", a: "Estimasi kedatangan mitra adalah 15–45 menit tergantung jarak dan ketersediaan mitra di area Anda." },
-                      { q: "Bagaimana cara membatalkan pesanan?", a: "Anda dapat membatalkan pesanan sebelum mitra menerima. Buka tab Pesanan dan pilih Batalkan Order." },
-                      { q: "Bagaimana jika ada masalah dengan layanan?", a: "Hubungi kami via WhatsApp 0800-RIDE-APP atau email support@ride.app untuk penanganan dalam 1x24 jam." },
-                    ].map((faq, i) => (
-                      <div key={i} style={{ padding: "10px 0", borderTop: i === 0 ? "none" : "1px solid #f0f4f8" }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#1a3a5c", marginBottom: 4 }}>Q: {faq.q}</div>
-                        <div style={{ fontSize: 12, color: "#5a6a7a", lineHeight: 1.5 }}>{faq.a}</div>
-                      </div>
-                    ))}
-                    <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                      <a href="https://wa.me/6280081433277" style={{ flex: 1, background: "#25D366", color: "#fff", textDecoration: "none", borderRadius: 10, padding: "9px 0", fontSize: 12, fontWeight: 700, textAlign: "center" as const }}>WhatsApp</a>
-                      <a href="mailto:support@ride.app" style={{ flex: 1, background: "#1a3a5c", color: "#fff", textDecoration: "none", borderRadius: 10, padding: "9px 0", fontSize: 12, fontWeight: 700, textAlign: "center" as const }}>Email Support</a>
-                    </div>
-                  </div>
-                )}
                 {openAkunSection === "tentang" && item.id === "tentang" && (
                   <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
                     <div style={{ textAlign: "center" as const, padding: "12px 0" }}>
