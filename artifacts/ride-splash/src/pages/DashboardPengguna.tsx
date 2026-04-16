@@ -214,6 +214,11 @@ export default function DashboardPengguna() {
   // Keamanan sub-section
   const [keamananSubSection, setKeamananSubSection] = useState<string | null>(null);
 
+  // Edit alamat
+  const [editingAlamatId, setEditingAlamatId] = useState<string | null>(null);
+  const [editAlamatLabel, setEditAlamatLabel] = useState("");
+  const [editAlamatAddr, setEditAlamatAddr] = useState("");
+
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const userMarkerRef = useRef<L.CircleMarker | null>(null);
@@ -1461,22 +1466,48 @@ export default function DashboardPengguna() {
                     {alamatList.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4", padding: "8px 0" }}>Belum ada alamat tersimpan.</div>}
                     {alamatList.map(a => (
                       <div key={a.id} style={{ background: a.id === defaultAlamatId ? "#f0faf8" : "#f8fafc", borderRadius: 10, padding: "9px 12px", marginTop: 8, border: a.id === defaultAlamatId ? "1.5px solid #1a7a6a" : "1.5px solid transparent" }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{a.label}</div>
-                              {a.id === defaultAlamatId && <span style={{ background: "#1a7a6a", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: 5, padding: "1px 6px" }}>DEFAULT</span>}
+                        {editingAlamatId === a.id ? (
+                          /* Mode Edit */
+                          <div>
+                            <input value={editAlamatLabel} onChange={e => setEditAlamatLabel(e.target.value)} placeholder="Label (misal: Rumah)"
+                              style={{ width: "100%", border: "1.5px solid #1a7a6a", borderRadius: 8, padding: "6px 10px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 6, outline: "none" }} />
+                            <input value={editAlamatAddr} onChange={e => setEditAlamatAddr(e.target.value)} placeholder="Alamat lengkap"
+                              style={{ width: "100%", border: "1.5px solid #1a7a6a", borderRadius: 8, padding: "6px 10px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 8, outline: "none" }} />
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => {
+                                if (!editAlamatLabel.trim() || !editAlamatAddr.trim()) return;
+                                setAlamatList(l => l.map(x => x.id === a.id ? { ...x, label: editAlamatLabel.trim(), address: editAlamatAddr.trim() } : x));
+                                setEditingAlamatId(null);
+                              }} style={{ flex: 1, background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 8, padding: "7px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Simpan</button>
+                              <button onClick={() => setEditingAlamatId(null)}
+                                style={{ flex: 1, background: "#f0f4f8", color: "#7a8a9a", border: "none", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer" }}>Batal</button>
                             </div>
-                            <div style={{ fontSize: 11, color: "#7a8a9a", marginTop: 2 }}>{a.address}</div>
                           </div>
-                          <button onClick={() => setAlamatList(l => l.filter(x => x.id !== a.id))}
-                            style={{ background: "none", border: "none", color: "#e74c3c", fontSize: 16, cursor: "pointer", padding: 0, flexShrink: 0 }}>×</button>
-                        </div>
-                        {a.id !== defaultAlamatId && (
-                          <button onClick={() => setDefaultAlamatId(a.id)}
-                            style={{ marginTop: 6, background: "none", border: "1px solid #1a7a6a", borderRadius: 7, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#1a7a6a", cursor: "pointer" }}>
-                            Jadikan Default
-                          </button>
+                        ) : (
+                          /* Mode View */
+                          <>
+                            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{a.label}</div>
+                                  {a.id === defaultAlamatId && <span style={{ background: "#1a7a6a", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: 5, padding: "1px 6px" }}>DEFAULT</span>}
+                                </div>
+                                <div style={{ fontSize: 11, color: "#7a8a9a", marginTop: 2 }}>{a.address}</div>
+                              </div>
+                              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                <button onClick={() => { setEditingAlamatId(a.id); setEditAlamatLabel(a.label); setEditAlamatAddr(a.address); }}
+                                  style={{ background: "none", border: "none", color: "#1a7a6a", fontSize: 13, cursor: "pointer", padding: 0, fontWeight: 700 }}>✏️</button>
+                                <button onClick={() => { setAlamatList(l => l.filter(x => x.id !== a.id)); if (defaultAlamatId === a.id) setDefaultAlamatId(null); }}
+                                  style={{ background: "none", border: "none", color: "#e74c3c", fontSize: 16, cursor: "pointer", padding: 0 }}>×</button>
+                              </div>
+                            </div>
+                            {a.id !== defaultAlamatId && (
+                              <button onClick={() => setDefaultAlamatId(a.id)}
+                                style={{ marginTop: 6, background: "none", border: "1px solid #1a7a6a", borderRadius: 7, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#1a7a6a", cursor: "pointer" }}>
+                                Jadikan Default
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     ))}
@@ -1675,7 +1706,7 @@ export default function DashboardPengguna() {
                 <span style={{ fontSize: 20 }}>🎧</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Chat Customer Service RIDE</div>
-                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Hubungi CS kami langsung</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Hubungi CS kami langsung via email</div>
                 </div>
                 <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "chat-cs" ? "∨" : "›"}</span>
               </button>
@@ -1685,18 +1716,25 @@ export default function DashboardPengguna() {
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#1a7a6a", marginBottom: 4 }}>🟢 CS Online · Waktu respons ~5 menit</div>
                     <div style={{ fontSize: 11, color: "#5a7a6a" }}>Tim CS RIDE siap membantu Anda pada hari kerja pukul 08.00–22.00 WIB.</div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <a href="https://wa.me/6280081433277" target="_blank" rel="noreferrer"
-                      style={{ flex: 1, background: "#25D366", color: "#fff", textDecoration: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, textAlign: "center" as const }}>
-                      📲 WhatsApp CS
-                    </a>
-                    <a href="mailto:support@ride.app"
-                      style={{ flex: 1, background: "#1a3a5c", color: "#fff", textDecoration: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, textAlign: "center" as const }}>
-                      ✉️ Email CS
-                    </a>
-                  </div>
+                  <a href="mailto:support@ride.app"
+                    style={{ display: "block", background: "#1a3a5c", color: "#fff", textDecoration: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, textAlign: "center" as const }}>
+                    ✉️ Kirim Email ke CS
+                  </a>
                 </div>
               )}
+            </div>
+            {/* Hubungi via WhatsApp */}
+            <div>
+              <a href="https://wa.me/6280081433277" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+                <div style={{ width: "100%", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, borderTop: "1px solid #f0f4f8" }}>
+                  <span style={{ fontSize: 20 }}>📲</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Hubungi via WhatsApp</div>
+                    <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Chat langsung di WhatsApp RIDE</div>
+                  </div>
+                  <span style={{ fontSize: 16, color: "#25D366", fontWeight: 800 }}>›</span>
+                </div>
+              </a>
             </div>
             {/* Laporkan Masalah */}
             <div>
