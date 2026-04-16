@@ -928,9 +928,9 @@ export default function DashboardPengguna() {
                           {pd && (
                             <div style={{ margin: "0 16px 14px", border: "1.5px solid #e0e8f0", borderRadius: 14, overflow: "hidden" }}>
                               {[
-                                { label: "Biaya Panggilan", sub: "Ongkos kedatangan mitra", val: pd.biayaPanggilan },
                                 { label: "Biaya Jasa", sub: "Disepakati langsung dengan mitra", val: pd.biayaJasa },
                                 ...(pd.biayaSparepart > 0 ? [{ label: "Sparepart", sub: "Suku cadang yang diganti", val: pd.biayaSparepart }] : []),
+                                { label: "Biaya Panggilan", sub: "Ongkos kedatangan mitra", val: pd.biayaPanggilan },
                                 { label: "Biaya Layanan & Admin", sub: "Biaya platform Ride", val: pd.biayaLayanan },
                               ].map(row => (
                                 <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #f0f4f8" }}>
