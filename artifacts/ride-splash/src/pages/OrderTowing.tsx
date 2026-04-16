@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { calcBiayaPanggilan } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -251,7 +252,7 @@ export default function OrderTowing() {
         if (orderPollRef.current) clearInterval(orderPollRef.current);
         const mitraLat = od.mitra.lat ?? 0, mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
-        setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: mitraLat, lng: mitraLng, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: Math.round((dist * 2000 + 10000) / 500) * 500, etaMin: Math.max(5, Math.round(dist * 2 + 5)) });
+        setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: mitraLat, lng: mitraLng, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: od.totalAmount ?? calcBiayaPanggilan("towing", dist), etaMin: Math.max(5, Math.round(dist * 2 + 5)) });
         setOrderStatus("accepted");
       } else if (od.status === "cancelled") {
         if (orderPollRef.current) clearInterval(orderPollRef.current);

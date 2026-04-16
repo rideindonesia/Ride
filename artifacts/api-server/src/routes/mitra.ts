@@ -9,6 +9,30 @@ import { io } from "../socket";
 
 const router = Router();
 
+// ── Pricing helpers (mirrors artifacts/ride-splash/src/utils/pricing.ts) ──
+const CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm: number }> = {
+  bengkel:    { base: 12000, freeKm: 3, perKm: 2500 },
+  elektronik: { base: 12000, freeKm: 3, perKm: 2500 },
+  barber:     { base: 12000, freeKm: 3, perKm: 2500 },
+  cuci:       { base: 12000, freeKm: 3, perKm: 2500 },
+  inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
+  towing:     { base: 75000, freeKm: 3, perKm: 8000 },
+};
+const BIAYA_LAYANAN = 2000;
+function serverCalcBiayaPanggilan(serviceType: string, distKm: number): number {
+  const key = serviceType.toLowerCase().replace(/[\s_-]+/g, "");
+  const cfg = CALL_FEE_CONFIG[key] ?? CALL_FEE_CONFIG.bengkel;
+  const raw = cfg.base + Math.max(0, distKm - cfg.freeKm) * cfg.perKm;
+  return Math.round(raw / 500) * 500;
+}
+function serverHaversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 const uploadDir = path.resolve(process.cwd(), "uploads", "mitra");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -422,14 +446,28 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   const [updated] = await db.update(ordersTable)
     .set({ status: "accepted", mitraId, updatedAt: new Date() })
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")))
-    .returning({ penggunaId: ordersTable.penggunaId, orderNo: ordersTable.orderNo, serviceType: ordersTable.serviceType });
+    .returning({
+      penggunaId: ordersTable.penggunaId,
+      orderNo: ordersTable.orderNo,
+      serviceType: ordersTable.serviceType,
+      pickupLat: ordersTable.pickupLat,
+      pickupLng: ordersTable.pickupLng,
+    });
 
-  // Notify pengguna in real-time
   try {
     if (updated) {
       const [mitraUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, mitraId)).limit(1);
       const [mitraLoc] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
         .from(mitraLocationsTable).where(eq(mitraLocationsTable.userId, mitraId)).limit(1);
+
+      // Calculate & store callFee at acceptance time (totalAmount used as temp storage)
+      let callFee = serverCalcBiayaPanggilan(updated.serviceType, 0);
+      if (mitraLoc && updated.pickupLat != null && updated.pickupLng != null) {
+        const distKm = serverHaversineKm(mitraLoc.lat, mitraLoc.lng, updated.pickupLat, updated.pickupLng);
+        callFee = serverCalcBiayaPanggilan(updated.serviceType, distKm);
+      }
+      await db.update(ordersTable).set({ totalAmount: callFee }).where(eq(ordersTable.id, orderId));
+
       io?.to(`user:${updated.penggunaId}`).emit("order:accepted", {
         orderId,
         orderNo: updated.orderNo,
@@ -437,6 +475,8 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
         mitraName: mitraUser?.name ?? "",
         mitraLat: mitraLoc?.lat ?? null,
         mitraLng: mitraLoc?.lng ?? null,
+        callFee,
+        biayaLayanan: BIAYA_LAYANAN,
       });
     }
   } catch {}

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { calcBiayaPanggilan } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -347,7 +348,7 @@ export default function OrderBengkel() {
         const mitraLat = od.mitra.lat ?? 0;
         const mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
-        const callFee = Math.round((dist * 2000 + 10000) / 500) * 500;
+        const callFee = od.totalAmount ?? calcBiayaPanggilan("bengkel", dist);
         const etaMin = Math.max(5, Math.round(dist * 2 + 5));
         setAcceptedMitra({
           id: od.mitra.id,

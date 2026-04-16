@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
+import { BIAYA_LAYANAN } from "../utils/pricing";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -951,7 +952,7 @@ export default function DashboardMitra() {
                   const jasa = Number(biayaJasa) || 0;
                   const spare = svcCfg.showSparepart ? (Number(biayaSparepart) || 0) : 0;
                   const biayaPanggilan = activeOrder.totalAmount ?? 0;
-                  const biayaLayanan = Math.round(jasa * 0.05 / 1000) * 1000;
+                  const biayaLayanan = BIAYA_LAYANAN;
                   const total = jasa + spare + biayaPanggilan + biayaLayanan;
                   const canSend = jasa > 0;
                   const fmtIdr = (n: number) => n.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
