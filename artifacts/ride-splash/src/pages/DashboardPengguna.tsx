@@ -962,13 +962,6 @@ export default function DashboardPengguna() {
                             </div>
                           )}
 
-                          {/* PESAN LAGI */}
-                          <div style={{ padding: "4px 16px 16px" }}>
-                            <button onClick={() => navigate(svc.route ?? "/")}
-                              style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                              🔄 Pesan Lagi
-                            </button>
-                          </div>
                         </div>
                       )}
                     </div>
