@@ -14,6 +14,7 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 - **DB Schema**: profilePhotoPath + walletBalance di usersTable; walletTransactionsTable (topup/withdraw) ✅
 - **Static uploads**: /uploads/* served dari api-server ✅
 - **Socket.io (real-time)**: Singleton socket.ts (frontend), HTTP+Socket.io server (backend index.ts), identifySocket/joinOrderRoom/leaveOrderRoom utilities. Events: `order:new` (mitra broadcast), `order:accepted/phase/payment/done` (pengguna user room), `chat:message` (order room). DashboardPengguna, DashboardMitra, dan semua 6 Order pages (Bengkel/Cuci/Barber/Elektronik/Inspeksi/Towing) sudah socket-integrated. Polling direduksi ke 30s backup. ✅
+- **Chat Auth (cross-role fix)**: `chat.ts` menggunakan `getAllUserIds()` yang mengumpulkan semua identitas (session + `ride-p-uid` cookie + `ride-m-uid` cookie) ke dalam Set, lalu memeriksa apakah ANY ID cocok dengan `penggunaId` atau `mitraId` order. Ini mengatasi bug di mana testing pada device yang sama (multiple account login) menyebabkan session dari pengguna lain mem-override autentikasi mitra dan memunculkan 403. ✅
 
 ## Demo Accounts
 
