@@ -462,4 +462,44 @@ router.delete("/orders/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /api/pengguna/profile — profil lengkap pengguna
+router.get("/profile", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const [user] = await db.select({
+    id: usersTable.id, name: usersTable.name, email: usersTable.email,
+    phone: usersTable.phone, createdAt: usersTable.createdAt,
+  }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
+  res.json(user);
+});
+
+// PUT /api/pengguna/profile — update nama
+router.put("/profile", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { name } = req.body as { name?: string };
+  if (!name?.trim()) { res.status(400).json({ error: "Nama tidak boleh kosong" }); return; }
+  await db.update(usersTable).set({ name: name.trim() }).where(eq(usersTable.id, penggunaId));
+  res.json({ ok: true, name: name.trim() });
+});
+
+// PUT /api/pengguna/change-password
+router.put("/change-password", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+  if (!currentPassword || !newPassword) { res.status(400).json({ error: "Semua field wajib diisi" }); return; }
+  if (newPassword.length < 8) { res.status(400).json({ error: "Password baru minimal 8 karakter" }); return; }
+  const [user] = await db.select({ passwordHash: usersTable.passwordHash })
+    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
+  if (user.passwordHash !== hashPassword(currentPassword)) {
+    res.status(400).json({ error: "Password lama tidak sesuai" }); return;
+  }
+  await db.update(usersTable).set({ passwordHash: hashPassword(newPassword) })
+    .where(eq(usersTable.id, penggunaId));
+  res.json({ ok: true });
+});
+
 export default router;

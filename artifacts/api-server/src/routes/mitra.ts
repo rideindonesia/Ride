@@ -477,4 +477,58 @@ router.patch("/orders/:id/done", requireMitra, async (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /api/mitra/profile-detail — profil lengkap + dokumen
+router.get("/profile-detail", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const [user] = await db.select({
+    id: usersTable.id, name: usersTable.name, email: usersTable.email,
+    phone: usersTable.phone, createdAt: usersTable.createdAt,
+  }).from(usersTable).where(eq(usersTable.id, mitraId)).limit(1);
+  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
+
+  const [app] = await db.select({
+    ktpPath: mitraApplicationsTable.ktpPath,
+    selfieKtpPath: mitraApplicationsTable.selfieKtpPath,
+    simPath: mitraApplicationsTable.simPath,
+    certPath: mitraApplicationsTable.certPath,
+    operatingCity: mitraApplicationsTable.operatingCity,
+    status: mitraApplicationsTable.status,
+  }).from(mitraApplicationsTable)
+    .where(eq(mitraApplicationsTable.email, user.email))
+    .limit(1);
+
+  const totalDone = await db.select({ c: count() }).from(ordersTable)
+    .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")));
+
+  res.json({
+    ...user,
+    documents: {
+      ktp: { uploaded: !!app?.ktpPath, status: app?.status ?? "pending" },
+      selfieKtp: { uploaded: !!app?.selfieKtpPath, status: app?.status ?? "pending" },
+      sim: { uploaded: !!app?.simPath, status: app?.status ?? "pending" },
+      sertifikat: { uploaded: !!app?.certPath, status: app?.status ?? "pending" },
+    },
+    operatingCity: app?.operatingCity ?? null,
+    accountStatus: app?.status ?? "pending",
+    totalDoneOrders: totalDone[0]?.c ?? 0,
+  });
+});
+
+// PUT /api/mitra/change-password
+router.put("/change-password", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+  if (!currentPassword || !newPassword) { res.status(400).json({ error: "Semua field wajib diisi" }); return; }
+  if (newPassword.length < 8) { res.status(400).json({ error: "Password baru minimal 8 karakter" }); return; }
+  const [user] = await db.select({ passwordHash: usersTable.passwordHash })
+    .from(usersTable).where(eq(usersTable.id, mitraId)).limit(1);
+  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
+  if (user.passwordHash !== hashPassword(currentPassword)) {
+    res.status(400).json({ error: "Password lama tidak sesuai" }); return;
+  }
+  await db.update(usersTable).set({ passwordHash: hashPassword(newPassword) })
+    .where(eq(usersTable.id, mitraId));
+  res.json({ ok: true });
+});
+
 export default router;

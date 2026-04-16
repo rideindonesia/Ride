@@ -4,6 +4,14 @@
 
 pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Panggilan** dengan tiga jenis pengguna: **Pengguna**, **Mitra**, dan **Admin**.
 
+### Status Fitur
+- **DashboardPengguna**: 4-tab bottom nav (Beranda/Pesanan/Chat/Akun) ✅
+  - Akun tab: Hero profil card (nama, email, phone, stats) + Edit nama + Ganti password + Voucher & Promo accordion + Notifikasi toggles + Alamat Tersimpan (localStorage) + Bantuan FAQ + Tentang/Syarat/Privasi + Keluar ✅
+- **DashboardMitra**: 4-tab bottom nav (Beranda/Pesanan/Chat/Akun) ✅
+  - Akun tab: Hero profil card (nama, layanan, status verifikasi, stats) + Ringkasan Penghasilan + Dokumen & Verifikasi (dari DB) + Notifikasi toggles + Ganti password + Bantuan Mitra FAQ + Legal + Tentang + Keluar ✅
+- **Backend Pengguna**: GET+PUT /api/pengguna/profile, PUT /api/pengguna/change-password ✅
+- **Backend Mitra**: GET /api/mitra/profile-detail (docs status), PUT /api/mitra/change-password ✅
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces

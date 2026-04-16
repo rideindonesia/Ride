@@ -165,6 +165,18 @@ export default function DashboardMitra() {
   const [chatHistoryMsgs, setChatHistoryMsgs] = useState<ChatMsg[]>([]);
   const [loadingChatHistory, setLoadingChatHistory] = useState(false);
 
+  // Akun tab states
+  const [openAkunSection, setOpenAkunSection] = useState<string | null>(null);
+  type MitraProfileDoc = { uploaded: boolean; status: string };
+  type MitraProfileData = { id: number; name: string; email: string; phone: string | null; createdAt: string; documents: { ktp: MitraProfileDoc; selfieKtp: MitraProfileDoc; sim: MitraProfileDoc; sertifikat: MitraProfileDoc }; operatingCity: string | null; accountStatus: string; totalDoneOrders: number };
+  const [mitraProfile, setMitraProfile] = useState<MitraProfileData | null>(null);
+  const [mCpOld, setMCpOld] = useState(""); const [mCpNew, setMCpNew] = useState(""); const [mCpConfirm, setMCpConfirm] = useState("");
+  const [mCpLoading, setMCpLoading] = useState(false);
+  const [mCpMsg, setMCpMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [mNotifSettings, setMNotifSettings] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ride-notif-m") ?? "null") ?? { pesanan: true, chat: true, promo: false }; } catch { return { pesanan: true, chat: true, promo: false }; }
+  });
+
   const fetchDashboard = useCallback(async () => {
     try {
       const res = await fetch(`${BASE}/api/mitra/dashboard`);
@@ -234,6 +246,19 @@ export default function DashboardMitra() {
     }, 15000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchDashboard, fetchIncoming, fetchActiveOrder]);
+
+  // Fetch mitra profile detail (dokumen, phone, dll)
+  useEffect(() => {
+    fetch(`${BASE}/api/mitra/profile-detail`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (d.id) setMitraProfile(d); })
+      .catch(() => {});
+  }, [BASE]);
+
+  // Sync mitra notif settings to localStorage
+  useEffect(() => {
+    localStorage.setItem("ride-notif-m", JSON.stringify(mNotifSettings));
+  }, [mNotifSettings]);
 
   // Countdown timer for incoming order
   useEffect(() => {
@@ -1295,37 +1320,267 @@ export default function DashboardMitra() {
         </>}
 
         {/* ══ AKUN TAB ══ */}
-        {activeTab === "akun" && <>
-          <div style={{ background: "#fff", borderRadius: 20, padding: "28px 20px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", textAlign: "center" as const }}>
-            <div style={{ width: 72, height: 72, borderRadius: 24, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 800, color: "#fff", margin: "0 auto 14px" }}>
-              {(data?.name ?? "M").charAt(0).toUpperCase()}
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#1a2a3a" }}>{data?.name ?? "-"}</div>
-            <div style={{ fontSize: 13, color: "#7a8a9a", marginTop: 4 }}>{serviceLabel(data?.serviceType ?? "")}</div>
-            <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 18, paddingTop: 18, borderTop: "1px solid #f0f4f8" }}>
-              <div style={{ textAlign: "center" as const }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#f5a623" }}>{data?.rating != null ? Number(data.rating).toFixed(1) : "-"}</div>
-                <div style={{ fontSize: 11, color: "#9aa5b4" }}>Rating</div>
-              </div>
-              <div style={{ width: 1, background: "#f0f4f8" }} />
-              <div style={{ textAlign: "center" as const }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#1a7a6a" }}>{data?.todayOrders ?? 0}</div>
-                <div style={{ fontSize: 11, color: "#9aa5b4" }}>Order Hari Ini</div>
-              </div>
-              <div style={{ width: 1, background: "#f0f4f8" }} />
-              <div style={{ textAlign: "center" as const }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#ea580c" }}>{fmtRp(data?.todayIncome ?? 0)}</div>
-                <div style={{ fontSize: 11, color: "#9aa5b4" }}>Pendapatan</div>
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={async () => { await fetch(`${BASE}/api/auth/logout`, { method: "POST", credentials: "include" }); navigate("/"); }}
-            style={{ width: "100%", padding: "16px", borderRadius: 16, border: "1.5px solid #ea580c", background: "#fff5f0", color: "#ea580c", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
-          >
-            🚪 Keluar dari Akun
-          </button>
-        </>}
+        {activeTab === "akun" && <div style={{ padding: "0 0 12px" }}>
+          {/* Hero profil mitra */}
+          {(() => {
+            const cfg = getSvcCfg(data?.serviceType);
+            const statusMap: Record<string, { label: string; color: string; bg: string }> = {
+              approved: { label: "Terverifikasi ✓", color: "#1a7a6a", bg: "#e8f5f2" },
+              pending: { label: "Dalam Review ⏳", color: "#d97706", bg: "#fef3c7" },
+              rejected: { label: "Ditolak ✗", color: "#e74c3c", bg: "#fde8e8" },
+            };
+            const accStatus = mitraProfile?.accountStatus ?? "pending";
+            const sMap = statusMap[accStatus] ?? statusMap["pending"];
+            const monthlyRevenue = (data?.recentOrders ?? []).reduce((s: number, o: any) => s + (o.totalAmount ?? 0), 0);
+            const monthlyFee = (data?.recentOrders ?? []).reduce((s: number, o: any) => s + (o.platformFee ?? 0), 0);
+            const monthlyNet = monthlyRevenue - monthlyFee;
+            return (
+              <>
+                <div style={{ background: `linear-gradient(135deg, ${cfg.color} 0%, #1a3a5c 100%)`, borderRadius: 22, padding: "24px 18px 20px", marginBottom: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 62, height: 62, borderRadius: 20, background: "rgba(255,255,255,0.18)", border: "2.5px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, color: "#fff", flexShrink: 0 }}>
+                      {(data?.name ?? "M").charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>{data?.name ?? "Memuat..."}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", marginTop: 2 }}>{cfg.label} · {mitraProfile?.operatingCity ?? serviceLabel(data?.serviceType ?? "")}</div>
+                      <div style={{ display: "inline-flex", alignItems: "center", marginTop: 6, background: sMap.bg, borderRadius: 8, padding: "3px 8px" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: sMap.color }}>{sMap.label}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    {[
+                      { val: data?.rating != null ? Number(data.rating).toFixed(1) : "—", label: "Rating", unit: "" },
+                      { val: mitraProfile?.totalDoneOrders ?? (data?.recentOrders?.length ?? 0), label: "Total Order", unit: "" },
+                      { val: mitraProfile?.createdAt ? new Date(mitraProfile.createdAt).getFullYear() : "—", label: "Bergabung", unit: "" },
+                    ].map(s => (
+                      <div key={s.label} style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "8px 0", textAlign: "center" as const }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{s.val}</div>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Menu grup 1: Keuangan */}
+                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Keuangan</div>
+                  <div>
+                    <button onClick={() => setOpenAkunSection(openAkunSection === "penghasilan" ? null : "penghasilan")}
+                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                      <span style={{ fontSize: 20 }}>💰</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Ringkasan Penghasilan</div>
+                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Pendapatan hari ini & rekap order</div>
+                      </div>
+                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "penghasilan" ? "∨" : "›"}</span>
+                    </button>
+                    {openAkunSection === "penghasilan" && (
+                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                          {[
+                            { label: "Pendapatan Hari Ini", val: fmtRp(data?.todayIncome ?? 0), color: "#1a7a6a" },
+                            { label: "Order Hari Ini", val: `${data?.todayOrders ?? 0} order`, color: "#1a3a5c" },
+                            { label: "Total Omset Riwayat", val: fmtRp(monthlyRevenue), color: "#d97706" },
+                            { label: "Platform Fee", val: fmtRp(monthlyFee), color: "#e74c3c" },
+                            { label: "Pendapatan Bersih", val: fmtRp(monthlyNet), color: "#1a7a6a" },
+                            { label: "Total Selesai", val: `${mitraProfile?.totalDoneOrders ?? (data?.recentOrders?.length ?? 0)} order`, color: "#1a3a5c" },
+                          ].map(item => (
+                            <div key={item.label} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px" }}>
+                              <div style={{ fontSize: 12, color: "#9aa5b4", marginBottom: 4 }}>{item.label}</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: item.color }}>{item.val}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 10, fontSize: 11, color: "#9aa5b4", textAlign: "center" as const }}>Platform fee 5% dari biaya jasa per order</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Menu grup 2: Profil & Dokumen */}
+                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Profil & Dokumen</div>
+                  <div>
+                    <button onClick={() => setOpenAkunSection(openAkunSection === "dokumen" ? null : "dokumen")}
+                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                      <span style={{ fontSize: 20 }}>📄</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Dokumen & Verifikasi</div>
+                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Status dokumen pendaftaran</div>
+                      </div>
+                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "dokumen" ? "∨" : "›"}</span>
+                    </button>
+                    {openAkunSection === "dokumen" && (
+                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                        {mitraProfile && ([
+                          { key: "ktp" as const, label: "KTP", icon: "🪪" },
+                          { key: "selfieKtp" as const, label: "Selfie dengan KTP", icon: "🤳" },
+                          { key: "sim" as const, label: "SIM", icon: "🚗" },
+                          { key: "sertifikat" as const, label: "Sertifikat / STNK", icon: "📋" },
+                        ]).map(doc => {
+                          const d = mitraProfile.documents[doc.key];
+                          return (
+                            <div key={doc.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: "1px solid #f8fafc" }}>
+                              <span style={{ fontSize: 20 }}>{doc.icon}</span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{doc.label}</div>
+                                <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>{d.uploaded ? "Dokumen diunggah" : "Belum diunggah"}</div>
+                              </div>
+                              <div style={{ borderRadius: 8, padding: "3px 8px", background: d.status === "approved" ? "#e8f5f2" : d.status === "rejected" ? "#fde8e8" : "#fef3c7", fontSize: 11, fontWeight: 700, color: d.status === "approved" ? "#1a7a6a" : d.status === "rejected" ? "#e74c3c" : "#d97706" }}>
+                                {d.status === "approved" ? "✓ Disetujui" : d.status === "rejected" ? "✗ Ditolak" : "⏳ Review"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {!mitraProfile && <div style={{ fontSize: 12, color: "#9aa5b4", padding: "8px 0" }}>Memuat data dokumen...</div>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Menu grup 3: Preferensi */}
+                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Preferensi</div>
+                  <div>
+                    <button onClick={() => setOpenAkunSection(openAkunSection === "notif-m" ? null : "notif-m")}
+                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                      <span style={{ fontSize: 20 }}>🔔</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Notifikasi</div>
+                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Kelola pemberitahuan</div>
+                      </div>
+                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "notif-m" ? "∨" : "›"}</span>
+                    </button>
+                    {openAkunSection === "notif-m" && (
+                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                        {([
+                          { key: "pesanan", label: "Order Masuk", desc: "Notifikasi saat ada order baru tersedia" },
+                          { key: "chat", label: "Pesan Chat", desc: "Notifikasi saat pengguna mengirim pesan" },
+                          { key: "promo", label: "Info Mitra", desc: "Update kebijakan dan program insentif" },
+                        ] as const).map(n => (
+                          <div key={n.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: "1px solid #f0f4f8" }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{n.label}</div>
+                              <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 2 }}>{n.desc}</div>
+                            </div>
+                            <div onClick={() => setMNotifSettings((s: any) => ({ ...s, [n.key]: !s[n.key] }))}
+                              style={{ width: 42, height: 24, borderRadius: 12, background: mNotifSettings[n.key] ? "#1a7a6a" : "#d0d9e2", cursor: "pointer", position: "relative" as const, transition: "background 0.2s", flexShrink: 0 }}>
+                              <div style={{ position: "absolute" as const, top: 3, left: mNotifSettings[n.key] ? 20 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.2)", transition: "left 0.2s" }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Menu grup 4: Keamanan */}
+                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Keamanan</div>
+                  <div>
+                    <button onClick={() => setOpenAkunSection(openAkunSection === "keamanan-m" ? null : "keamanan-m")}
+                      style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                      <span style={{ fontSize: 20 }}>🔐</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Keamanan Akun</div>
+                        <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Ganti password akun mitra</div>
+                      </div>
+                      <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "keamanan-m" ? "∨" : "›"}</span>
+                    </button>
+                    {openAkunSection === "keamanan-m" && (
+                      <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                        {(["mCpOld", "mCpNew", "mCpConfirm"] as const).map((k, i) => (
+                          <input key={k} type="password"
+                            value={k === "mCpOld" ? mCpOld : k === "mCpNew" ? mCpNew : mCpConfirm}
+                            onChange={e => { if (k === "mCpOld") setMCpOld(e.target.value); else if (k === "mCpNew") setMCpNew(e.target.value); else setMCpConfirm(e.target.value); }}
+                            placeholder={["Password lama", "Password baru (min. 8 karakter)", "Konfirmasi password baru"][i]}
+                            style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "9px 12px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 8, outline: "none" }} />
+                        ))}
+                        {mCpMsg && <div style={{ fontSize: 12, color: mCpMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{mCpMsg.text}</div>}
+                        <button disabled={mCpLoading} onClick={async () => {
+                          setMCpMsg(null);
+                          if (!mCpOld || !mCpNew || !mCpConfirm) { setMCpMsg({ type: "err", text: "Semua field wajib diisi" }); return; }
+                          if (mCpNew !== mCpConfirm) { setMCpMsg({ type: "err", text: "Konfirmasi password tidak cocok" }); return; }
+                          if (mCpNew.length < 8) { setMCpMsg({ type: "err", text: "Password baru minimal 8 karakter" }); return; }
+                          setMCpLoading(true);
+                          const r = await fetch(`${BASE}/api/mitra/change-password`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: mCpOld, newPassword: mCpNew }) });
+                          const d = await r.json();
+                          setMCpLoading(false);
+                          if (d.ok) { setMCpMsg({ type: "ok", text: "Password berhasil diubah!" }); setMCpOld(""); setMCpNew(""); setMCpConfirm(""); }
+                          else setMCpMsg({ type: "err", text: d.error ?? "Gagal mengubah password" });
+                        }} style={{ width: "100%", background: mCpLoading ? "#b2dfdb" : "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                          {mCpLoading ? "Menyimpan..." : "Ubah Password"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Menu grup 5: Bantuan & Legal */}
+                <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Bantuan & Legal</div>
+                  {[
+                    { id: "bantuan-m", icon: "🆘", label: "Bantuan Mitra", sub: "FAQ dan panduan mitra" },
+                    { id: "legal-m", icon: "📜", label: "Legal & Kemitraan", sub: "Perjanjian mitra dan kebijakan" },
+                    { id: "tentang-m", icon: "ℹ️", label: "Tentang RIDE", sub: "Versi 1.0.0" },
+                  ].map(item => (
+                    <div key={item.id}>
+                      <button onClick={() => setOpenAkunSection(openAkunSection === item.id ? null : item.id)}
+                        style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                        <span style={{ fontSize: 20 }}>{item.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{item.label}</div>
+                          <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{item.sub}</div>
+                        </div>
+                        <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === item.id ? "∨" : "›"}</span>
+                      </button>
+                      {openAkunSection === "bantuan-m" && item.id === "bantuan-m" && (
+                        <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                          {[
+                            { q: "Bagaimana cara menerima order?", a: "Aktifkan status Online di halaman Beranda. Order masuk akan tampil sebagai notifikasi, Anda punya 30 detik untuk menerima atau menolak." },
+                            { q: "Kapan pendapatan saya masuk?", a: "Pendapatan dihitung dari setiap order yang berhasil diselesaikan dikurangi platform fee 5% dari biaya jasa." },
+                            { q: "Apa yang harus dilakukan jika ada masalah dengan pengguna?", a: "Hubungi kami via email mitra@ride.app atau WhatsApp 0800-RIDE-MITRA untuk eskalasi dalam 1x24 jam." },
+                            { q: "Bagaimana jika pengguna tidak bayar?", a: "Laporkan melalui fitur Bantuan. Tim kami akan meninjau dan menyelesaikan dalam 3 hari kerja." },
+                          ].map((faq, i) => (
+                            <div key={i} style={{ padding: "10px 0", borderTop: i === 0 ? "none" : "1px solid #f0f4f8" }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#1a3a5c", marginBottom: 4 }}>Q: {faq.q}</div>
+                              <div style={{ fontSize: 12, color: "#5a6a7a", lineHeight: 1.5 }}>{faq.a}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {openAkunSection === "legal-m" && item.id === "legal-m" && (
+                        <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8", fontSize: 12, color: "#7a8a9a", lineHeight: 1.6 }}>
+                          Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar 5% dari biaya jasa berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan.
+                        </div>
+                      )}
+                      {openAkunSection === "tentang-m" && item.id === "tentang-m" && (
+                        <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                          <div style={{ textAlign: "center" as const, padding: "12px 0" }}>
+                            <div style={{ fontSize: 28, fontWeight: 900, color: "#1a3a5c", letterSpacing: -1 }}>RIDE</div>
+                            <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 4 }}>Super App Jasa Panggilan</div>
+                            <div style={{ fontSize: 11, color: "#b0bec5", marginTop: 2 }}>Versi 1.0.0 · Mitra App · Build 2026</div>
+                          </div>
+                          <div style={{ fontSize: 12, color: "#7a8a9a", lineHeight: 1.6 }}>Terima kasih telah menjadi bagian dari ekosistem RIDE. Bersama Anda, kami menghadirkan layanan jasa berkualitas ke seluruh penjuru kota.</div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tombol Keluar */}
+                <button onClick={async () => { await fetch(`${BASE}/api/auth/logout`, { method: "POST", credentials: "include" }); navigate("/"); }}
+                  style={{ width: "100%", background: "#fff0f0", borderRadius: 16, padding: "14px 16px", border: "1.5px solid #fde8e8", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 8px rgba(231,76,60,0.07)" }}>
+                  <span style={{ fontSize: 22 }}>🚪</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#e74c3c" }}>Keluar dari Akun</span>
+                </button>
+                <div style={{ height: 8 }} />
+              </>
+            );
+          })()}
+        </div>}
 
       </div>
 
