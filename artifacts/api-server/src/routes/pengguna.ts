@@ -1,8 +1,26 @@
 import { Router } from "express";
-import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable } from "@workspace/db";
+import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, walletTransactionsTable } from "@workspace/db";
 import { eq, and, gt, sql, avg, count, or, desc } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+// Profile photo upload setup
+const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
+if (!fs.existsSync(profileUploadDir)) fs.mkdirSync(profileUploadDir, { recursive: true });
+
+const profileStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, profileUploadDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const uploadPhoto = multer({ storage: profileStorage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
+}});
 
 const router = Router();
 
@@ -469,6 +487,8 @@ router.get("/profile", async (req, res) => {
   const [user] = await db.select({
     id: usersTable.id, name: usersTable.name, email: usersTable.email,
     phone: usersTable.phone, createdAt: usersTable.createdAt,
+    profilePhotoPath: usersTable.profilePhotoPath,
+    walletBalance: usersTable.walletBalance,
   }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
   if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
   res.json(user);
@@ -500,6 +520,126 @@ router.put("/change-password", async (req, res) => {
   await db.update(usersTable).set({ passwordHash: hashPassword(newPassword) })
     .where(eq(usersTable.id, penggunaId));
   res.json({ ok: true });
+});
+
+// POST /api/pengguna/upload-photo — upload foto profil
+router.post("/upload-photo", (req, res, next) => {
+  uploadPhoto.single("photo")(req, res, (err) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    next();
+  });
+}, async (req: any, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  if (!req.file) { res.status(400).json({ error: "Tidak ada file yang diunggah" }); return; }
+  const relativePath = `/uploads/profile/${req.file.filename}`;
+  await db.update(usersTable).set({ profilePhotoPath: relativePath }).where(eq(usersTable.id, penggunaId));
+  res.json({ ok: true, photoUrl: relativePath });
+});
+
+// POST /api/pengguna/request-profile-otp — minta OTP untuk ganti HP/email
+router.post("/request-profile-otp", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { field, value } = req.body as { field: "phone" | "email"; value: string };
+  if (!field || !value) { res.status(400).json({ error: "Field dan value wajib diisi" }); return; }
+  if (field !== "phone" && field !== "email") { res.status(400).json({ error: "Field tidak valid" }); return; }
+  if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    res.status(400).json({ error: "Format email tidak valid" }); return;
+  }
+  // Check uniqueness
+  const existing = await db.select({ id: usersTable.id })
+    .from(usersTable)
+    .where(and(
+      field === "email" ? eq(usersTable.email, value) : eq(usersTable.phone, value),
+    )).limit(1);
+  if (existing.length > 0 && existing[0].id !== penggunaId) {
+    res.status(409).json({ error: `${field === "email" ? "Email" : "Nomor HP"} sudah digunakan akun lain` }); return;
+  }
+  const otp = generateOtp();
+  (req.session as any).profileOtp = { code: otp, field, value, userId: penggunaId, expiresAt: Date.now() + 10 * 60 * 1000 };
+  // Demo mode: return OTP in response
+  res.json({ ok: true, message: `Kode OTP telah dikirim ke ${value}`, otpDemo: otp });
+});
+
+// POST /api/pengguna/verify-profile-otp — verifikasi OTP dan simpan perubahan
+router.post("/verify-profile-otp", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { otp } = req.body as { otp: string };
+  if (!otp) { res.status(400).json({ error: "Kode OTP wajib diisi" }); return; }
+  const pending = (req.session as any).profileOtp as { code: string; field: string; value: string; userId: number; expiresAt: number } | undefined;
+  if (!pending) { res.status(400).json({ error: "Tidak ada permintaan OTP aktif" }); return; }
+  if (pending.userId !== penggunaId) { res.status(403).json({ error: "OTP bukan milik Anda" }); return; }
+  if (Date.now() > pending.expiresAt) {
+    delete (req.session as any).profileOtp;
+    res.status(400).json({ error: "Kode OTP sudah kadaluarsa" }); return;
+  }
+  if (otp.trim() !== pending.code) { res.status(400).json({ error: "Kode OTP tidak valid" }); return; }
+  const update: Record<string, string> = {};
+  update[pending.field === "phone" ? "phone" : "email"] = pending.value;
+  await db.update(usersTable).set(update as any).where(eq(usersTable.id, penggunaId));
+  delete (req.session as any).profileOtp;
+  res.json({ ok: true, field: pending.field, value: pending.value });
+});
+
+// GET /api/pengguna/wallet — saldo dan riwayat transaksi
+router.get("/wallet", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const [user] = await db.select({ walletBalance: usersTable.walletBalance })
+    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
+  const transactions = await db.select().from(walletTransactionsTable)
+    .where(eq(walletTransactionsTable.userId, penggunaId))
+    .orderBy(desc(walletTransactionsTable.createdAt))
+    .limit(30);
+  res.json({ balance: user.walletBalance, transactions });
+});
+
+// POST /api/pengguna/wallet/topup — isi saldo (demo)
+router.post("/wallet/topup", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { amount, method } = req.body as { amount: number; method: string };
+  if (!amount || amount < 10000) { res.status(400).json({ error: "Minimal top-up Rp 10.000" }); return; }
+  if (amount > 10000000) { res.status(400).json({ error: "Maksimal top-up Rp 10.000.000" }); return; }
+  await db.transaction(async (tx) => {
+    await tx.update(usersTable)
+      .set({ walletBalance: sql`${usersTable.walletBalance} + ${amount}` })
+      .where(eq(usersTable.id, penggunaId));
+    await tx.insert(walletTransactionsTable).values({
+      userId: penggunaId, type: "topup", amount,
+      description: `Top-up via ${method ?? "Transfer Bank"}`,
+    });
+  });
+  const [updated] = await db.select({ walletBalance: usersTable.walletBalance })
+    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+  res.json({ ok: true, newBalance: updated?.walletBalance ?? 0 });
+});
+
+// POST /api/pengguna/wallet/withdraw — tarik saldo (demo)
+router.post("/wallet/withdraw", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { amount, destination } = req.body as { amount: number; destination: string };
+  if (!amount || amount < 10000) { res.status(400).json({ error: "Minimal tarik Rp 10.000" }); return; }
+  const [user] = await db.select({ walletBalance: usersTable.walletBalance })
+    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
+  if ((user.walletBalance ?? 0) < amount) { res.status(400).json({ error: "Saldo tidak cukup" }); return; }
+  await db.transaction(async (tx) => {
+    await tx.update(usersTable)
+      .set({ walletBalance: sql`${usersTable.walletBalance} - ${amount}` })
+      .where(eq(usersTable.id, penggunaId));
+    await tx.insert(walletTransactionsTable).values({
+      userId: penggunaId, type: "withdraw", amount,
+      description: `Tarik saldo ke ${destination ?? "rekening bank"}`,
+    });
+  });
+  const [updated] = await db.select({ walletBalance: usersTable.walletBalance })
+    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+  res.json({ ok: true, newBalance: updated?.walletBalance ?? 0 });
 });
 
 export default router;

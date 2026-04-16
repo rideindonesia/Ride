@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import path from "path";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET must be set");
@@ -48,6 +49,7 @@ app.use(
   }),
 );
 
+app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api", router);
 
 export default app;

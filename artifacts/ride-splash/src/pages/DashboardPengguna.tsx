@@ -68,7 +68,7 @@ type OrderHistory = {
   id: number; orderNo: string; serviceType: string; vehicleModel: string; vehicleYear: string;
   damageCategories: string[] | null; pickupAddress: string | null;
   totalAmount: number; paymentData: { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string } | null;
-  createdAt: string;
+  createdAt: string; rating?: number | null;
 };
 
 const SVC_CFG: Record<string, { emoji: string; label: string }> = {
@@ -126,7 +126,7 @@ export default function DashboardPengguna() {
 
   // Akun section states
   const [openAkunSection, setOpenAkunSection] = useState<string | null>(null);
-  const [profile, setProfile] = useState<{ name: string; email: string; phone: string | null; createdAt: string } | null>(null);
+  const [profile, setProfile] = useState<{ id: number; name: string; email: string; phone: string | null; createdAt: string; profilePhotoPath: string | null } | null>(null);
   const [editName, setEditName] = useState("");
   const [editNameLoading, setEditNameLoading] = useState(false);
   const [editNameMsg, setEditNameMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -143,6 +143,46 @@ export default function DashboardPengguna() {
   const [newAlamatAddr, setNewAlamatAddr] = useState("");
   const [voucherInput, setVoucherInput] = useState("");
   const [voucherMsg, setVoucherMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  // Edit phone/email
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  // OTP modal
+  const [otpPending, setOtpPending] = useState<{ field: "phone" | "email"; value: string; demoOtp?: string } | null>(null);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpMsg, setOtpMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  // Profile photo
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  // Wallet
+  type WalletTx = { id: number; type: string; amount: number; description: string; createdAt: string };
+  const [walletData, setWalletData] = useState<{ balance: number; transactions: WalletTx[] } | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [topupModal, setTopupModal] = useState(false);
+  const [topupAmount, setTopupAmount] = useState("");
+  const [topupMethod, setTopupMethod] = useState("GoPay");
+  const [topupLoading, setTopupLoading] = useState(false);
+  const [topupMsg, setTopupMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [withdrawModal, setWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawDest, setWithdrawDest] = useState("");
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawMsg, setWithdrawMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  // Payment methods (localStorage)
+  const [paymentMethods, setPaymentMethods] = useState<{ id: string; type: string; label: string; icon: string }[]>(() => {
+    try { return JSON.parse(localStorage.getItem("ride-paymethods") ?? "null") ?? [
+      { id: "1", type: "ewallet", label: "GoPay", icon: "🟢" },
+      { id: "2", type: "ewallet", label: "OVO", icon: "🟣" },
+    ]; } catch { return []; }
+  });
+  const [addingPayMethod, setAddingPayMethod] = useState(false);
+  const [newPayType, setNewPayType] = useState("ewallet");
+  const [newPayLabel, setNewPayLabel] = useState("");
+  // Profile save loading
+  const [profileSaveLoading, setProfileSaveLoading] = useState(false);
+  const [profileSaveMsg, setProfileSaveMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -189,8 +229,21 @@ export default function DashboardPengguna() {
   useEffect(() => {
     fetch("/api/pengguna/profile", { credentials: "include" })
       .then(r => r.json())
-      .then(d => { if (d.id) { setProfile(d); setEditName(d.name); } })
+      .then(d => { if (d.id) { setProfile(d); setEditName(d.name); setEditPhone(d.phone ?? ""); setEditEmail(d.email ?? ""); } })
       .catch(() => {});
+  }, []);
+
+  // Fetch wallet saldo
+  const fetchWallet = () => {
+    setWalletLoading(true);
+    fetch("/api/pengguna/wallet", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (d.balance !== undefined) setWalletData(d); })
+      .catch(() => {})
+      .finally(() => setWalletLoading(false));
+  };
+  useEffect(() => {
+    fetchWallet();
   }, []);
 
   // Sync notif settings to localStorage
@@ -202,6 +255,74 @@ export default function DashboardPengguna() {
   useEffect(() => {
     localStorage.setItem("ride-alamat", JSON.stringify(alamatList));
   }, [alamatList]);
+
+  // Sync payment methods to localStorage
+  useEffect(() => {
+    localStorage.setItem("ride-paymethods", JSON.stringify(paymentMethods));
+  }, [paymentMethods]);
+
+  // Level badge helper
+  const getLevel = (n: number) => n >= 20 ? { label: "Gold ⭐⭐⭐", color: "#c8960c", bg: "#fff9e6", border: "#f5a623" } : n >= 5 ? { label: "Silver ⭐⭐", color: "#6b7280", bg: "#f5f7fa", border: "#9aa5b4" } : { label: "New ⭐", color: "#1a7a6a", bg: "#e8f5f2", border: "#1a7a6a" };
+
+  // Handle profile save (name + phone/email with OTP)
+  const handleProfileSave = async () => {
+    if (!profile) return;
+    setProfileSaveLoading(true); setProfileSaveMsg(null);
+    try {
+      // Save name if changed
+      if (editName.trim() && editName.trim() !== profile.name) {
+        const r = await fetch("/api/pengguna/profile", { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: editName.trim() }) });
+        const d = await r.json();
+        if (!d.ok) { setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal update nama" }); setProfileSaveLoading(false); return; }
+        setProfile(p => p ? { ...p, name: editName.trim() } : p);
+      }
+      // Phone changed → request OTP
+      if (editPhone.trim() && editPhone.trim() !== (profile.phone ?? "")) {
+        const r = await fetch("/api/pengguna/request-profile-otp", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: "phone", value: editPhone.trim() }) });
+        const d = await r.json();
+        if (!d.ok) { setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal kirim OTP" }); setProfileSaveLoading(false); return; }
+        setOtpPending({ field: "phone", value: editPhone.trim(), demoOtp: d.otpDemo });
+        setOtpInput(""); setOtpMsg(null); setProfileSaveLoading(false); return;
+      }
+      // Email changed → request OTP
+      if (editEmail.trim() && editEmail.trim() !== profile.email) {
+        const r = await fetch("/api/pengguna/request-profile-otp", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: "email", value: editEmail.trim() }) });
+        const d = await r.json();
+        if (!d.ok) { setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal kirim OTP" }); setProfileSaveLoading(false); return; }
+        setOtpPending({ field: "email", value: editEmail.trim(), demoOtp: d.otpDemo });
+        setOtpInput(""); setOtpMsg(null); setProfileSaveLoading(false); return;
+      }
+      setProfileSaveMsg({ type: "ok", text: "Profil berhasil diperbarui!" });
+    } catch { setProfileSaveMsg({ type: "err", text: "Terjadi kesalahan, coba lagi" }); }
+    setProfileSaveLoading(false);
+  };
+
+  // Handle OTP verification
+  const handleVerifyOtp = async () => {
+    if (!otpPending || !otpInput.trim()) return;
+    setOtpLoading(true); setOtpMsg(null);
+    const r = await fetch("/api/pengguna/verify-profile-otp", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ otp: otpInput.trim() }) });
+    const d = await r.json();
+    setOtpLoading(false);
+    if (d.ok) {
+      setProfile(p => p ? { ...p, [d.field]: d.value } : p);
+      setOtpPending(null); setOtpInput("");
+      setProfileSaveMsg({ type: "ok", text: `${d.field === "phone" ? "Nomor HP" : "Email"} berhasil diperbarui!` });
+    } else setOtpMsg({ type: "err", text: d.error ?? "Kode OTP tidak valid" });
+  };
+
+  // Handle photo upload
+  const handlePhotoUpload = async () => {
+    if (!photoFile) return;
+    setPhotoUploading(true);
+    const formData = new FormData();
+    formData.append("photo", photoFile);
+    const r = await fetch("/api/pengguna/upload-photo", { method: "POST", credentials: "include", body: formData });
+    const d = await r.json();
+    setPhotoUploading(false);
+    if (d.ok) { setProfile(p => p ? { ...p, profilePhotoPath: d.photoUrl } : p); setPhotoFile(null); setPhotoPreview(null); setProfileSaveMsg({ type: "ok", text: "Foto profil berhasil diperbarui!" }); }
+    else setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal upload foto" });
+  };
 
   // Poll chat msgs for active order every 3s
   useEffect(() => {
@@ -813,54 +934,202 @@ export default function DashboardPengguna() {
 
         {/* ══ AKUN TAB ══ */}
         {activeTab === "akun" && <div style={{ padding: "16px 10px 12px" }}>
-          {/* Hero profil */}
-          <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #1a7a6a 100%)", borderRadius: 22, padding: "24px 18px 20px", marginBottom: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.13)", position: "relative" as const }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ width: 62, height: 62, borderRadius: 20, background: "rgba(255,255,255,0.18)", border: "2.5px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, color: "#fff", flexShrink: 0 }}>
-                {(profile?.name ?? user?.name ?? "U").charAt(0).toUpperCase()}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 2 }}>{profile?.name ?? user?.name ?? "Memuat..."}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)" }}>{profile?.email ?? user?.email ?? ""}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{profile?.phone ?? "—"}</div>
-              </div>
-              <button onClick={() => setOpenAkunSection(openAkunSection === "profil" ? null : "profil")}
-                style={{ background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.3)", borderRadius: 12, padding: "7px 13px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                Edit
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-              {[
-                { val: orderHistory.length, label: "Pesanan" },
-                { val: Math.round((orderHistory.reduce((s, o) => s + (o.rating ?? 0), 0) / (orderHistory.filter(o => o.rating).length || 1)) * 10) / 10 || "—", label: "Rata-rata Rating" },
-                { val: profile?.createdAt ? new Date(profile.createdAt).getFullYear() : "—", label: "Tahun Bergabung" },
-              ].map(stat => (
-                <div key={stat.label} style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "8px 0", textAlign: "center" as const }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{stat.val}</div>
-                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{stat.label}</div>
+          {/* ── OTP MODAL ── */}
+          {otpPending && (
+            <div style={{ position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
+              <div style={{ background: "#fff", borderRadius: 20, padding: "28px 20px", width: "100%", maxWidth: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+                <div style={{ fontSize: 22, textAlign: "center" as const, marginBottom: 4 }}>🔐</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2a3a", textAlign: "center" as const, marginBottom: 8 }}>Verifikasi OTP</div>
+                <div style={{ fontSize: 13, color: "#7a8a9a", textAlign: "center" as const, marginBottom: 4 }}>
+                  Kode dikirim ke <strong>{otpPending.value}</strong>
                 </div>
-              ))}
+                {otpPending.demoOtp && (
+                  <div style={{ background: "#fff9e6", border: "1px solid #f5a623", borderRadius: 10, padding: "8px 12px", marginBottom: 12, textAlign: "center" as const }}>
+                    <div style={{ fontSize: 11, color: "#92400e" }}>Mode Demo — kode OTP Anda:</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: "#d97706", letterSpacing: 6 }}>{otpPending.demoOtp}</div>
+                  </div>
+                )}
+                <input value={otpInput} onChange={e => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="000000" maxLength={6}
+                  style={{ width: "100%", border: "2px solid #e0e8ef", borderRadius: 12, padding: "12px 0", fontSize: 24, fontWeight: 800, textAlign: "center" as const, letterSpacing: 8, boxSizing: "border-box" as const, outline: "none", marginBottom: 8 }} />
+                {otpMsg && <div style={{ fontSize: 12, color: "#e74c3c", textAlign: "center" as const, marginBottom: 8 }}>{otpMsg.text}</div>}
+                <button disabled={otpLoading || otpInput.length !== 6} onClick={handleVerifyOtp}
+                  style={{ width: "100%", background: otpInput.length === 6 ? "#1a7a6a" : "#b2dfdb", color: "#fff", border: "none", borderRadius: 12, padding: "12px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+                  {otpLoading ? "Memverifikasi..." : "Verifikasi"}
+                </button>
+                <button onClick={() => { setOtpPending(null); setOtpInput(""); setOtpMsg(null); }}
+                  style={{ width: "100%", background: "none", border: "1.5px solid #e0e8ef", borderRadius: 12, padding: "11px 0", fontSize: 14, fontWeight: 600, color: "#7a8a9a", cursor: "pointer" }}>
+                  Batal
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Edit Profil panel */}
+          {/* ── TOP-UP MODAL ── */}
+          {topupModal && (
+            <div style={{ position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+              <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "28px 20px 36px", width: "100%", maxWidth: 480, boxShadow: "0 -8px 32px rgba(0,0,0,0.12)" }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", marginBottom: 16 }}>💳 Isi Saldo RIDE</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+                  {["50000", "100000", "200000", "500000", "1000000", "2000000"].map(amt => (
+                    <button key={amt} onClick={() => setTopupAmount(amt)}
+                      style={{ background: topupAmount === amt ? "#1a7a6a" : "#f0f4f8", color: topupAmount === amt ? "#fff" : "#1a2a3a", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      {fmtRp(+amt)}
+                    </button>
+                  ))}
+                </div>
+                <input value={topupAmount} onChange={e => setTopupAmount(e.target.value.replace(/\D/g, ""))} placeholder="Atau masukkan nominal lain"
+                  style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginBottom: 12, outline: "none" }} />
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#7a8a9a", marginBottom: 8 }}>Metode Pembayaran</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, marginBottom: 14 }}>
+                  {["GoPay", "OVO", "DANA", "ShopeePay", "BCA Virtual Account", "Kartu Kredit"].map(m => (
+                    <button key={m} onClick={() => setTopupMethod(m)}
+                      style={{ padding: "6px 12px", borderRadius: 10, border: `1.5px solid ${topupMethod === m ? "#1a7a6a" : "#e0e8ef"}`, background: topupMethod === m ? "#e8f5f2" : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", color: topupMethod === m ? "#1a7a6a" : "#7a8a9a" }}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                {topupMsg && <div style={{ fontSize: 12, color: topupMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{topupMsg.text}</div>}
+                <button disabled={topupLoading || !topupAmount || +topupAmount < 10000} onClick={async () => {
+                  setTopupLoading(true); setTopupMsg(null);
+                  const r = await fetch("/api/pengguna/wallet/topup", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: +topupAmount, method: topupMethod }) });
+                  const d = await r.json();
+                  setTopupLoading(false);
+                  if (d.ok) { setTopupMsg({ type: "ok", text: `Saldo berhasil ditambahkan!` }); setWalletData(w => w ? { ...w, balance: d.newBalance } : w); fetchWallet(); setTimeout(() => { setTopupModal(false); setTopupAmount(""); setTopupMsg(null); }, 1200); }
+                  else setTopupMsg({ type: "err", text: d.error ?? "Gagal top-up" });
+                }} style={{ width: "100%", background: !topupAmount || +topupAmount < 10000 ? "#b2dfdb" : "#1a7a6a", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+                  {topupLoading ? "Memproses..." : `Bayar ${topupAmount ? fmtRp(+topupAmount) : ""}`}
+                </button>
+                <button onClick={() => { setTopupModal(false); setTopupAmount(""); setTopupMsg(null); }}
+                  style={{ width: "100%", background: "none", border: "none", fontSize: 14, color: "#7a8a9a", cursor: "pointer", padding: "6px 0" }}>Batal</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── WITHDRAW MODAL ── */}
+          {withdrawModal && (
+            <div style={{ position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+              <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "28px 20px 36px", width: "100%", maxWidth: 480, boxShadow: "0 -8px 32px rgba(0,0,0,0.12)" }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", marginBottom: 4 }}>💸 Tarik Saldo</div>
+                <div style={{ fontSize: 12, color: "#9aa5b4", marginBottom: 14 }}>Saldo tersedia: <strong>{fmtRp(walletData?.balance ?? 0)}</strong></div>
+                <input value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value.replace(/\D/g, ""))} placeholder="Nominal tarik (min. Rp 10.000)"
+                  style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginBottom: 10, outline: "none" }} />
+                <input value={withdrawDest} onChange={e => setWithdrawDest(e.target.value)} placeholder="Tujuan: nama bank + no. rekening"
+                  style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginBottom: 14, outline: "none" }} />
+                {withdrawMsg && <div style={{ fontSize: 12, color: withdrawMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{withdrawMsg.text}</div>}
+                <button disabled={withdrawLoading || !withdrawAmount || +withdrawAmount < 10000 || !withdrawDest} onClick={async () => {
+                  setWithdrawLoading(true); setWithdrawMsg(null);
+                  const r = await fetch("/api/pengguna/wallet/withdraw", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: +withdrawAmount, destination: withdrawDest }) });
+                  const d = await r.json();
+                  setWithdrawLoading(false);
+                  if (d.ok) { setWithdrawMsg({ type: "ok", text: "Penarikan berhasil diproses!" }); setWalletData(w => w ? { ...w, balance: d.newBalance } : w); fetchWallet(); setTimeout(() => { setWithdrawModal(false); setWithdrawAmount(""); setWithdrawDest(""); setWithdrawMsg(null); }, 1200); }
+                  else setWithdrawMsg({ type: "err", text: d.error ?? "Gagal tarik saldo" });
+                }} style={{ width: "100%", background: !withdrawAmount || +withdrawAmount < 10000 ? "#b2dfdb" : "#e74c3c", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+                  {withdrawLoading ? "Memproses..." : "Konfirmasi Penarikan"}
+                </button>
+                <button onClick={() => { setWithdrawModal(false); setWithdrawAmount(""); setWithdrawDest(""); setWithdrawMsg(null); }}
+                  style={{ width: "100%", background: "none", border: "none", fontSize: 14, color: "#7a8a9a", cursor: "pointer", padding: "6px 0" }}>Batal</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── HERO PROFIL ── */}
+          {(() => {
+            const level = getLevel(orderHistory.length);
+            const photoUrl = photoPreview ?? (profile?.profilePhotoPath ? profile.profilePhotoPath : null);
+            return (
+              <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #1a7a6a 100%)", borderRadius: 22, padding: "24px 18px 20px", marginBottom: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 66, height: 66, borderRadius: 22, overflow: "hidden", border: "2.5px solid rgba(255,255,255,0.35)", flexShrink: 0, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {photoUrl ? <img src={photoUrl} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 26, fontWeight: 900, color: "#fff" }}>{(profile?.name ?? user?.name ?? "U").charAt(0).toUpperCase()}</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>{profile?.name ?? user?.name ?? "Memuat..."}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{profile?.email ?? ""}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>{profile?.phone ?? "—"}</div>
+                    <div style={{ display: "inline-flex", alignItems: "center", marginTop: 5, background: level.bg, borderRadius: 8, padding: "2px 8px" }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: level.color }}>{level.label}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setOpenAkunSection(openAkunSection === "profil" ? null : "profil")}
+                    style={{ background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.3)", borderRadius: 12, padding: "7px 13px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                    {openAkunSection === "profil" ? "Tutup" : "Edit"}
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                  {[
+                    { val: orderHistory.length, label: "Pesanan" },
+                    { val: Math.round((orderHistory.reduce((s, o) => s + (o.rating ?? 0), 0) / (orderHistory.filter(o => o.rating).length || 1)) * 10) / 10 || "—", label: "Rating" },
+                    { val: profile?.createdAt ? new Date(profile.createdAt).getFullYear() : "—", label: "Bergabung" },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "8px 0", textAlign: "center" as const }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{stat.val}</div>
+                      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Edit Profil panel - FULL */}
           {openAkunSection === "profil" && (
             <div style={{ background: "#fff", borderRadius: 16, padding: "16px 14px", marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 10 }}>Edit Nama</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a", marginBottom: 14 }}>Edit Profil</div>
+              {/* Photo */}
+              <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", marginBottom: 16 }}>
+                <div style={{ width: 84, height: 84, borderRadius: 26, overflow: "hidden", background: "#e8f5f2", border: "2.5px solid #1a7a6a", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8, cursor: "pointer" }}
+                  onClick={() => photoInputRef.current?.click()}>
+                  {(photoPreview ?? profile?.profilePhotoPath) ? <img src={photoPreview ?? profile?.profilePhotoPath ?? ""} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 34, fontWeight: 900, color: "#1a7a6a" }}>{(profile?.name ?? "U").charAt(0).toUpperCase()}</span>}
+                </div>
+                <input ref={photoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+                  const f = e.target.files?.[0]; if (f) { setPhotoFile(f); const rd = new FileReader(); rd.onload = ev => setPhotoPreview(ev.target?.result as string); rd.readAsDataURL(f); }
+                }} />
+                <button onClick={() => photoInputRef.current?.click()}
+                  style={{ background: "none", border: "1.5px solid #1a7a6a", borderRadius: 10, padding: "5px 14px", fontSize: 12, fontWeight: 700, color: "#1a7a6a", cursor: "pointer", marginBottom: photoFile ? 6 : 0 }}>
+                  Ganti Foto
+                </button>
+                {photoFile && <button disabled={photoUploading} onClick={handlePhotoUpload}
+                  style={{ background: "#1a7a6a", border: "none", borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
+                  {photoUploading ? "Mengupload..." : "Upload Foto"}
+                </button>}
+              </div>
+              {/* Nama */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#7a8a9a", marginBottom: 4 }}>NAMA LENGKAP</div>
               <input value={editName} onChange={e => setEditName(e.target.value)}
                 style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginBottom: 10, outline: "none" }}
                 placeholder="Nama lengkap" />
-              {editNameMsg && <div style={{ fontSize: 12, color: editNameMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{editNameMsg.text}</div>}
-              <button disabled={editNameLoading} onClick={async () => {
-                if (!editName.trim()) return;
-                setEditNameLoading(true); setEditNameMsg(null);
-                const r = await fetch("/api/pengguna/profile", { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: editName }) });
-                const d = await r.json();
-                setEditNameLoading(false);
-                if (d.ok) { setEditNameMsg({ type: "ok", text: "Nama berhasil diperbarui!" }); setProfile(p => p ? { ...p, name: editName } : p); }
-                else setEditNameMsg({ type: "err", text: d.error ?? "Gagal memperbarui" });
-              }} style={{ width: "100%", background: editNameLoading ? "#b2dfdb" : "#1a7a6a", color: "#fff", border: "none", borderRadius: 10, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                {editNameLoading ? "Menyimpan..." : "Simpan Perubahan"}
+              {/* HP */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#7a8a9a", marginBottom: 4 }}>NOMOR HP</div>
+              <div style={{ position: "relative" as const, marginBottom: 10 }}>
+                <input value={editPhone} onChange={e => setEditPhone(e.target.value.replace(/\D/g, ""))}
+                  style={{ width: "100%", border: `1.5px solid ${editPhone !== (profile?.phone ?? "") ? "#f5a623" : "#e0e8ef"}`, borderRadius: 10, padding: "10px 12px", paddingRight: editPhone !== (profile?.phone ?? "") ? 90 : 12, fontSize: 14, boxSizing: "border-box" as const, outline: "none" }}
+                  placeholder="08xxxxxxxxxx" />
+                {editPhone !== (profile?.phone ?? "") && <span style={{ position: "absolute" as const, right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 10, fontWeight: 800, background: "#fff9e6", color: "#d97706", padding: "2px 6px", borderRadius: 6 }}>OTP diperlukan</span>}
+              </div>
+              {/* Email */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#7a8a9a", marginBottom: 4 }}>EMAIL</div>
+              <div style={{ position: "relative" as const, marginBottom: 14 }}>
+                <input value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                  style={{ width: "100%", border: `1.5px solid ${editEmail !== (profile?.email ?? "") ? "#f5a623" : "#e0e8ef"}`, borderRadius: 10, padding: "10px 12px", paddingRight: editEmail !== (profile?.email ?? "") ? 90 : 12, fontSize: 14, boxSizing: "border-box" as const, outline: "none" }}
+                  placeholder="email@contoh.com" />
+                {editEmail !== (profile?.email ?? "") && <span style={{ position: "absolute" as const, right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 10, fontWeight: 800, background: "#fff9e6", color: "#d97706", padding: "2px 6px", borderRadius: 6 }}>OTP diperlukan</span>}
+              </div>
+              {/* Info: bergabung + level */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <div style={{ flex: 1, background: "#f7f9fc", borderRadius: 10, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10, color: "#9aa5b4" }}>Bergabung</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}</div>
+                </div>
+                <div style={{ flex: 1, background: getLevel(orderHistory.length).bg, borderRadius: 10, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10, color: "#9aa5b4" }}>Level</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: getLevel(orderHistory.length).color }}>{getLevel(orderHistory.length).label}</div>
+                </div>
+              </div>
+              {profileSaveMsg && <div style={{ fontSize: 12, color: profileSaveMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{profileSaveMsg.text}</div>}
+              <button disabled={profileSaveLoading} onClick={handleProfileSave}
+                style={{ width: "100%", background: profileSaveLoading ? "#b2dfdb" : "#1a7a6a", color: "#fff", border: "none", borderRadius: 12, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                {profileSaveLoading ? "Menyimpan..." : "Simpan Perubahan"}
               </button>
             </div>
           )}
@@ -871,45 +1140,190 @@ export default function DashboardPengguna() {
             {[
               { id: "pesanan-menu", icon: "📋", label: "Riwayat Pesanan", sub: `${orderHistory.length} pesanan selesai`, action: () => { setActiveTab("pesanan"); setPesananSubTab("riwayat"); } },
               { id: "chat-menu", icon: "💬", label: "Riwayat Chat", sub: `${orderHistory.length} percakapan`, action: () => { setActiveTab("chat"); setChatSubTab("riwayat"); } },
-              { id: "voucher", icon: "🎟️", label: "Voucher & Promo", sub: "3 voucher tersedia" },
             ].map(item => (
               <div key={item.id}>
-                <button onClick={() => item.action ? item.action() : setOpenAkunSection(openAkunSection === item.id ? null : item.id)}
+                <button onClick={() => item.action()}
                   style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
                   <span style={{ fontSize: 20 }}>{item.icon}</span>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{item.label}</div>
                     <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{item.sub}</div>
                   </div>
-                  <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === item.id ? "∨" : "›"}</span>
+                  <span style={{ fontSize: 16, color: "#b0bec5" }}>›</span>
                 </button>
-                {openAkunSection === "voucher" && item.id === "voucher" && (
-                  <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                    {[
-                      { code: "RIDE10", desc: "Diskon 10% untuk order berikutnya", exp: "30 Apr 2026" },
-                      { code: "RIDE20", desc: "Diskon 20% min. order Rp 150.000", exp: "15 Mei 2026" },
-                      { code: "GRATIS", desc: "Gratis biaya panggilan 1x", exp: "01 Jun 2026" },
-                    ].map(v => (
-                      <div key={v.code} style={{ background: "#f0faf8", borderRadius: 12, padding: "10px 12px", marginTop: 8, display: "flex", gap: 10, alignItems: "center" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: "#1a7a6a" }}>{v.code}</div>
-                          <div style={{ fontSize: 11, color: "#5a7a6a", marginTop: 2 }}>{v.desc}</div>
-                          <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 2 }}>s/d {v.exp}</div>
-                        </div>
-                        <button style={{ background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Pakai</button>
-                      </div>
-                    ))}
-                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                      <input value={voucherInput} onChange={e => setVoucherInput(e.target.value)} placeholder="Punya kode voucher?"
-                        style={{ flex: 1, border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "8px 10px", fontSize: 13, outline: "none" }} />
-                      <button onClick={() => { if (voucherInput.trim()) { setVoucherMsg({ type: "err", text: "Kode tidak valid atau sudah digunakan." }); setVoucherInput(""); } }}
-                        style={{ background: "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Tukar</button>
-                    </div>
-                    {voucherMsg && <div style={{ fontSize: 11, color: voucherMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginTop: 6 }}>{voucherMsg.text}</div>}
-                  </div>
-                )}
               </div>
             ))}
+          </div>
+
+          {/* Menu grup 2: Dompet & Pembayaran */}
+          <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Dompet & Pembayaran</div>
+            {/* RIDE Wallet */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "dompet" ? null : "dompet")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>💰</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>RIDE Wallet</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Saldo: {walletLoading ? "..." : fmtRp(walletData?.balance ?? 0)}</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "dompet" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "dompet" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  {/* Balance card */}
+                  <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #1a7a6a 100%)", borderRadius: 14, padding: "16px 16px 14px", marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 4 }}>Saldo RIDE Anda</div>
+                    <div style={{ fontSize: 28, fontWeight: 900, color: "#fff" }}>{walletLoading ? "..." : fmtRp(walletData?.balance ?? 0)}</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button onClick={() => { setTopupModal(true); setTopupMsg(null); }}
+                        style={{ flex: 1, background: "#fff", border: "none", borderRadius: 10, padding: "8px 0", fontSize: 12, fontWeight: 800, color: "#1a7a6a", cursor: "pointer" }}>+ Isi Saldo</button>
+                      <button onClick={() => { setWithdrawModal(true); setWithdrawMsg(null); }}
+                        style={{ flex: 1, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 10, padding: "8px 0", fontSize: 12, fontWeight: 800, color: "#fff", cursor: "pointer" }}>↓ Tarik</button>
+                    </div>
+                  </div>
+                  {/* Transactions */}
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1a2a3a", marginBottom: 8 }}>Riwayat Transaksi</div>
+                  {(!walletData?.transactions?.length) && <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center" as const, padding: "12px 0" }}>Belum ada transaksi.</div>}
+                  {walletData?.transactions?.slice(0, 10).map(tx => (
+                    <div key={tx.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid #f0f4f8" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: tx.type === "topup" ? "#e8f5f2" : "#fff0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+                        {tx.type === "topup" ? "⬆️" : "⬇️"}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{tx.description}</div>
+                        <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 1 }}>{new Date(tx.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: tx.type === "topup" ? "#1a7a6a" : "#e74c3c" }}>
+                        {tx.type === "topup" ? "+" : "-"}{fmtRp(tx.amount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Metode Pembayaran */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "metode-bayar" ? null : "metode-bayar")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>💳</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Metode Pembayaran</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{paymentMethods.length} metode tersimpan</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "metode-bayar" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "metode-bayar" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  {paymentMethods.map(pm => (
+                    <div key={pm.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "#f8fafc", borderRadius: 10, padding: "10px 12px", marginTop: 8 }}>
+                      <span style={{ fontSize: 18 }}>{pm.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{pm.label}</div>
+                        <div style={{ fontSize: 11, color: "#9aa5b4" }}>{pm.type === "ewallet" ? "E-Wallet" : pm.type === "bank" ? "Rekening Bank" : "Kartu"}</div>
+                      </div>
+                      <button onClick={() => setPaymentMethods(m => m.filter(x => x.id !== pm.id))}
+                        style={{ background: "none", border: "none", color: "#e74c3c", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>×</button>
+                    </div>
+                  ))}
+                  {!addingPayMethod ? (
+                    <button onClick={() => setAddingPayMethod(true)}
+                      style={{ width: "100%", background: "none", border: "1.5px dashed #b0bec5", borderRadius: 10, padding: "9px 0", fontSize: 13, color: "#9aa5b4", cursor: "pointer", marginTop: 10 }}>
+                      + Tambah Metode Baru
+                    </button>
+                  ) : (
+                    <div style={{ marginTop: 10 }}>
+                      <select value={newPayType} onChange={e => setNewPayType(e.target.value)}
+                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "8px 10px", fontSize: 13, marginBottom: 6, outline: "none", background: "#fff" }}>
+                        <option value="ewallet">E-Wallet</option>
+                        <option value="bank">Rekening Bank</option>
+                        <option value="card">Kartu Kredit/Debit</option>
+                      </select>
+                      <input value={newPayLabel} onChange={e => setNewPayLabel(e.target.value)} placeholder="Nama (misal: GoPay, BCA, Visa)"
+                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "8px 10px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 8, outline: "none" }} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => {
+                          if (!newPayLabel.trim()) return;
+                          const icon = newPayType === "ewallet" ? "📱" : newPayType === "bank" ? "🏦" : "💳";
+                          setPaymentMethods(m => [...m, { id: Date.now().toString(), type: newPayType, label: newPayLabel.trim(), icon }]);
+                          setNewPayLabel(""); setAddingPayMethod(false);
+                        }} style={{ flex: 1, background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 10, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Simpan</button>
+                        <button onClick={() => setAddingPayMethod(false)}
+                          style={{ flex: 1, background: "#f0f4f8", color: "#7a8a9a", border: "none", borderRadius: 10, padding: "8px 0", fontSize: 13, cursor: "pointer" }}>Batal</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Menu grup 3: Voucher & Promo */}
+          <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Voucher & Promo</div>
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "voucher" ? null : "voucher")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>🎟️</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Voucher Aktif Saya</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>3 voucher tersedia</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "voucher" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "voucher" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  {[
+                    { code: "RIDE10", desc: "Diskon 10% untuk order berikutnya", exp: "30 Apr 2026" },
+                    { code: "RIDE20", desc: "Diskon 20% min. order Rp 150.000", exp: "15 Mei 2026" },
+                    { code: "GRATIS", desc: "Gratis biaya panggilan 1x", exp: "01 Jun 2026" },
+                  ].map(v => (
+                    <div key={v.code} style={{ background: "#f0faf8", borderRadius: 12, padding: "10px 12px", marginTop: 8, display: "flex", gap: 10, alignItems: "center" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "#1a7a6a" }}>{v.code}</div>
+                        <div style={{ fontSize: 11, color: "#5a7a6a", marginTop: 2 }}>{v.desc}</div>
+                        <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 2 }}>s/d {v.exp}</div>
+                      </div>
+                      <button style={{ background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Pakai</button>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <input value={voucherInput} onChange={e => setVoucherInput(e.target.value)} placeholder="Punya kode voucher?"
+                      style={{ flex: 1, border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "8px 10px", fontSize: 13, outline: "none" }} />
+                    <button onClick={() => { if (voucherInput.trim()) { setVoucherMsg({ type: "err", text: "Kode tidak valid atau sudah digunakan." }); setVoucherInput(""); } }}
+                      style={{ background: "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Tukar</button>
+                  </div>
+                  {voucherMsg && <div style={{ fontSize: 11, color: voucherMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginTop: 6 }}>{voucherMsg.text}</div>}
+                </div>
+              )}
+            </div>
+            {/* Referral Code */}
+            <div>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "referral" ? null : "referral")}
+                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+                <span style={{ fontSize: 20 }}>🔗</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Kode Referral Saya</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Ajak teman, dapatkan bonus</div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "referral" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "referral" && (
+                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
+                  <div style={{ background: "linear-gradient(135deg, #e8f5f2 0%, #f0f9f6 100%)", borderRadius: 12, padding: "14px 14px", marginTop: 8, textAlign: "center" as const }}>
+                    <div style={{ fontSize: 11, color: "#5a7a6a", marginBottom: 6 }}>Kode Referral Anda</div>
+                    <div style={{ fontSize: 24, fontWeight: 900, color: "#1a7a6a", letterSpacing: 4, marginBottom: 8 }}>RIDE{profile?.id ?? "****"}</div>
+                    <button onClick={() => { navigator.clipboard?.writeText(`RIDE${profile?.id ?? ""}`); alert("Kode referral disalin!"); }}
+                      style={{ background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 10, padding: "8px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      📋 Salin Kode
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#7a8a9a", marginTop: 10, lineHeight: 1.5 }}>
+                    Bagikan kode referral Anda ke teman. Setiap teman yang mendaftar dan menyelesaikan order pertama, Anda mendapat bonus Rp 25.000 ke RIDE Wallet.
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Menu grup 2: Preferensi */}

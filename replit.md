@@ -6,11 +6,13 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 
 ### Status Fitur
 - **DashboardPengguna**: 4-tab bottom nav (Beranda/Pesanan/Chat/Akun) ✅
-  - Akun tab: Hero profil card (nama, email, phone, stats) + Edit nama + Ganti password + Voucher & Promo accordion + Notifikasi toggles + Alamat Tersimpan (localStorage) + Bantuan FAQ + Tentang/Syarat/Privasi + Keluar ✅
+  - Akun tab FULL: Hero card (foto profil/level badge/stats) + Edit Profil lengkap (foto upload, nama, HP+OTP, email+OTP) + Aktivitas + Dompet & Pembayaran (RIDE Wallet balance+topup+withdraw+transaksi, Metode Pembayaran localStorage) + Voucher & Promo (voucher aktif + kode referral) + Preferensi (Alamat+Notifikasi) + Keamanan (ganti password) + Bantuan & Info + Keluar ✅
 - **DashboardMitra**: 4-tab bottom nav (Beranda/Pesanan/Chat/Akun) ✅
   - Akun tab: Hero profil card (nama, layanan, status verifikasi, stats) + Ringkasan Penghasilan + Dokumen & Verifikasi (dari DB) + Notifikasi toggles + Ganti password + Bantuan Mitra FAQ + Legal + Tentang + Keluar ✅
-- **Backend Pengguna**: GET+PUT /api/pengguna/profile, PUT /api/pengguna/change-password ✅
+- **Backend Pengguna**: GET+PUT /api/pengguna/profile, PUT /api/pengguna/change-password, POST /api/pengguna/request-profile-otp, POST /api/pengguna/verify-profile-otp, POST /api/pengguna/upload-photo (multer→/uploads/profile/), GET /api/pengguna/wallet, POST /api/pengguna/wallet/topup, POST /api/pengguna/wallet/withdraw ✅
 - **Backend Mitra**: GET /api/mitra/profile-detail (docs status), PUT /api/mitra/change-password ✅
+- **DB Schema**: profilePhotoPath + walletBalance di usersTable; walletTransactionsTable (topup/withdraw) ✅
+- **Static uploads**: /uploads/* served dari api-server ✅
 
 ## Stack
 
