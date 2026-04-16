@@ -204,7 +204,7 @@ export default function OrderCuci() {
   const sendChatMessage = useCallback(async () => {
     if (!chatInput.trim() || !orderId || chatSending) return;
     setChatSending(true);
-    try { await fetch(`/api/chat/${orderId}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ message: chatInput.trim() }) }); setChatInput(""); } catch { } finally { setChatSending(false); }
+    try { const r = await fetch(`/api/chat/${orderId}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ message: chatInput.trim() }) }); if (r.status === 401) { alert("Sesi Anda telah habis. Silakan login ulang."); window.location.href = "/"; return; } setChatInput(""); } catch { } finally { setChatSending(false); }
   }, [chatInput, orderId, chatSending]);
 
   useEffect(() => {

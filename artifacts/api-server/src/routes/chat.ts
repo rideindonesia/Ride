@@ -96,26 +96,18 @@ router.post("/:orderId", requireAuth, async (req, res) => {
   let senderId: number;
   let senderRole: "pengguna" | "mitra";
 
+  // Session is the ONLY reliable source for senderRole.
+  // Cookies cannot be trusted alone (same device may have both ride-p-uid and
+  // ride-m-uid cookies when testing multiple accounts, causing cross-role confusion).
   if (sessionRole === "mitra" && sessionUserId === order.mitraId) {
-    senderId    = sessionUserId;
-    senderRole  = "mitra";
+    senderId   = sessionUserId;
+    senderRole = "mitra";
   } else if (sessionRole === "pengguna" && sessionUserId === order.penggunaId) {
-    senderId    = sessionUserId;
-    senderRole  = "pengguna";
+    senderId   = sessionUserId;
+    senderRole = "pengguna";
   } else {
-    // Fallback: signed cookies (no active session, e.g. SSO/cookie-only flow)
-    const mUidRaw = req.signedCookies?.["ride-m-uid"];
-    const mUid    = mUidRaw && mUidRaw !== false ? parseInt(mUidRaw) : NaN;
-    const pUidRaw = req.signedCookies?.["ride-p-uid"];
-    const pUid    = pUidRaw && pUidRaw !== false ? parseInt(pUidRaw) : NaN;
-
-    if (!isNaN(mUid) && mUid === order.mitraId) {
-      senderId = mUid; senderRole = "mitra";
-    } else if (!isNaN(pUid) && pUid === order.penggunaId) {
-      senderId = pUid; senderRole = "pengguna";
-    } else {
-      res.status(403).json({ error: "Tidak dapat menentukan pengirim" }); return;
-    }
+    // No valid session — user must re-login (in-memory sessions clear on restart).
+    res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
   }
 
   const [msg] = await db.insert(chatMessagesTable).values({

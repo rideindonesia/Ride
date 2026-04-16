@@ -438,12 +438,17 @@ export default function DashboardMitra() {
     setChatInput("");
     setChatSending(true);
     try {
-      await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
+      const r = await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ message: msg }),
       });
+      if (r.status === 401) {
+        alert("Sesi Anda telah habis. Silakan login ulang.");
+        window.location.href = "/";
+        return;
+      }
     } catch { /* ignore */ } finally { setChatSending(false); }
   };
 
@@ -1439,7 +1444,7 @@ export default function DashboardMitra() {
                         const isMe = m.senderRole === "mitra";
                         return (
                           <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 2 }}>
-                            <div style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: isMe ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMe ? "#1a7a6a" : "#fff", color: isMe ? "#fff" : "#1a2a3a", fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                            <div style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: isMe ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMe ? "#1a7a6a" : "#eef1f5", color: isMe ? "#fff" : "#1a2a3a", fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                               {m.message}
                             </div>
                             <span style={{ fontSize: 10, color: "#b0bec5" }}>{new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
@@ -1496,7 +1501,7 @@ export default function DashboardMitra() {
                                 const isMe = m.senderRole === "mitra";
                                 return (
                                   <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 2 }}>
-                                    <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMe ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMe ? "#1a7a6a" : "#fff", color: isMe ? "#fff" : "#1a2a3a", fontSize: 12, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                                    <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: isMe ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMe ? "#1a7a6a" : "#eef1f5", color: isMe ? "#fff" : "#1a2a3a", fontSize: 12, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                                       {m.message}
                                     </div>
                                     <span style={{ fontSize: 10, color: "#b0bec5" }}>{new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>

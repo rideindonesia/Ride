@@ -449,11 +449,16 @@ export default function DashboardPengguna() {
     setChatSending(true);
     const msg = chatInput.trim();
     setChatInput("");
-    await fetch(`/api/chat/${activeOrder.id}`, {
+    const r = await fetch(`/api/chat/${activeOrder.id}`, {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: msg, senderRole: "pengguna" }),
-    }).catch(() => {});
+      body: JSON.stringify({ message: msg }),
+    }).catch(() => null);
+    if (r?.status === 401) {
+      alert("Sesi Anda telah habis. Silakan login ulang.");
+      window.location.href = "/";
+      return;
+    }
     setChatSending(false);
   };
 
