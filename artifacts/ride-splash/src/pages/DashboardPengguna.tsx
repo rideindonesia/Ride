@@ -616,8 +616,8 @@ export default function DashboardPengguna() {
       {/* Sub-page top bar — shown for non-beranda tabs */}
       {activeTab !== "beranda" && (
         <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "44px 16px 14px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <button onClick={() => setActiveTab("beranda")} style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff", flexShrink: 0 }}>
-            ←
+          <button onClick={() => setActiveTab("beranda")} style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff", flexShrink: 0, letterSpacing: "-1px" }}>
+            &lt;-
           </button>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>
             {activeTab === "pesanan" ? "Pesanan" : activeTab === "chat" ? "Chat" : "Akun Saya"}
