@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan, calcEtaMinutes } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -184,7 +184,7 @@ export default function OrderBengkel() {
         const pLat: number = data.pickupLat ?? 0;
         const pLng: number = data.pickupLng ?? 0;
         const dist = haversineDist(data.mitra.lat, data.mitra.lng, pLat, pLng);
-        const etaMin = calcEtaMinutes(dist);
+        const etaMin = Math.ceil(calcEtaSecsLive(dist, data.mitra.speedKmh) / 60);
         setOrderId(data.id);
         setOrderNo(data.orderNo);
         setOrderStatus("accepted");
@@ -349,7 +349,7 @@ export default function OrderBengkel() {
         const mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
         const callFee = od.totalAmount ?? calcBiayaPanggilan("bengkel", dist);
-        const etaMin = calcEtaMinutes(dist);
+        const etaMin = Math.ceil(calcEtaSecsLive(dist, od.mitra.speedKmh) / 60);
         setAcceptedMitra({
           id: od.mitra.id,
           name: od.mitra.name,
@@ -447,7 +447,8 @@ export default function OrderBengkel() {
           setMitraTrackLng(mLng);
           const dist = haversineDist(mLat, mLng, pinLat, pinLng);
           setTrackDist(dist);
-          setTrackEta(calcEtaMinutes(dist));
+          // Blend kecepatan GPS nyata mitra dengan model lalu lintas
+          setTrackEta(Math.ceil(calcEtaSecsLive(dist, data.mitra?.speedKmh) / 60));
         }
         if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
         if (data.paymentData) setPaymentData(data.paymentData);

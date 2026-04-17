@@ -332,7 +332,7 @@ router.get("/orders/:id", async (req, res) => {
   if (order.mitraId) {
     const [mitraUser] = await db.select({ name: usersTable.name })
       .from(usersTable).where(eq(usersTable.id, order.mitraId));
-    const [mitraLoc] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng, serviceType: mitraLocationsTable.serviceType })
+    const [mitraLoc] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng, speedKmh: mitraLocationsTable.speedKmh, serviceType: mitraLocationsTable.serviceType })
       .from(mitraLocationsTable).where(eq(mitraLocationsTable.userId, order.mitraId));
     const [stats] = await db.select({ rating: avg(ordersTable.rating), totalOrders: count(ordersTable.id) })
       .from(ordersTable).where(and(eq(ordersTable.mitraId, order.mitraId), eq(ordersTable.status, "done")));
@@ -342,6 +342,7 @@ router.get("/orders/:id", async (req, res) => {
       name: mitraUser?.name ?? "",
       lat: mitraLoc?.lat ?? 0,
       lng: mitraLoc?.lng ?? 0,
+      speedKmh: mitraLoc?.speedKmh ?? 0,
       serviceType: mitraLoc?.serviceType ?? "",
       rating: stats?.rating != null ? parseFloat(Number(stats.rating).toFixed(1)) : null,
       totalOrders: Number(stats?.totalOrders) || 0,

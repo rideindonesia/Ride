@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan, calcEtaMinutes } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -145,7 +145,7 @@ export default function OrderCuci() {
       const dist = haversineDist(data.mitra.lat, data.mitra.lng, pLat, pLng);
       setOrderId(data.id); setOrderNo(data.orderNo); setOrderStatus("accepted");
       setPinLat(pLat); setPinLng(pLng); setAutoAddress(data.pickupAddress || "");
-      setAcceptedMitra({ id: data.mitra.id, name: data.mitra.name, lat: data.mitra.lat, lng: data.mitra.lng, serviceType: data.mitra.serviceType || "", rating: data.mitra.rating ?? null, totalOrders: data.mitra.totalOrders ?? 0, dist, callFee: data.totalAmount ?? 0, etaMin: calcEtaMinutes(dist) });
+      setAcceptedMitra({ id: data.mitra.id, name: data.mitra.name, lat: data.mitra.lat, lng: data.mitra.lng, serviceType: data.mitra.serviceType || "", rating: data.mitra.rating ?? null, totalOrders: data.mitra.totalOrders ?? 0, dist, callFee: data.totalAmount ?? 0, etaMin: Math.ceil(calcEtaSecsLive(dist, data.mitra?.speedKmh) / 60) });
       setMitraConfirmed(true);
       if (data.trackingPhase === "selesai") { if (data.paymentData) setPaymentData(data.paymentData); setStep(5); } else { setStep(4); }
     }).catch(() => {});
@@ -191,7 +191,7 @@ export default function OrderCuci() {
       if (od.status === "accepted" && od.mitra) {
         if (orderPollRef.current) clearInterval(orderPollRef.current);
         const dist = calcDist(lat, lng, od.mitra.lat ?? 0, od.mitra.lng ?? 0);
-        setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: od.mitra.lat ?? 0, lng: od.mitra.lng ?? 0, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: od.totalAmount ?? calcBiayaPanggilan("cuci", dist), etaMin: calcEtaMinutes(dist) });
+        setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: od.mitra.lat ?? 0, lng: od.mitra.lng ?? 0, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: od.totalAmount ?? calcBiayaPanggilan("cuci", dist), etaMin: Math.ceil(calcEtaSecsLive(dist, od.mitra?.speedKmh) / 60) });
         setOrderStatus("accepted");
       } else if (od.status === "cancelled") { if (orderPollRef.current) clearInterval(orderPollRef.current); setOrderStatus("cancelled"); }
     };
@@ -223,7 +223,7 @@ export default function OrderCuci() {
       try {
         const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }); const data = await res.json();
         const mLat: number | null = data.mitra?.lat ?? null, mLng: number | null = data.mitra?.lng ?? null;
-        if (mLat && mLng) { setMitraTrackLat(mLat); setMitraTrackLng(mLng); const dist = haversineDist(mLat, mLng, pinLat, pinLng); setTrackDist(dist); setTrackEta(calcEtaMinutes(dist)); }
+        if (mLat && mLng) { setMitraTrackLat(mLat); setMitraTrackLng(mLng); const dist = haversineDist(mLat, mLng, pinLat, pinLng); setTrackDist(dist); setTrackEta(Math.ceil(calcEtaSecsLive(dist, data.mitra?.speedKmh) / 60)); }
         if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
         if (data.paymentData) setPaymentData(data.paymentData);
         if (data.trackingPhase === "selesai") setStep(5);

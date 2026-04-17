@@ -6,6 +6,7 @@ export const mitraLocationsTable = pgTable("mitra_locations", {
   userId: integer("user_id").notNull().references(() => usersTable.id),
   lat: doublePrecision("lat").notNull(),
   lng: doublePrecision("lng").notNull(),
+  speedKmh: doublePrecision("speed_kmh").default(0),
   isOnline: boolean("is_online").default(false).notNull(),
   serviceType: text("service_type"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

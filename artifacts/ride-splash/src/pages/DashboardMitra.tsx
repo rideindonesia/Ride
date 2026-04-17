@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
-import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes } from "../utils/pricing";
+import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
 
 function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -574,11 +574,12 @@ export default function DashboardMitra() {
     const pLat = activeOrder.pickupLat;
     const pLng = activeOrder.pickupLng;
 
-    // Fungsi hitung + set ETA berdasarkan posisi mitra saat ini
-    const updateEtaFromPos = (lat: number, lng: number) => {
+    // Fungsi hitung + set ETA berdasarkan posisi & kecepatan mitra saat ini
+    // speedKmh dari GPS → blend 60% aktual + 40% model lalu lintas (anti-noise)
+    const updateEtaFromPos = (lat: number, lng: number, speedKmh?: number | null) => {
       if (!pLat || !pLng) return;
       const km = haversineKm(lat, lng, pLat, pLng);
-      const secs = Math.max(30, calcEtaMinutes(km) * 60);
+      const secs = calcEtaSecsLive(km, speedKmh);
       setEtaSecs(secs);
     };
 
@@ -594,35 +595,37 @@ export default function DashboardMitra() {
     // Mulai watchPosition — kirim lokasi ke backend setiap ada perubahan
     stopLocationWatch();
     if (navigator.geolocation) {
-      // Set ETA awal dulu dari posisi pertama
+      // Set ETA awal dari posisi pertama
       navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        updateEtaFromPos(lat, lng);
-        // Kirim lokasi awal ke backend
+        const { latitude: lat, longitude: lng, speed } = pos.coords;
+        const speedKmh = speed != null && speed >= 0 ? speed * 3.6 : null;
+        updateEtaFromPos(lat, lng, speedKmh);
         fetch(`${BASE}/api/mitra/location`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ lat, lng }),
+          body: JSON.stringify({ lat, lng, ...(speedKmh != null ? { speedKmh } : {}) }),
         }).catch(() => {});
       }, () => {}, { enableHighAccuracy: true });
 
-      // Pantau perubahan lokasi secara terus-menerus
+      // Pantau perubahan lokasi + kecepatan secara terus-menerus
       locationWatchRef.current = navigator.geolocation.watchPosition(
         pos => {
-          const { latitude: lat, longitude: lng } = pos.coords;
-          // Update ETA di sisi mitra berdasarkan posisi terkini
-          updateEtaFromPos(lat, lng);
+          const { latitude: lat, longitude: lng, speed } = pos.coords;
+          // speed dari GPS dalam m/s → konversi ke km/h
+          const speedKmh = speed != null && speed >= 0 ? speed * 3.6 : null;
+          // Update ETA di sisi mitra: blend kecepatan nyata + model lalu lintas
+          updateEtaFromPos(lat, lng, speedKmh);
           // Kirim ke backend → user polling 4 detik akan ambil otomatis
           fetch(`${BASE}/api/mitra/location`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ lat, lng }),
+            body: JSON.stringify({ lat, lng, ...(speedKmh != null ? { speedKmh } : {}) }),
           }).catch(() => {});
         },
         () => {},
-        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
     } else if (pLat && pLng) {
       // GPS tidak tersedia — pakai estimasi dari lokasi tersimpan

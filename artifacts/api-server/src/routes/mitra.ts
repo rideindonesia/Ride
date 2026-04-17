@@ -317,16 +317,20 @@ router.get("/dashboard", requireMitra, async (req, res) => {
   });
 });
 
-// PATCH /api/mitra/location — update posisi GPS mitra real-time saat perjalanan
+// PATCH /api/mitra/location — update posisi GPS + kecepatan mitra real-time
 router.patch("/location", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
-  const { lat, lng } = req.body;
+  const { lat, lng, speedKmh } = req.body;
   if (typeof lat !== "number" || typeof lng !== "number") {
     res.status(400).json({ error: "lat and lng required" });
     return;
   }
+  const updates: Record<string, unknown> = { lat, lng, updatedAt: new Date() };
+  if (typeof speedKmh === "number" && speedKmh >= 0 && speedKmh <= 200) {
+    updates.speedKmh = speedKmh;
+  }
   await db.update(mitraLocationsTable)
-    .set({ lat, lng, updatedAt: new Date() })
+    .set(updates)
     .where(eq(mitraLocationsTable.userId, mitraId));
   res.json({ ok: true });
 });
