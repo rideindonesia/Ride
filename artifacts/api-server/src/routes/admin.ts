@@ -370,15 +370,24 @@ router.get("/keuangan/summary", requireAdmin, async (_req, res) => {
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
   const lastMonthStart = new Date(monthStart); lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
 
-  const [[allTime], [thisMonth], [lastMonth]] = await Promise.all([
+  // cash = mitra pegang uang, fee belum masuk ke RIDE (unpaid)
+  // wallet/transfer = dipotong otomatis (paid)
+  const isCash = sql`(${ordersTable.paymentData}->>'paymentMethod') = 'cash'`;
+  const isNonCash = sql`(${ordersTable.paymentData}->>'paymentMethod') != 'cash' AND ${ordersTable.paymentData} IS NOT NULL`;
+
+  const [[allTime], [thisMonth], [lastMonth], [unpaidAll], [unpaidMonth]] = await Promise.all([
     db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(eq(ordersTable.status, "done")),
     db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, monthStart))),
     db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, lastMonthStart), lte(ordersTable.createdAt, monthStart))),
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), isCash)),
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), isCash, gte(ordersTable.createdAt, monthStart))),
   ]);
   res.json({
     allTimeTotal: Number(allTime.total ?? 0), allTimeOrders: Number(allTime.c),
     thisMonthTotal: Number(thisMonth.total ?? 0), thisMonthOrders: Number(thisMonth.c),
     lastMonthTotal: Number(lastMonth.total ?? 0), lastMonthOrders: Number(lastMonth.c),
+    unpaidTotal: Number(unpaidAll.total ?? 0), unpaidOrders: Number(unpaidAll.c),
+    unpaidThisMonth: Number(unpaidMonth.total ?? 0), unpaidThisMonthOrders: Number(unpaidMonth.c),
   });
 });
 
@@ -388,18 +397,53 @@ router.get("/keuangan/fee-per-mitra", requireAdmin, async (req, res) => {
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
   const offset = (page - 1) * limit;
 
-  const rows = await db.select({ mitraId: ordersTable.mitraId, total: sum(ordersTable.platformFee), c: count() })
-    .from(ordersTable).where(and(eq(ordersTable.status, "done"), sql`${ordersTable.mitraId} IS NOT NULL`))
-    .groupBy(ordersTable.mitraId).orderBy(desc(sum(ordersTable.platformFee))).limit(limit).offset(offset);
+  const doneMitra = and(eq(ordersTable.status, "done"), sql`${ordersTable.mitraId} IS NOT NULL`);
+
+  // Total platform fee per mitra (all payment methods)
+  const rows = await db.select({
+    mitraId: ordersTable.mitraId,
+    total: sum(ordersTable.platformFee),
+    c: count(),
+  }).from(ordersTable).where(doneMitra)
+    .groupBy(ordersTable.mitraId)
+    .orderBy(desc(sum(ordersTable.platformFee)))
+    .limit(limit).offset(offset);
 
   const mitraIds = rows.filter(r => r.mitraId).map(r => r.mitraId!);
   let nameMap: Record<number, { name: string; email: string }> = {};
   if (mitraIds.length > 0) {
-    const users = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email }).from(usersTable).where(inArray(usersTable.id, mitraIds as [number, ...number[]]));
+    const users = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+      .from(usersTable).where(inArray(usersTable.id, mitraIds as [number, ...number[]]));
     nameMap = Object.fromEntries(users.map(u => [u.id, { name: u.name, email: u.email }]));
   }
 
-  res.json(rows.map(r => ({ mitraId: r.mitraId, mitraName: r.mitraId ? (nameMap[r.mitraId]?.name ?? "-") : "-", mitraEmail: r.mitraId ? (nameMap[r.mitraId]?.email ?? "-") : "-", totalFee: Number(r.total ?? 0), totalOrders: Number(r.c) })));
+  // Unpaid fee per mitra (cash orders only)
+  let unpaidMap: Record<number, number> = {};
+  if (mitraIds.length > 0) {
+    const unpaidRows = await db.select({
+      mitraId: ordersTable.mitraId,
+      unpaid: sum(ordersTable.platformFee),
+    }).from(ordersTable)
+      .where(and(
+        eq(ordersTable.status, "done"),
+        sql`${ordersTable.mitraId} IS NOT NULL`,
+        sql`(${ordersTable.paymentData}->>'paymentMethod') = 'cash'`,
+        inArray(ordersTable.mitraId, mitraIds as [number, ...number[]]),
+      ))
+      .groupBy(ordersTable.mitraId);
+    for (const r of unpaidRows) {
+      if (r.mitraId) unpaidMap[r.mitraId] = Number(r.unpaid ?? 0);
+    }
+  }
+
+  res.json(rows.map(r => ({
+    mitraId: r.mitraId,
+    mitraName: r.mitraId ? (nameMap[r.mitraId]?.name ?? "-") : "-",
+    mitraEmail: r.mitraId ? (nameMap[r.mitraId]?.email ?? "-") : "-",
+    totalFee: Number(r.total ?? 0),
+    totalOrders: Number(r.c),
+    unpaidFee: r.mitraId ? (unpaidMap[r.mitraId] ?? 0) : 0,
+  })));
 });
 
 // ── Vouchers ──────────────────────────────────────────────────────────────────
