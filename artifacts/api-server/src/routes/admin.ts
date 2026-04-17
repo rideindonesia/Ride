@@ -309,10 +309,35 @@ router.get("/orders/:id", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
   if (!order) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+
   const ids = [order.penggunaId, ...(order.mitraId ? [order.mitraId] : [])];
-  const users = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email }).from(usersTable).where(inArray(usersTable.id, ids as [number, ...number[]]));
-  const nameMap = Object.fromEntries(users.map(u => [u.id, u]));
-  res.json({ ...order, pengguna: nameMap[order.penggunaId], mitra: order.mitraId ? nameMap[order.mitraId] : null });
+  const users = await db.select({
+    id: usersTable.id, name: usersTable.name, email: usersTable.email,
+    phone: usersTable.phone, walletBalance: usersTable.walletBalance,
+  }).from(usersTable).where(inArray(usersTable.id, ids as [number, ...number[]]));
+  const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+
+  let mitraApp = null;
+  if (order.mitraId) {
+    const mitraUser = userMap[order.mitraId];
+    if (mitraUser?.email) {
+      const [app] = await db.select({
+        serviceType: mitraApplicationsTable.serviceType,
+        operatingCity: mitraApplicationsTable.operatingCity,
+        status: mitraApplicationsTable.status,
+      }).from(mitraApplicationsTable).where(eq(mitraApplicationsTable.email, mitraUser.email)).limit(1);
+      mitraApp = app ?? null;
+    }
+  }
+
+  const pengguna = userMap[order.penggunaId] ?? null;
+  const mitraUser = order.mitraId ? userMap[order.mitraId] ?? null : null;
+
+  res.json({
+    ...order,
+    pengguna: pengguna ? { ...pengguna } : null,
+    mitra: mitraUser ? { ...mitraUser, serviceType: mitraApp?.serviceType, operatingCity: mitraApp?.operatingCity, mitraStatus: mitraApp?.status } : null,
+  });
 });
 
 // PATCH /api/admin/orders/:id/cancel
