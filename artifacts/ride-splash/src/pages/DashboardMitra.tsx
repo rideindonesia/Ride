@@ -566,74 +566,69 @@ export default function DashboardMitra() {
     }
   };
 
-  const startJourney = async () => {
-    if (!activeOrder) return;
-    await updatePhase("menuju");
-    setMitraPhase("menuju");
+  // Mulai GPS tracking + countdown timer saat fase "menuju"
+  // Dipanggil dari startJourney() dan juga auto-restart saat fase di-restore dari DB
+  const beginTracking = useCallback((pLat: number | null, pLng: number | null) => {
+    if (!pLat || !pLng) return;
 
-    const pLat = activeOrder.pickupLat;
-    const pLng = activeOrder.pickupLng;
-
-    // Fungsi hitung + set ETA berdasarkan posisi & kecepatan mitra saat ini
-    // speedKmh dari GPS → blend 60% aktual + 40% model lalu lintas (anti-noise)
-    const updateEtaFromPos = (lat: number, lng: number, speedKmh?: number | null) => {
-      if (!pLat || !pLng) return;
-      const km = haversineKm(lat, lng, pLat, pLng);
-      const secs = calcEtaSecsLive(km, speedKmh);
-      setEtaSecs(secs);
+    const startCountdown = (initialSecs: number) => {
+      if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+      setEtaSecs(initialSecs);
+      etaTimerRef.current = setInterval(() => {
+        setEtaSecs(prev => Math.max(0, prev - 1));
+      }, 1000);
     };
 
-    // Inisialisasi countdown timer — update setiap detik
-    if (etaTimerRef.current) clearInterval(etaTimerRef.current);
-    etaTimerRef.current = setInterval(() => {
-      setEtaSecs(prev => {
-        if (prev <= 1) { clearInterval(etaTimerRef.current!); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // Mulai watchPosition — kirim lokasi ke backend setiap ada perubahan
+    // GPS tersedia — hitung ETA dari posisi nyata, lalu mulai timer
     stopLocationWatch();
     if (navigator.geolocation) {
-      // Set ETA awal dari posisi pertama
-      navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude: lat, longitude: lng, speed } = pos.coords;
-        const speedKmh = speed != null && speed >= 0 ? speed * 3.6 : null;
-        updateEtaFromPos(lat, lng, speedKmh);
-        fetch(`${BASE}/api/mitra/location`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ lat, lng, ...(speedKmh != null ? { speedKmh } : {}) }),
-        }).catch(() => {});
-      }, () => {}, { enableHighAccuracy: true });
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { latitude: lat, longitude: lng, speed } = pos.coords;
+          const speedKmh = speed != null && speed >= 0 ? speed * 3.6 : null;
+          const km = haversineKmMitra(lat, lng, pLat, pLng);
+          startCountdown(calcEtaSecsLive(km, speedKmh));
+          fetch(`${BASE}/api/mitra/location`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+            body: JSON.stringify({ lat, lng, ...(speedKmh != null ? { speedKmh } : {}) }),
+          }).catch(() => {});
+        },
+        () => { startCountdown(600); }, // GPS ditolak — fallback 10 menit
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
 
-      // Pantau perubahan lokasi + kecepatan secara terus-menerus
       locationWatchRef.current = navigator.geolocation.watchPosition(
         pos => {
           const { latitude: lat, longitude: lng, speed } = pos.coords;
-          // speed dari GPS dalam m/s → konversi ke km/h
           const speedKmh = speed != null && speed >= 0 ? speed * 3.6 : null;
-          // Update ETA di sisi mitra: blend kecepatan nyata + model lalu lintas
-          updateEtaFromPos(lat, lng, speedKmh);
-          // Kirim ke backend → user polling 4 detik akan ambil otomatis
+          const km = haversineKmMitra(lat, lng, pLat, pLng);
+          // Setiap update GPS → restart countdown dari ETA baru (seperti Google Maps)
+          startCountdown(calcEtaSecsLive(km, speedKmh));
           fetch(`${BASE}/api/mitra/location`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
+            method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
             body: JSON.stringify({ lat, lng, ...(speedKmh != null ? { speedKmh } : {}) }),
           }).catch(() => {});
         },
         () => {},
         { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
-    } else if (pLat && pLng) {
-      // GPS tidak tersedia — pakai estimasi dari lokasi tersimpan
-      const mitraLat = (activeOrder as any).mitraLat as number | null;
-      const mitraLng = (activeOrder as any).mitraLng as number | null;
-      if (mitraLat && mitraLng) updateEtaFromPos(mitraLat, mitraLng);
-      else setEtaSecs(300);
+    } else {
+      startCountdown(600);
     }
+  }, [stopLocationWatch]);
+
+  // Auto-restart GPS tracking ketika fase "menuju" di-restore dari DB saat halaman di-refresh
+  useEffect(() => {
+    if (mitraPhase !== "menuju" || !activeOrder?.pickupLat || !activeOrder?.pickupLng) return;
+    if (locationWatchRef.current != null) return; // Sudah berjalan
+    beginTracking(activeOrder.pickupLat, activeOrder.pickupLng);
+  }, [mitraPhase, activeOrder?.id]);
+
+  const startJourney = async () => {
+    if (!activeOrder) return;
+    await updatePhase("menuju");
+    setMitraPhase("menuju");
+    beginTracking(activeOrder.pickupLat ?? null, activeOrder.pickupLng ?? null);
   };
 
   const serviceLabel = (s: string) => {
@@ -974,6 +969,12 @@ export default function DashboardMitra() {
                 {/* ── FASE 3: Menuju Lokasi ── */}
                 {mitraPhase === "menuju" && (
                   <>
+                    {!penggunaConfirmed && (
+                      <div style={{ background: "#fff8e1", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: 15 }}>⏳</span>
+                        <span style={{ fontSize: 12, color: "#7a5a00", fontWeight: 600 }}>Menunggu konsumen mengkonfirmasi panggilan...</span>
+                      </div>
+                    )}
                     <div style={{ background: "#fff", borderRadius: 16, padding: "14px", marginBottom: 12, border: "1.5px solid #d4ede5" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div>
