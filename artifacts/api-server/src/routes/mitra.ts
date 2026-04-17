@@ -317,6 +317,20 @@ router.get("/dashboard", requireMitra, async (req, res) => {
   });
 });
 
+// PATCH /api/mitra/location — update posisi GPS mitra real-time saat perjalanan
+router.patch("/location", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const { lat, lng } = req.body;
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    res.status(400).json({ error: "lat and lng required" });
+    return;
+  }
+  await db.update(mitraLocationsTable)
+    .set({ lat, lng, updatedAt: new Date() })
+    .where(eq(mitraLocationsTable.userId, mitraId));
+  res.json({ ok: true });
+});
+
 // PATCH /api/mitra/toggle-online
 router.patch("/toggle-online", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;

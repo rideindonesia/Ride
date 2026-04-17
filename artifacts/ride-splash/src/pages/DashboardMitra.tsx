@@ -153,6 +153,7 @@ export default function DashboardMitra() {
   const [penggunaConfirmed, setPenggunaConfirmed] = useState(false);
   const [etaSecs, setEtaSecs] = useState(0);
   const etaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationWatchRef = useRef<number | null>(null); // watchPosition ID saat menuju
   const [biayaJasa, setBiayaJasa] = useState("");
   const [biayaSparepart, setBiayaSparepart] = useState("0");
   const [paymentMethod, setPaymentMethod] = useState<"cash"|"transfer"|"qris">("cash");
@@ -330,6 +331,7 @@ export default function DashboardMitra() {
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (locationWatchRef.current != null) navigator.geolocation?.clearWatch(locationWatchRef.current);
       socket.off("order:new", onNewOrder);
       socket.off("order:confirmed", onPenggunaConfirmed);
       socket.off("order:cancelled", onOrderCancelled);
@@ -517,6 +519,7 @@ export default function DashboardMitra() {
     await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/done`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
     if (chatPollRef.current) clearInterval(chatPollRef.current);
     if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+    stopLocationWatch();
     setActiveOrder(null);
     setChatMsgs([]);
     setMitraPhase("diterima");
@@ -538,22 +541,31 @@ export default function DashboardMitra() {
     } catch { /* ignore */ } finally { setLoadingChatHistory(false); }
   };
 
+  // Hentikan live tracking lokasi mitra
+  const stopLocationWatch = () => {
+    if (locationWatchRef.current != null) {
+      navigator.geolocation?.clearWatch(locationWatchRef.current);
+      locationWatchRef.current = null;
+    }
+  };
+
   const startJourney = async () => {
     if (!activeOrder) return;
     await updatePhase("menuju");
-    // Hitung ETA dari mitra location → pickup location
-    // Gunakan mitra lat/lng dari data yang disimpan (data?.lat/lng) atau default estimasi 5 menit = 300 detik
-    const mitraLat = (activeOrder as any).mitraLat as number | null;
-    const mitraLng = (activeOrder as any).mitraLng as number | null;
+    setMitraPhase("menuju");
+
     const pLat = activeOrder.pickupLat;
     const pLng = activeOrder.pickupLng;
-    let secs = 300; // default 5 menit
-    if (mitraLat && mitraLng && pLat && pLng) {
-      const km = haversineKm(mitraLat, mitraLng, pLat, pLng);
-      secs = Math.max(60, calcEtaMinutes(km) * 60); // kalkulasi jam macet sesuai waktu
-    }
-    setEtaSecs(secs);
-    setMitraPhase("menuju");
+
+    // Fungsi hitung + set ETA berdasarkan posisi mitra saat ini
+    const updateEtaFromPos = (lat: number, lng: number) => {
+      if (!pLat || !pLng) return;
+      const km = haversineKm(lat, lng, pLat, pLng);
+      const secs = Math.max(30, calcEtaMinutes(km) * 60);
+      setEtaSecs(secs);
+    };
+
+    // Inisialisasi countdown timer — update setiap detik
     if (etaTimerRef.current) clearInterval(etaTimerRef.current);
     etaTimerRef.current = setInterval(() => {
       setEtaSecs(prev => {
@@ -561,6 +573,47 @@ export default function DashboardMitra() {
         return prev - 1;
       });
     }, 1000);
+
+    // Mulai watchPosition — kirim lokasi ke backend setiap ada perubahan
+    stopLocationWatch();
+    if (navigator.geolocation) {
+      // Set ETA awal dulu dari posisi pertama
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        updateEtaFromPos(lat, lng);
+        // Kirim lokasi awal ke backend
+        fetch(`${BASE}/api/mitra/location`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ lat, lng }),
+        }).catch(() => {});
+      }, () => {}, { enableHighAccuracy: true });
+
+      // Pantau perubahan lokasi secara terus-menerus
+      locationWatchRef.current = navigator.geolocation.watchPosition(
+        pos => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          // Update ETA di sisi mitra berdasarkan posisi terkini
+          updateEtaFromPos(lat, lng);
+          // Kirim ke backend → user polling 4 detik akan ambil otomatis
+          fetch(`${BASE}/api/mitra/location`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ lat, lng }),
+          }).catch(() => {});
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      );
+    } else if (pLat && pLng) {
+      // GPS tidak tersedia — pakai estimasi dari lokasi tersimpan
+      const mitraLat = (activeOrder as any).mitraLat as number | null;
+      const mitraLng = (activeOrder as any).mitraLng as number | null;
+      if (mitraLat && mitraLng) updateEtaFromPos(mitraLat, mitraLng);
+      else setEtaSecs(300);
+    }
   };
 
   const serviceLabel = (s: string) => {
@@ -924,6 +977,7 @@ export default function DashboardMitra() {
                       onClick={async () => {
                         await updatePhase("tiba");
                         if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+                        stopLocationWatch();
                         setMitraPhase("tiba");
                       }}
                       style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
