@@ -157,30 +157,14 @@ export default function DashboardPengguna() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  // Wallet
-  type WalletTx = { id: number; type: string; amount: number; description: string; createdAt: string };
-  const [walletData, setWalletData] = useState<{ balance: number; transactions: WalletTx[] } | null>(null);
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [topupModal, setTopupModal] = useState(false);
-  const [topupAmount, setTopupAmount] = useState("");
-  const [topupMethod, setTopupMethod] = useState("GoPay");
-  const [topupLoading, setTopupLoading] = useState(false);
-  const [topupMsg, setTopupMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [withdrawModal, setWithdrawModal] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawDest, setWithdrawDest] = useState("");
-  const [withdrawLoading, setWithdrawLoading] = useState(false);
-  const [withdrawMsg, setWithdrawMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  // Payment methods (localStorage)
-  const [paymentMethods, setPaymentMethods] = useState<{ id: string; type: string; label: string; icon: string }[]>(() => {
-    try { return JSON.parse(localStorage.getItem("ride-paymethods") ?? "null") ?? [
-      { id: "1", type: "ewallet", label: "GoPay", icon: "🟢" },
-      { id: "2", type: "ewallet", label: "OVO", icon: "🟣" },
-    ]; } catch { return []; }
-  });
-  const [addingPayMethod, setAddingPayMethod] = useState(false);
-  const [newPayType, setNewPayType] = useState("ewallet");
-  const [newPayLabel, setNewPayLabel] = useState("");
+  // Level helper
+  const getLevel = (orders: number) => {
+    if (orders >= 50) return { label: "Platinum", color: "#1a3a5c", bg: "#e8f0f8" };
+    if (orders >= 20) return { label: "Gold", color: "#b8860b", bg: "#fef9e7" };
+    if (orders >= 5) return { label: "Silver", color: "#607d8b", bg: "#f0f4f8" };
+    return { label: "Bronze", color: "#8d6e63", bg: "#fdf1ee" };
+  };
+
   // Profile save loading
   const [profileSaveLoading, setProfileSaveLoading] = useState(false);
   const [profileSaveMsg, setProfileSaveMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -313,19 +297,6 @@ export default function DashboardPengguna() {
       .catch(() => {});
   }, []);
 
-  // Fetch wallet saldo
-  const fetchWallet = () => {
-    setWalletLoading(true);
-    fetch("/api/pengguna/wallet", { credentials: "include" })
-      .then(r => r.json())
-      .then(d => { if (d.balance !== undefined) setWalletData(d); })
-      .catch(() => {})
-      .finally(() => setWalletLoading(false));
-  };
-  useEffect(() => {
-    fetchWallet();
-  }, []);
-
   // Sync notif settings to localStorage
   useEffect(() => {
     localStorage.setItem("ride-notif-p", JSON.stringify(notifSettings));
@@ -335,11 +306,6 @@ export default function DashboardPengguna() {
   useEffect(() => {
     localStorage.setItem("ride-alamat", JSON.stringify(alamatList));
   }, [alamatList]);
-
-  // Sync payment methods to localStorage
-  useEffect(() => {
-    localStorage.setItem("ride-paymethods", JSON.stringify(paymentMethods));
-  }, [paymentMethods]);
 
   // Sync default alamat to localStorage
   useEffect(() => {
@@ -1134,74 +1100,6 @@ export default function DashboardPengguna() {
             </div>
           )}
 
-          {/* ── TOP-UP MODAL ── */}
-          {topupModal && (
-            <div style={{ position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-              <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "28px 20px 36px", width: "100%", maxWidth: 480, boxShadow: "0 -8px 32px rgba(0,0,0,0.12)" }}>
-                <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", marginBottom: 16 }}>💳 Isi Saldo RIDE</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                  {["50000", "100000", "200000", "500000", "1000000", "2000000"].map(amt => (
-                    <button key={amt} onClick={() => setTopupAmount(amt)}
-                      style={{ background: topupAmount === amt ? "#1a7a6a" : "#f0f4f8", color: topupAmount === amt ? "#fff" : "#1a2a3a", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      {fmtRp(+amt)}
-                    </button>
-                  ))}
-                </div>
-                <input value={topupAmount} onChange={e => setTopupAmount(e.target.value.replace(/\D/g, ""))} placeholder="Atau masukkan nominal lain"
-                  style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginBottom: 12, outline: "none" }} />
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#7a8a9a", marginBottom: 8 }}>Metode Pembayaran</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, marginBottom: 14 }}>
-                  {["GoPay", "OVO", "DANA", "ShopeePay", "BCA Virtual Account", "Kartu Kredit"].map(m => (
-                    <button key={m} onClick={() => setTopupMethod(m)}
-                      style={{ padding: "6px 12px", borderRadius: 10, border: `1.5px solid ${topupMethod === m ? "#1a7a6a" : "#e0e8ef"}`, background: topupMethod === m ? "#e8f5f2" : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", color: topupMethod === m ? "#1a7a6a" : "#7a8a9a" }}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-                {topupMsg && <div style={{ fontSize: 12, color: topupMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{topupMsg.text}</div>}
-                <button disabled={topupLoading || !topupAmount || +topupAmount < 10000} onClick={async () => {
-                  setTopupLoading(true); setTopupMsg(null);
-                  const r = await fetch("/api/pengguna/wallet/topup", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: +topupAmount, method: topupMethod }) });
-                  const d = await r.json();
-                  setTopupLoading(false);
-                  if (d.ok) { setTopupMsg({ type: "ok", text: `Saldo berhasil ditambahkan!` }); setWalletData(w => w ? { ...w, balance: d.newBalance } : w); fetchWallet(); setTimeout(() => { setTopupModal(false); setTopupAmount(""); setTopupMsg(null); }, 1200); }
-                  else setTopupMsg({ type: "err", text: d.error ?? "Gagal top-up" });
-                }} style={{ width: "100%", background: !topupAmount || +topupAmount < 10000 ? "#b2dfdb" : "#1a7a6a", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
-                  {topupLoading ? "Memproses..." : `Bayar ${topupAmount ? fmtRp(+topupAmount) : ""}`}
-                </button>
-                <button onClick={() => { setTopupModal(false); setTopupAmount(""); setTopupMsg(null); }}
-                  style={{ width: "100%", background: "none", border: "none", fontSize: 14, color: "#7a8a9a", cursor: "pointer", padding: "6px 0" }}>Batal</button>
-              </div>
-            </div>
-          )}
-
-          {/* ── WITHDRAW MODAL ── */}
-          {withdrawModal && (
-            <div style={{ position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-              <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "28px 20px 36px", width: "100%", maxWidth: 480, boxShadow: "0 -8px 32px rgba(0,0,0,0.12)" }}>
-                <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", marginBottom: 4 }}>💸 Tarik Saldo</div>
-                <div style={{ fontSize: 12, color: "#9aa5b4", marginBottom: 14 }}>Saldo tersedia: <strong>{fmtRp(walletData?.balance ?? 0)}</strong></div>
-                <input value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value.replace(/\D/g, ""))} placeholder="Nominal tarik (min. Rp 10.000)"
-                  style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginBottom: 10, outline: "none" }} />
-                <input value={withdrawDest} onChange={e => setWithdrawDest(e.target.value)} placeholder="Tujuan: nama bank + no. rekening"
-                  style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginBottom: 14, outline: "none" }} />
-                {withdrawMsg && <div style={{ fontSize: 12, color: withdrawMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{withdrawMsg.text}</div>}
-                <button disabled={withdrawLoading || !withdrawAmount || +withdrawAmount < 10000 || !withdrawDest} onClick={async () => {
-                  setWithdrawLoading(true); setWithdrawMsg(null);
-                  const r = await fetch("/api/pengguna/wallet/withdraw", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: +withdrawAmount, destination: withdrawDest }) });
-                  const d = await r.json();
-                  setWithdrawLoading(false);
-                  if (d.ok) { setWithdrawMsg({ type: "ok", text: "Penarikan berhasil diproses!" }); setWalletData(w => w ? { ...w, balance: d.newBalance } : w); fetchWallet(); setTimeout(() => { setWithdrawModal(false); setWithdrawAmount(""); setWithdrawDest(""); setWithdrawMsg(null); }, 1200); }
-                  else setWithdrawMsg({ type: "err", text: d.error ?? "Gagal tarik saldo" });
-                }} style={{ width: "100%", background: !withdrawAmount || +withdrawAmount < 10000 ? "#b2dfdb" : "#e74c3c", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
-                  {withdrawLoading ? "Memproses..." : "Konfirmasi Penarikan"}
-                </button>
-                <button onClick={() => { setWithdrawModal(false); setWithdrawAmount(""); setWithdrawDest(""); setWithdrawMsg(null); }}
-                  style={{ width: "100%", background: "none", border: "none", fontSize: 14, color: "#7a8a9a", cursor: "pointer", padding: "6px 0" }}>Batal</button>
-              </div>
-            </div>
-          )}
-
           {/* ── HERO PROFIL ── */}
           {(() => {
             const photoUrl = photoPreview ?? (profile?.profilePhotoPath ? profile.profilePhotoPath : null);
@@ -1384,109 +1282,6 @@ export default function DashboardPengguna() {
             </div>
           </div>
 
-          {/* Menu grup 2: Dompet & Pembayaran */}
-          <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Dompet & Pembayaran</div>
-            {/* RIDE Wallet */}
-            <div>
-              <button onClick={() => setOpenAkunSection(openAkunSection === "dompet" ? null : "dompet")}
-                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                <span style={{ fontSize: 20 }}>💰</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>RIDE Wallet</div>
-                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>Saldo: {walletLoading ? "..." : fmtRp(walletData?.balance ?? 0)}</div>
-                </div>
-                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "dompet" ? "∨" : "›"}</span>
-              </button>
-              {openAkunSection === "dompet" && (
-                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                  {/* Balance card */}
-                  <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #1a7a6a 100%)", borderRadius: 14, padding: "16px 16px 14px", marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 4 }}>Saldo RIDE Anda</div>
-                    <div style={{ fontSize: 28, fontWeight: 900, color: "#fff" }}>{walletLoading ? "..." : fmtRp(walletData?.balance ?? 0)}</div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                      <button onClick={() => { setTopupModal(true); setTopupMsg(null); }}
-                        style={{ flex: 1, background: "#fff", border: "none", borderRadius: 10, padding: "8px 0", fontSize: 12, fontWeight: 800, color: "#1a7a6a", cursor: "pointer" }}>+ Isi Saldo</button>
-                      <button onClick={() => { setWithdrawModal(true); setWithdrawMsg(null); }}
-                        style={{ flex: 1, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 10, padding: "8px 0", fontSize: 12, fontWeight: 800, color: "#fff", cursor: "pointer" }}>↓ Tarik</button>
-                    </div>
-                  </div>
-                  {/* Transactions */}
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1a2a3a", marginBottom: 8 }}>Riwayat Transaksi</div>
-                  {(!walletData?.transactions?.length) && <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center" as const, padding: "12px 0" }}>Belum ada transaksi.</div>}
-                  {walletData?.transactions?.slice(0, 10).map(tx => (
-                    <div key={tx.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid #f0f4f8" }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: tx.type === "topup" ? "#e8f5f2" : "#fff0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
-                        {tx.type === "topup" ? "⬆️" : "⬇️"}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{tx.description}</div>
-                        <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 1 }}>{new Date(tx.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: tx.type === "topup" ? "#1a7a6a" : "#e74c3c" }}>
-                        {tx.type === "topup" ? "+" : "-"}{fmtRp(tx.amount)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {/* Metode Pembayaran */}
-            <div>
-              <button onClick={() => setOpenAkunSection(openAkunSection === "metode-bayar" ? null : "metode-bayar")}
-                style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
-                <span style={{ fontSize: 20 }}>💳</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Metode Pembayaran</div>
-                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{paymentMethods.length} metode tersimpan</div>
-                </div>
-                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "metode-bayar" ? "∨" : "›"}</span>
-              </button>
-              {openAkunSection === "metode-bayar" && (
-                <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                  {paymentMethods.map(pm => (
-                    <div key={pm.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "#f8fafc", borderRadius: 10, padding: "10px 12px", marginTop: 8 }}>
-                      <span style={{ fontSize: 18 }}>{pm.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{pm.label}</div>
-                        <div style={{ fontSize: 11, color: "#9aa5b4" }}>{pm.type === "ewallet" ? "E-Wallet" : pm.type === "bank" ? "Rekening Bank" : "Kartu"}</div>
-                      </div>
-                      <button onClick={() => setPaymentMethods(m => m.filter(x => x.id !== pm.id))}
-                        style={{ background: "none", border: "none", color: "#e74c3c", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>×</button>
-                    </div>
-                  ))}
-                  {!addingPayMethod ? (
-                    <button onClick={() => setAddingPayMethod(true)}
-                      style={{ width: "100%", background: "none", border: "1.5px dashed #b0bec5", borderRadius: 10, padding: "9px 0", fontSize: 13, color: "#9aa5b4", cursor: "pointer", marginTop: 10 }}>
-                      + Tambah Metode Baru
-                    </button>
-                  ) : (
-                    <div style={{ marginTop: 10 }}>
-                      <select value={newPayType} onChange={e => setNewPayType(e.target.value)}
-                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "8px 10px", fontSize: 13, marginBottom: 6, outline: "none", background: "#fff" }}>
-                        <option value="ewallet">E-Wallet</option>
-                        <option value="bank">Rekening Bank</option>
-                        <option value="card">Kartu Kredit/Debit</option>
-                      </select>
-                      <input value={newPayLabel} onChange={e => setNewPayLabel(e.target.value)} placeholder="Nama (misal: GoPay, BCA, Visa)"
-                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "8px 10px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 8, outline: "none" }} />
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => {
-                          if (!newPayLabel.trim()) return;
-                          const icon = newPayType === "ewallet" ? "📱" : newPayType === "bank" ? "🏦" : "💳";
-                          setPaymentMethods(m => [...m, { id: Date.now().toString(), type: newPayType, label: newPayLabel.trim(), icon }]);
-                          setNewPayLabel(""); setAddingPayMethod(false);
-                        }} style={{ flex: 1, background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 10, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Simpan</button>
-                        <button onClick={() => setAddingPayMethod(false)}
-                          style={{ flex: 1, background: "#f0f4f8", color: "#7a8a9a", border: "none", borderRadius: 10, padding: "8px 0", fontSize: 13, cursor: "pointer" }}>Batal</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Menu grup 3: Voucher & Promo */}
           <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
             <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Voucher & Promo</div>
@@ -1561,7 +1356,7 @@ export default function DashboardPengguna() {
                     </button>
                   </div>
                   <div style={{ fontSize: 11, color: "#7a8a9a", marginTop: 10, lineHeight: 1.5 }}>
-                    Bagikan kode referral Anda ke teman. Setiap teman yang mendaftar dan menyelesaikan order pertama, Anda mendapat bonus Rp 25.000 ke RIDE Wallet.
+                    Bagikan kode referral Anda ke teman. Setiap teman yang mendaftar dan menyelesaikan order pertama, Anda mendapat reward eksklusif dari RIDE.
                   </div>
                 </div>
               )}
