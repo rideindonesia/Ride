@@ -370,17 +370,21 @@ router.get("/keuangan/summary", requireAdmin, async (_req, res) => {
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
   const lastMonthStart = new Date(monthStart); lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
 
-  // cash = mitra pegang uang, fee belum masuk ke RIDE (unpaid)
-  // wallet/transfer = dipotong otomatis (paid)
-  const isCash = sql`(${ordersTable.paymentData}->>'paymentMethod') = 'cash'`;
-  const isNonCash = sql`(${ordersTable.paymentData}->>'paymentMethod') != 'cash' AND ${ordersTable.paymentData} IS NOT NULL`;
+  // Semua pembayaran (cash/transfer/QRIS) masuk ke mitra dulu.
+  // Platform fee harus disetorkan mitra ke RIDE.
+  // isPlatformFeePaid = true → sudah disetorkan/lunas
+  // isPlatformFeePaid = false → masih terutang (belum dibayar ke RIDE)
+  const done = eq(ordersTable.status, "done");
+  const unpaid = eq(ordersTable.isPlatformFeePaid, false);
+  const paid = eq(ordersTable.isPlatformFeePaid, true);
 
-  const [[allTime], [thisMonth], [lastMonth], [unpaidAll], [unpaidMonth]] = await Promise.all([
-    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(eq(ordersTable.status, "done")),
-    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, monthStart))),
-    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, lastMonthStart), lte(ordersTable.createdAt, monthStart))),
-    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), isCash)),
-    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), isCash, gte(ordersTable.createdAt, monthStart))),
+  const [[allTime], [thisMonth], [lastMonth], [unpaidAll], [unpaidMonth], [paidAll]] = await Promise.all([
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(done),
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(done, gte(ordersTable.createdAt, monthStart))),
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(done, gte(ordersTable.createdAt, lastMonthStart), lte(ordersTable.createdAt, monthStart))),
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(done, unpaid)),
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(done, unpaid, gte(ordersTable.createdAt, monthStart))),
+    db.select({ total: sum(ordersTable.platformFee), c: count() }).from(ordersTable).where(and(done, paid)),
   ]);
   res.json({
     allTimeTotal: Number(allTime.total ?? 0), allTimeOrders: Number(allTime.c),
@@ -388,6 +392,7 @@ router.get("/keuangan/summary", requireAdmin, async (_req, res) => {
     lastMonthTotal: Number(lastMonth.total ?? 0), lastMonthOrders: Number(lastMonth.c),
     unpaidTotal: Number(unpaidAll.total ?? 0), unpaidOrders: Number(unpaidAll.c),
     unpaidThisMonth: Number(unpaidMonth.total ?? 0), unpaidThisMonthOrders: Number(unpaidMonth.c),
+    paidTotal: Number(paidAll.total ?? 0), paidOrders: Number(paidAll.c),
   });
 });
 
@@ -399,7 +404,7 @@ router.get("/keuangan/fee-per-mitra", requireAdmin, async (req, res) => {
 
   const doneMitra = and(eq(ordersTable.status, "done"), sql`${ordersTable.mitraId} IS NOT NULL`);
 
-  // Total platform fee per mitra (all payment methods)
+  // Total platform fee per mitra
   const rows = await db.select({
     mitraId: ordersTable.mitraId,
     total: sum(ordersTable.platformFee),
@@ -417,22 +422,27 @@ router.get("/keuangan/fee-per-mitra", requireAdmin, async (req, res) => {
     nameMap = Object.fromEntries(users.map(u => [u.id, { name: u.name, email: u.email }]));
   }
 
-  // Unpaid fee per mitra (cash orders only)
+  // Fee belum dibayar ke RIDE (isPlatformFeePaid = false)
   let unpaidMap: Record<number, number> = {};
+  let unpaidCountMap: Record<number, number> = {};
   if (mitraIds.length > 0) {
     const unpaidRows = await db.select({
       mitraId: ordersTable.mitraId,
       unpaid: sum(ordersTable.platformFee),
+      uc: count(),
     }).from(ordersTable)
       .where(and(
         eq(ordersTable.status, "done"),
+        eq(ordersTable.isPlatformFeePaid, false),
         sql`${ordersTable.mitraId} IS NOT NULL`,
-        sql`(${ordersTable.paymentData}->>'paymentMethod') = 'cash'`,
         inArray(ordersTable.mitraId, mitraIds as [number, ...number[]]),
       ))
       .groupBy(ordersTable.mitraId);
     for (const r of unpaidRows) {
-      if (r.mitraId) unpaidMap[r.mitraId] = Number(r.unpaid ?? 0);
+      if (r.mitraId) {
+        unpaidMap[r.mitraId] = Number(r.unpaid ?? 0);
+        unpaidCountMap[r.mitraId] = Number(r.uc);
+      }
     }
   }
 
@@ -443,7 +453,22 @@ router.get("/keuangan/fee-per-mitra", requireAdmin, async (req, res) => {
     totalFee: Number(r.total ?? 0),
     totalOrders: Number(r.c),
     unpaidFee: r.mitraId ? (unpaidMap[r.mitraId] ?? 0) : 0,
+    unpaidOrders: r.mitraId ? (unpaidCountMap[r.mitraId] ?? 0) : 0,
   })));
+});
+
+// PATCH /api/admin/keuangan/mark-paid/:mitraId — tandai semua fee mitra sebagai lunas
+router.patch("/keuangan/mark-paid/:mitraId", requireAdmin, async (req, res) => {
+  const mitraId = parseInt(req.params.mitraId);
+  const now = new Date();
+  const result = await db.update(ordersTable)
+    .set({ isPlatformFeePaid: true, platformFeePaidAt: now, updatedAt: now })
+    .where(and(
+      eq(ordersTable.status, "done"),
+      eq(ordersTable.isPlatformFeePaid, false),
+      eq(ordersTable.mitraId, mitraId),
+    ));
+  res.json({ ok: true, paidAt: now });
 });
 
 // ── Vouchers ──────────────────────────────────────────────────────────────────

@@ -24,6 +24,8 @@ export const ordersTable = pgTable("orders", {
   platformFee: integer("platform_fee"),
   rating: real("rating"),
   reviewComment: text("review_comment"),
+  isPlatformFeePaid: boolean("is_platform_fee_paid").default(false).notNull(),
+  platformFeePaidAt: timestamp("platform_fee_paid_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
