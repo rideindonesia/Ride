@@ -535,22 +535,32 @@ router.delete("/orders/:id", async (req, res) => {
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
   const orderId = parseInt(req.params.id);
+  const cancelReason: string | undefined = req.body?.cancelReason;
+
   const [cancelled] = await db.update(ordersTable)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId)))
+    .set({
+      status: "cancelled",
+      canceledBy: "pengguna",
+      cancelReason: cancelReason ?? null,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(ordersTable.id, orderId),
+      eq(ordersTable.penggunaId, penggunaId),
+      or(eq(ordersTable.status, "pending"), eq(ordersTable.status, "accepted")) as any,
+    ))
     .returning({ id: ordersTable.id, mitraId: ordersTable.mitraId });
 
-  // Notify the assigned mitra (if any) via Socket.io so their dashboard updates instantly
   if (cancelled) {
     try {
-      io?.to(`order:${cancelled.id}`).emit("order:cancelled", { orderId: cancelled.id });
+      io?.to(`order:${cancelled.id}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
       if (cancelled.mitraId) {
-        io?.to(`mitra:${cancelled.mitraId}`).emit("order:cancelled", { orderId: cancelled.id });
+        io?.to(`mitra:${cancelled.mitraId}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
       }
     } catch { /* ignore */ }
   }
 
-  res.json({ ok: true });
+  res.json({ ok: !!cancelled });
 });
 
 // GET /api/pengguna/profile — profil lengkap pengguna

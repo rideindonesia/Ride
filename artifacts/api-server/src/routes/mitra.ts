@@ -539,6 +539,41 @@ router.patch("/orders/:id/reject", requireMitra, async (req, res) => {
   res.json({ ok: true });
 });
 
+// PATCH /api/mitra/orders/:id/cancel — mitra membatalkan order yang sudah diterima
+router.patch("/orders/:id/cancel", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const orderId = parseInt(req.params.id);
+  const { cancelReason } = req.body as { cancelReason?: string };
+
+  const [cancelled] = await db.update(ordersTable)
+    .set({
+      status: "cancelled",
+      canceledBy: "mitra",
+      cancelReason: cancelReason ?? null,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(ordersTable.id, orderId),
+      eq(ordersTable.mitraId, mitraId),
+      or(eq(ordersTable.status, "accepted"), eq(ordersTable.status, "pending")) as any,
+    ))
+    .returning({ id: ordersTable.id, penggunaId: ordersTable.penggunaId });
+
+  if (cancelled) {
+    try {
+      io?.to(`order:${orderId}`).emit("order:cancelled", { orderId, canceledBy: "mitra", cancelReason });
+      io?.to(`user:${cancelled.penggunaId}`).emit("order:cancelled", { orderId, canceledBy: "mitra", cancelReason });
+      sendPushToUsers([cancelled.penggunaId], {
+        title: "❌ Mitra Membatalkan Order",
+        body: cancelReason ? `Alasan: ${cancelReason}` : "Mitra tidak dapat melanjutkan pesanan.",
+        url: "/",
+      });
+    } catch { /* ignore */ }
+  }
+
+  res.json({ ok: !!cancelled });
+});
+
 // PATCH /api/mitra/orders/:id/phase — update tracking phase
 router.patch("/orders/:id/phase", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;

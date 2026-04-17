@@ -168,6 +168,11 @@ export default function DashboardMitra() {
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // Cancel order modal
+  const [mCancelModalOpen, setMCancelModalOpen] = useState(false);
+  const [mCancelReason, setMCancelReason] = useState("");
+  const [mCancelOther, setMCancelOther] = useState("");
+  const [mCancelling, setMCancelling] = useState(false);
   const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
@@ -591,6 +596,24 @@ export default function DashboardMitra() {
     });
   };
 
+  const doCancelOrderMitra = async () => {
+    if (!activeOrder || mCancelling) return;
+    const reason = mCancelReason === "Lainnya" ? mCancelOther.trim() : mCancelReason;
+    if (!reason) return;
+    setMCancelling(true);
+    await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/cancel`, {
+      method: "PATCH", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancelReason: reason }),
+    }).catch(() => null);
+    setMCancelling(false);
+    setMCancelModalOpen(false);
+    setMCancelReason("");
+    setMCancelOther("");
+    setActiveOrder(null);
+    setMitraPhase("diterima");
+  };
+
   const acceptOrder = async (orderId: number) => {
     await fetch(`${BASE}/api/mitra/orders/${orderId}/accept`, { method: "PATCH" });
     const current = incoming;
@@ -733,6 +756,47 @@ export default function DashboardMitra() {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", overflow: "hidden", position: "relative" }}>
       <RideToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* ── Cancel Order Modal (Mitra) ── */}
+      {mCancelModalOpen && activeOrder && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}
+          onClick={() => !mCancelling && setMCancelModalOpen(false)}>
+          <div style={{ background: "#fff", borderRadius: 22, padding: "24px 20px 20px", width: "100%", maxWidth: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 28, textAlign: "center", marginBottom: 6 }}>⚠️</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", textAlign: "center", marginBottom: 4 }}>Batalkan Order?</div>
+            <div style={{ fontSize: 13, color: "#7a8a9a", textAlign: "center", marginBottom: 18, lineHeight: 1.5 }}>
+              Membatalkan order akan memberitahu konsumen dan memengaruhi reputasi Anda.
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#4a5a6a", marginBottom: 8 }}>Alasan pembatalan:</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              {["Kendaraan mitra bermasalah", "Lokasi terlalu jauh", "Order tidak sesuai kemampuan", "Situasi darurat mendesak", "Lainnya"].map(opt => (
+                <button key={opt} onClick={() => { setMCancelReason(opt); if (opt !== "Lainnya") setMCancelOther(""); }}
+                  style={{ textAlign: "left", padding: "10px 14px", borderRadius: 12, border: mCancelReason === opt ? "2px solid #dc2626" : "1.5px solid #e0e8f0", background: mCancelReason === opt ? "#fef2f2" : "#fff", fontSize: 13, color: mCancelReason === opt ? "#dc2626" : "#4a5a6a", fontWeight: mCancelReason === opt ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 8, border: mCancelReason === opt ? "5px solid #dc2626" : "2px solid #d0dce8", flexShrink: 0 }} />
+                  {opt}
+                </button>
+              ))}
+              {mCancelReason === "Lainnya" && (
+                <textarea value={mCancelOther} onChange={e => setMCancelOther(e.target.value)}
+                  placeholder="Tuliskan alasan pembatalan..."
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, color: "#1a2a3a", resize: "none", outline: "none", minHeight: 72, fontFamily: "inherit", boxSizing: "border-box" }} />
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setMCancelModalOpen(false)} disabled={mCancelling}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "1.5px solid #d0dce8", background: "#fff", fontSize: 14, fontWeight: 700, color: "#4a5a6a", cursor: "pointer" }}>
+                Kembali
+              </button>
+              <button onClick={doCancelOrderMitra}
+                disabled={mCancelling || !mCancelReason || (mCancelReason === "Lainnya" && !mCancelOther.trim())}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "none", background: mCancelling || !mCancelReason ? "#fca5a5" : "#dc2626", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: !mCancelReason || (mCancelReason === "Lainnya" && !mCancelOther.trim()) ? 0.6 : 1 }}>
+                {mCancelling ? "Membatalkan..." : "Ya, Batalkan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 14px 16px", flexShrink: 0 }}>
@@ -979,6 +1043,10 @@ export default function DashboardMitra() {
                     >
                       💬 Chat dengan Konsumen
                     </button>
+                    <button onClick={() => { setMCancelReason(""); setMCancelOther(""); setMCancelModalOpen(true); }}
+                      style={{ marginTop: 8, width: "100%", padding: "11px", borderRadius: 14, border: "1.5px solid #fca5a5", background: "rgba(254,226,226,0.7)", color: "#dc2626", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      ✕ Batalkan & Tolak Order
+                    </button>
                   </>
                 )}
 
@@ -1027,6 +1095,11 @@ export default function DashboardMitra() {
                         >➤</button>
                       </div>
                     </div>
+                    {/* Batalkan order di fase chat */}
+                    <button onClick={() => { setMCancelReason(""); setMCancelOther(""); setMCancelModalOpen(true); }}
+                      style={{ marginBottom: 8, width: "100%", padding: "10px", borderRadius: 14, border: "1.5px solid #fca5a5", background: "rgba(254,226,226,0.7)", color: "#dc2626", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      ✕ Batalkan Order Ini
+                    </button>
                     {/* Tunggu konfirmasi pengguna atau tampilkan aksi */}
                     {!penggunaConfirmed ? (
                       <div style={{ background: "#f0f4f8", borderRadius: 12, padding: "12px 14px", display: "flex", gap: 8, alignItems: "center" }}>

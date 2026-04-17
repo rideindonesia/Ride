@@ -127,6 +127,11 @@ export default function DashboardPengguna() {
   const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
+  // Cancel order modal
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelOther, setCancelOther] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   const [chatHistoryOrderId, setChatHistoryOrderId] = useState<number | null>(null);
   const [chatHistoryMsgs, setChatHistoryMsgs] = useState<ChatMsg[]>([]);
   const [loadingChatHistory, setLoadingChatHistory] = useState(false);
@@ -490,6 +495,23 @@ export default function DashboardPengguna() {
     setChatSending(false);
   };
 
+  const doCancelOrder = async () => {
+    if (!activeOrder || cancelling) return;
+    const reason = cancelReason === "Lainnya" ? cancelOther.trim() : cancelReason;
+    if (!reason) return;
+    setCancelling(true);
+    await fetch(`/api/pengguna/orders/${activeOrder.id}`, {
+      method: "DELETE", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancelReason: reason }),
+    }).catch(() => null);
+    setCancelling(false);
+    setCancelModalOpen(false);
+    setCancelReason("");
+    setCancelOther("");
+    setActiveOrder(null);
+  };
+
   const fetchChatHistory = (orderId: number) => {
     if (chatHistoryOrderId === orderId) { setChatHistoryOrderId(null); return; }
     setChatHistoryOrderId(orderId);
@@ -655,6 +677,49 @@ export default function DashboardPengguna() {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", fontFamily: "'Inter', sans-serif", overflow: "hidden" }}>
       <RideToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* ── Cancel Order Modal ── */}
+      {cancelModalOpen && activeOrder && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}
+          onClick={() => !cancelling && setCancelModalOpen(false)}>
+          <div style={{ background: "#fff", borderRadius: 22, padding: "24px 20px 20px", width: "100%", maxWidth: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 28, textAlign: "center", marginBottom: 6 }}>⚠️</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", textAlign: "center", marginBottom: 4 }}>Batalkan Pesanan?</div>
+            <div style={{ fontSize: 13, color: "#7a8a9a", textAlign: "center", marginBottom: 18, lineHeight: 1.5 }}>
+              {activeOrder.mitraName
+                ? `Mitra ${activeOrder.mitraName} sedang dalam perjalanan. Pembatalan dapat mempengaruhi kepercayaan.`
+                : "Order Anda masih mencari mitra. Pembatalan tidak dikenakan biaya."}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#4a5a6a", marginBottom: 8 }}>Alasan pembatalan:</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              {["Saya berubah pikiran", "Menemukan mitra sendiri", "Order dibuat salah", "Terlalu lama menunggu", "Lainnya"].map(opt => (
+                <button key={opt} onClick={() => { setCancelReason(opt); if (opt !== "Lainnya") setCancelOther(""); }}
+                  style={{ textAlign: "left", padding: "10px 14px", borderRadius: 12, border: cancelReason === opt ? "2px solid #dc2626" : "1.5px solid #e0e8f0", background: cancelReason === opt ? "#fef2f2" : "#fff", fontSize: 13, color: cancelReason === opt ? "#dc2626" : "#4a5a6a", fontWeight: cancelReason === opt ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 8, border: cancelReason === opt ? "5px solid #dc2626" : "2px solid #d0dce8", flexShrink: 0 }} />
+                  {opt}
+                </button>
+              ))}
+              {cancelReason === "Lainnya" && (
+                <textarea value={cancelOther} onChange={e => setCancelOther(e.target.value)}
+                  placeholder="Tuliskan alasan pembatalan..."
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, color: "#1a2a3a", resize: "none", outline: "none", minHeight: 72, fontFamily: "inherit", boxSizing: "border-box" }} />
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setCancelModalOpen(false)} disabled={cancelling}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "1.5px solid #d0dce8", background: "#fff", fontSize: 14, fontWeight: 700, color: "#4a5a6a", cursor: "pointer" }}>
+                Kembali
+              </button>
+              <button onClick={doCancelOrder}
+                disabled={cancelling || !cancelReason || (cancelReason === "Lainnya" && !cancelOther.trim())}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "none", background: cancelling || !cancelReason ? "#fca5a5" : "#dc2626", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: !cancelReason || (cancelReason === "Lainnya" && !cancelOther.trim()) ? 0.6 : 1 }}>
+                {cancelling ? "Membatalkan..." : "Ya, Batalkan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sub-page top bar — shown for non-beranda tabs */}
       {activeTab !== "beranda" && (
@@ -897,32 +962,41 @@ export default function DashboardPengguna() {
           {/* Order Aktif */}
           {pesananSubTab === "aktif" && (
             activeOrder ? (
-              <div onClick={() => navigate(`/order/bengkel?resume=${activeOrder.id}`)}
-                style={{ borderRadius: 18, background: "linear-gradient(135deg, #0d2137 0%, #1a3a5c 100%)", padding: 16, cursor: "pointer", border: "1.5px solid rgba(26,122,106,0.4)", boxShadow: "0 4px 16px rgba(26,58,92,0.25)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 4, background: "#22c55e", boxShadow: "0 0 6px #22c55e" }} />
-                    <span style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>Order Sedang Berjalan</span>
-                  </div>
-                  <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 18 }}>›</span>
-                </div>
-                <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🔧</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{activeOrder.vehicleModel || "Bengkel Panggilan"}</div>
-                    <div style={{ color: "#5fd3c4", fontSize: 12, marginTop: 2 }}>
-                      {activeOrder.trackingPhase === "selesai" ? "💳 Menunggu pembayaran"
-                        : activeOrder.trackingPhase === "pengerjaan" ? "🔧 Sedang dikerjakan"
-                        : activeOrder.trackingPhase === "tiba" ? "📍 Mitra sudah tiba"
-                        : activeOrder.mitraName ? `🏍️ ${activeOrder.mitraName} menuju lokasi`
-                        : "🔍 Mencari mitra terdekat..."}
+              <div>
+                <div onClick={() => navigate(`/order/bengkel?resume=${activeOrder.id}`)}
+                  style={{ borderRadius: 18, background: "linear-gradient(135deg, #0d2137 0%, #1a3a5c 100%)", padding: 16, cursor: "pointer", border: "1.5px solid rgba(26,122,106,0.4)", boxShadow: "0 4px 16px rgba(26,58,92,0.25)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 4, background: "#22c55e", boxShadow: "0 0 6px #22c55e" }} />
+                      <span style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>Order Sedang Berjalan</span>
                     </div>
-                    <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 2 }}>#{activeOrder.orderNo}</div>
+                    <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 18 }}>›</span>
                   </div>
-                  <div style={{ background: activeOrder.trackingPhase === "selesai" ? "#ea580c" : activeOrder.trackingPhase === "pengerjaan" ? "#7c3aed" : activeOrder.trackingPhase === "tiba" ? "#0284c7" : "#1a7a6a", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                    {activeOrder.trackingPhase === "selesai" ? "💳 Bayar" : activeOrder.trackingPhase === "pengerjaan" ? "🔧 Pengerjaan" : activeOrder.trackingPhase === "tiba" ? "📍 Tiba" : "✅ Diterima"}
+                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🔧</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{activeOrder.vehicleModel || "Bengkel Panggilan"}</div>
+                      <div style={{ color: "#5fd3c4", fontSize: 12, marginTop: 2 }}>
+                        {activeOrder.trackingPhase === "selesai" ? "💳 Menunggu pembayaran"
+                          : activeOrder.trackingPhase === "pengerjaan" ? "🔧 Sedang dikerjakan"
+                          : activeOrder.trackingPhase === "tiba" ? "📍 Mitra sudah tiba"
+                          : activeOrder.mitraName ? `🏍️ ${activeOrder.mitraName} menuju lokasi`
+                          : "🔍 Mencari mitra terdekat..."}
+                      </div>
+                      <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 2 }}>#{activeOrder.orderNo}</div>
+                    </div>
+                    <div style={{ background: activeOrder.trackingPhase === "selesai" ? "#ea580c" : activeOrder.trackingPhase === "pengerjaan" ? "#7c3aed" : activeOrder.trackingPhase === "tiba" ? "#0284c7" : "#1a7a6a", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                      {activeOrder.trackingPhase === "selesai" ? "💳 Bayar" : activeOrder.trackingPhase === "pengerjaan" ? "🔧 Pengerjaan" : activeOrder.trackingPhase === "tiba" ? "📍 Tiba" : "✅ Diterima"}
+                    </div>
                   </div>
                 </div>
+                {/* Cancel button — only when order hasn't started service */}
+                {activeOrder.trackingPhase !== "selesai" && activeOrder.trackingPhase !== "pengerjaan" && (
+                  <button onClick={() => { setCancelReason(""); setCancelOther(""); setCancelModalOpen(true); }}
+                    style={{ marginTop: 10, width: "100%", padding: "11px", borderRadius: 14, border: "1.5px solid #fca5a5", background: "rgba(254,226,226,0.7)", color: "#dc2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    ✕ Batalkan Pesanan
+                  </button>
+                )}
               </div>
             ) : (
               <div style={{ textAlign: "center", padding: "56px 24px" }}>
