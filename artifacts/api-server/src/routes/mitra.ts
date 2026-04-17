@@ -526,10 +526,10 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   const { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod } = req.body;
   const paymentData = { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod };
 
-  // Hitung platform fee: 100% biaya panggilan + 100% biaya layanan & admin
+  // Hitung platform fee: 15% dari biaya panggilan + 100% biaya layanan & admin
   const callFee = Number(biayaPanggilan) || 0;
   const layanan = Number(biayaLayanan) || 0;
-  const platformFee = callFee + layanan;
+  const platformFee = Math.round(callFee * 0.15) + layanan;
 
   const [updated] = await db.update(ordersTable)
     .set({ paymentData, platformFee, updatedAt: new Date() })
