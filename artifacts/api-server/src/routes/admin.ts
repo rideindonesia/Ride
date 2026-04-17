@@ -156,27 +156,43 @@ router.get("/mitra", requireAdmin, async (req, res) => {
       .where(baseWhere.length > 0 ? and(...baseWhere as [any, ...any[]]) : undefined),
   ]);
 
-  // Get order counts per mitra
+  // Get order counts + platform fee + avg rating per mitra
   const mitraEmails = rows.map(r => r.email);
   let orderCounts: Record<string, number> = {};
+  let platformFeeTotals: Record<string, number> = {};
+  let avgRatings: Record<string, number | null> = {};
   if (mitraEmails.length > 0) {
     const userRows = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable)
       .where(inArray(usersTable.email, mitraEmails));
     const userIdToEmail = Object.fromEntries(userRows.map(u => [u.id, u.email]));
     const userIds = userRows.map(u => u.id);
     if (userIds.length > 0) {
-      const counts = await db.select({ mitraId: ordersTable.mitraId, c: count() })
-        .from(ordersTable).where(and(eq(ordersTable.status, "done"), inArray(ordersTable.mitraId, userIds as [number, ...number[]])))
+      const stats = await db.select({
+        mitraId: ordersTable.mitraId,
+        c: count(),
+        totalFee: sum(ordersTable.platformFee),
+        avgRating: sql<number>`AVG(${ordersTable.rating})`,
+      }).from(ordersTable)
+        .where(and(eq(ordersTable.status, "done"), inArray(ordersTable.mitraId, userIds as [number, ...number[]])))
         .groupBy(ordersTable.mitraId);
-      for (const c of counts) {
-        const email = userIdToEmail[c.mitraId!];
-        if (email) orderCounts[email] = Number(c.c);
+      for (const s of stats) {
+        const email = userIdToEmail[s.mitraId!];
+        if (email) {
+          orderCounts[email] = Number(s.c);
+          platformFeeTotals[email] = Number(s.totalFee ?? 0);
+          avgRatings[email] = s.avgRating != null ? Math.round(Number(s.avgRating) * 10) / 10 : null;
+        }
       }
     }
   }
 
   res.json({
-    data: rows.map(r => ({ ...r, totalOrders: orderCounts[r.email] ?? 0 })),
+    data: rows.map(r => ({
+      ...r,
+      totalOrders: orderCounts[r.email] ?? 0,
+      platformFeeTotal: platformFeeTotals[r.email] ?? 0,
+      avgRating: avgRatings[r.email] ?? null,
+    })),
     total: Number(totalRow.c),
     page,
     limit,

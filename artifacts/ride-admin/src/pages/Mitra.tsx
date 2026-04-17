@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, formatDate, SERVICE_LABELS, MITRA_STATUS_COLORS } from "@/lib/api";
-import { Search, Eye, CheckCircle, XCircle, PauseCircle, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { api, formatDate, rupiahFormat, SERVICE_LABELS, MITRA_STATUS_COLORS } from "@/lib/api";
+import { Search, Eye, CheckCircle, XCircle, PauseCircle, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MitraItem {
   id: number; name: string; email: string; phone: string; serviceType: string;
   operatingCity: string; status: string; createdAt: string; totalOrders: number;
+  platformFeeTotal: number; avgRating: number | null;
 }
 
 interface MitraDetail extends MitraItem {
@@ -94,7 +95,7 @@ export default function Mitra() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {["Nama & Email", "Layanan", "Kota", "Status", "Order", "Terdaftar", "Aksi"].map(h => (
+                {["Nama & Email", "Layanan", "Kota", "Status", "Order", "Platform Fee", "Rata-rata Rating", "Terdaftar", "Aksi"].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -117,7 +118,25 @@ export default function Mitra() {
                       {m.status === "pending" ? "Menunggu" : m.status === "approved" ? "Disetujui" : m.status === "rejected" ? "Ditolak" : m.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{m.totalOrders}</td>
+                  <td className="px-4 py-3 text-gray-700 font-medium">{m.totalOrders}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {m.platformFeeTotal > 0 ? (
+                      <span className="font-semibold text-[#1a7a6a]">{rupiahFormat(m.platformFeeTotal)}</span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">–</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {m.avgRating != null ? (
+                      <div className="flex items-center gap-1">
+                        <Star size={12} className="fill-amber-400 text-amber-400" />
+                        <span className="text-xs font-semibold text-amber-600">{m.avgRating.toFixed(1)}</span>
+                        <span className="text-xs text-gray-400">/ 5</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-300 text-xs">Belum ada</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{formatDate(m.createdAt)}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => setSelected(m)} className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1a3a5c]" title="Lihat Detail">
@@ -127,7 +146,7 @@ export default function Mitra() {
                 </tr>
               ))}
               {!data?.data?.length && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data</td></tr>
               )}
             </tbody>
           </table>
@@ -158,10 +177,8 @@ export default function Mitra() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
                   ["Layanan", SERVICE_LABELS[selected.serviceType] ?? selected.serviceType],
-                  ["Kota", selected.operatingCity],
-                  ["Telepon", selected.phone],
-                  ["Total Order", String(selected.totalOrders)],
-                  ["Platform Fee", `Rp ${(detail?.platformFeeTotal ?? 0).toLocaleString("id-ID")}`],
+                  ["Kota Operasi", selected.operatingCity],
+                  ["No. HP", selected.phone],
                   ["Terdaftar", formatDate(selected.createdAt)],
                 ].map(([k, v]) => (
                   <div key={k} className="bg-gray-50 rounded-lg p-3">
@@ -169,6 +186,29 @@ export default function Mitra() {
                     <p className="font-medium text-gray-800">{v}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Stats highlight */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[#1a3a5c]/5 border border-[#1a3a5c]/10 rounded-xl p-3 text-center">
+                  <p className="text-xs text-[#1a3a5c]/60 mb-0.5">Total Order Selesai</p>
+                  <p className="text-2xl font-bold text-[#1a3a5c]">{selected.totalOrders}</p>
+                </div>
+                <div className="bg-[#1a7a6a]/5 border border-[#1a7a6a]/10 rounded-xl p-3 text-center">
+                  <p className="text-xs text-[#1a7a6a]/60 mb-0.5">Total Platform Fee</p>
+                  <p className="text-lg font-bold text-[#1a7a6a] leading-tight mt-0.5">{rupiahFormat(detail?.platformFeeTotal ?? selected.platformFeeTotal ?? 0)}</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+                  <p className="text-xs text-amber-600/70 mb-0.5">Rating Rata-rata</p>
+                  {selected.avgRating != null ? (
+                    <div className="flex items-center justify-center gap-1 mt-0.5">
+                      <Star size={16} className="fill-amber-400 text-amber-400" />
+                      <span className="text-xl font-bold text-amber-600">{selected.avgRating.toFixed(1)}</span>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 mt-1">–</p>
+                  )}
+                </div>
               </div>
 
               {/* Status badge */}
@@ -212,16 +252,27 @@ export default function Mitra() {
               {/* Recent orders */}
               {detail?.orders && detail.orders.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Order Terbaru</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Riwayat Order (20 Terbaru)</h3>
                   <div className="space-y-1.5">
-                    {detail.orders.slice(0, 5).map(o => (
-                      <div key={o.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs">
-                        <div><span className="font-mono text-gray-600">{o.orderNo}</span> — {SERVICE_LABELS[o.serviceType] ?? o.serviceType}</div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400">{formatDate(o.createdAt)}</span>
-                          <span className={cn("px-2 py-0.5 rounded-full font-medium", o.status === "done" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600")}>
-                            {o.status === "done" ? "Selesai" : o.status}
+                    {detail.orders.map(o => (
+                      <div key={o.id} className="bg-gray-50 rounded-lg px-3 py-2.5 text-xs space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-gray-600">{o.orderNo}</span>
+                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded font-medium">{SERVICE_LABELS[o.serviceType] ?? o.serviceType}</span>
+                          </div>
+                          <span className={cn("px-2 py-0.5 rounded-full font-medium", o.status === "done" ? "bg-green-100 text-green-700" : o.status === "cancelled" ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-600")}>
+                            {o.status === "done" ? "Selesai" : o.status === "cancelled" ? "Dibatalkan" : o.status}
                           </span>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-400">
+                          <span>{formatDate(o.createdAt)}</span>
+                          <div className="flex items-center gap-3">
+                            {o.status === "done" && (
+                              <span className="text-[#1a7a6a] font-semibold">Fee: {rupiahFormat(o.platformFee ?? 0)}</span>
+                            )}
+                            <span className="text-gray-500">Total: {rupiahFormat(o.totalAmount ?? 0)}</span>
+                          </div>
                         </div>
                       </div>
                     ))}
