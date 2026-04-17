@@ -528,6 +528,9 @@ router.get("/reports", requireAdmin, async (req, res) => {
       status: reportsTable.status,
       createdAt: reportsTable.createdAt,
       userId: reportsTable.userId,
+      orderId: reportsTable.orderId,
+      orderNo: reportsTable.orderNo,
+      adminNote: reportsTable.adminNote,
       userName: usersTable.name,
       userEmail: usersTable.email,
       userPhone: usersTable.phone,
@@ -544,14 +547,16 @@ router.get("/reports", requireAdmin, async (req, res) => {
   res.json({ rows, total, page: parseInt(page), limit: parseInt(limit) });
 });
 
-// PATCH /api/admin/reports/:id/status — update status tiket
+// PATCH /api/admin/reports/:id/status — update status & catatan admin tiket
 router.patch("/reports/:id/status", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
-  const { status } = req.body as { status: string };
+  const { status, adminNote } = req.body as { status: string; adminNote?: string };
   if (!["open", "in_progress", "resolved"].includes(status)) {
     res.status(400).json({ error: "Status tidak valid" }); return;
   }
-  await db.update(reportsTable).set({ status } as any).where(eq(reportsTable.id, id));
+  const updateData: any = { status };
+  if (adminNote !== undefined) updateData.adminNote = adminNote.trim() || null;
+  await db.update(reportsTable).set(updateData).where(eq(reportsTable.id, id));
   res.json({ ok: true });
 });
 

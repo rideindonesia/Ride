@@ -7,10 +7,17 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 ### Status Fitur
 - **DashboardPengguna**: 4-tab bottom nav (Beranda/Pesanan/Chat/Akun) ✅
   - Akun tab FULL: Hero card (foto profil/level badge/stats) + Edit Profil lengkap (foto upload, nama, HP+OTP, email+OTP) + Aktivitas + Dompet & Pembayaran (RIDE Wallet balance+topup+withdraw+transaksi, Metode Pembayaran localStorage) + Voucher & Promo (voucher aktif + kode referral) + Preferensi (Alamat+Notifikasi) + Keamanan (ganti password) + Bantuan & Info + Keluar ✅
+  - Riwayat Order: badge merah "Dibatalkan" + alasan pembatalan ditampilkan ✅
+  - Rating & Review: modal bintang 1-5 + komentar, dikirim ke `/api/pengguna/orders/:id/review` ✅
+  - Keluhan/Dispute per order: tombol "Laporkan Masalah" + modal, dikirim ke `/api/pengguna/reports` dengan orderId/orderNo ✅
 - **DashboardMitra**: 4-tab bottom nav (Beranda/Pesanan/Chat/Akun) ✅
   - Akun tab: Hero profil card (nama, layanan, status verifikasi, stats) + Ringkasan Penghasilan + Dokumen & Verifikasi (dari DB) + Notifikasi toggles + Ganti password + Bantuan Mitra FAQ + Legal + Tentang + Keluar ✅
-- **Backend Pengguna**: GET+PUT /api/pengguna/profile, PUT /api/pengguna/change-password, POST /api/pengguna/request-profile-otp, POST /api/pengguna/verify-profile-otp, POST /api/pengguna/upload-photo (multer→/uploads/profile/), GET /api/pengguna/wallet, POST /api/pengguna/wallet/topup, POST /api/pengguna/wallet/withdraw ✅
-- **Backend Mitra**: GET /api/mitra/profile-detail (docs status), PUT /api/mitra/change-password ✅
+  - Riwayat Order: badge merah "Dibatalkan" + cancelReason ditampilkan + info dibatalkan oleh siapa ✅
+  - Keluhan/Dispute per order: tombol "Laporkan Masalah" + modal, dikirim ke `/api/mitra/reports` dengan orderId/orderNo ✅
+- **Tarif Dinamis**: `loadTarif(BASE)` di `pricing.ts` fetch `/api/pengguna/tarif` (dari system_settings DB) dan update `CALL_FEE_CONFIG` + `BIAYA_LAYANAN` saat runtime. Dipanggil di kedua dashboard ✅
+- **Push Notifications**: `usePushNotification(true)` hook di kedua dashboard, sw.js handles push+notificationclick, VAPID web-push di backend push.ts ✅
+- **Backend Pengguna**: GET+PUT /api/pengguna/profile, PUT /api/pengguna/change-password, POST /api/pengguna/request-profile-otp, POST /api/pengguna/verify-profile-otp, POST /api/pengguna/upload-photo (multer→/uploads/profile/), GET /api/pengguna/wallet, POST /api/pengguna/wallet/topup, POST /api/pengguna/wallet/withdraw, GET /api/pengguna/order-history (incl. cancelled), GET /api/pengguna/tarif, POST /api/pengguna/reports (with orderId/orderNo) ✅
+- **Backend Mitra**: GET /api/mitra/profile-detail (docs status), PUT /api/mitra/change-password, GET /api/mitra/order-history (incl. cancelled), POST /api/mitra/reports (with orderId/orderNo) ✅
 - **DB Schema**: profilePhotoPath + walletBalance di usersTable; walletTransactionsTable (topup/withdraw) ✅
 - **Static uploads**: /uploads/* served dari api-server ✅
 - **Socket.io (real-time)**: Singleton socket.ts (frontend), HTTP+Socket.io server (backend index.ts), identifySocket/joinOrderRoom/leaveOrderRoom utilities. Events: `order:new` (mitra broadcast), `order:accepted/phase/payment/done` (pengguna user room), `chat:message` (order room). DashboardPengguna, DashboardMitra, dan semua 6 Order pages (Bengkel/Cuci/Barber/Elektronik/Inspeksi/Towing) sudah socket-integrated. Polling direduksi ke 30s backup. ✅

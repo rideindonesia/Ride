@@ -1,4 +1,4 @@
-export const CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm: number }> = {
+export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm: number }> = {
   bengkel:    { base: 12000, freeKm: 3, perKm: 2500 },
   elektronik: { base: 12000, freeKm: 3, perKm: 2500 },
   barber:     { base: 12000, freeKm: 3, perKm: 2500 },
@@ -7,7 +7,38 @@ export const CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; per
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
 };
 
-export const BIAYA_LAYANAN = 2000;
+export let BIAYA_LAYANAN = 2000;
+
+let _tarifLoaded = false;
+
+export async function loadTarif(apiBase: string = ""): Promise<void> {
+  if (_tarifLoaded) return;
+  try {
+    const r = await fetch(`${apiBase}/api/pengguna/tarif`, { credentials: "include" });
+    if (!r.ok) return;
+    const { tarif } = await r.json() as { tarif: Record<string, string> };
+    const freeKm = parseFloat(tarif["call_fee_free_km"] ?? "3") || 3;
+    const biayaLayanan = parseInt(tarif["biaya_layanan_admin"] ?? "2000") || 2000;
+
+    const map: Record<string, string> = {
+      bengkel: "bengkel", elektronik: "elektronik", barber: "barber",
+      cuci: "cuci", inspeksi: "inspeksi", towing: "towing",
+    };
+
+    const newCfg: typeof CALL_FEE_CONFIG = { ...CALL_FEE_CONFIG };
+    for (const [svc, key] of Object.entries(map)) {
+      const base = parseInt(tarif[`call_fee_${key}_base`] ?? "");
+      const perKm = parseInt(tarif[`call_fee_${key}_per_km`] ?? "");
+      if (!isNaN(base) && !isNaN(perKm)) {
+        newCfg[svc] = { base, freeKm, perKm };
+      }
+    }
+    CALL_FEE_CONFIG = newCfg;
+    BIAYA_LAYANAN = biayaLayanan;
+    _tarifLoaded = true;
+  } catch {
+  }
+}
 
 export function calcBiayaPanggilan(serviceType: string, distKm: number): number {
   const key = serviceType.toLowerCase().replace(/[\s_-]+/g, "");
@@ -16,9 +47,6 @@ export function calcBiayaPanggilan(serviceType: string, distKm: number): number 
   return Math.round(raw / 500) * 500;
 }
 
-/**
- * Kecepatan rata-rata berdasarkan jam (model lalu lintas Samarinda/Balikpapan).
- */
 export function trafficSpeedKmh(): number {
   const hour = new Date().getHours();
   if      (hour >= 7  && hour < 9)  return 15;
@@ -28,26 +56,12 @@ export function trafficSpeedKmh(): number {
   else                               return 28;
 }
 
-/**
- * ETA kedatangan mitra (menit) untuk kartu pesanan masuk.
- * Termasuk +2 menit persiapan, minimum 5 menit.
- */
 export function calcEtaMinutes(km: number): number {
   const speed = trafficSpeedKmh();
   const driveMin = (km / speed) * 60;
   return Math.max(5, Math.round(driveMin + 2));
 }
 
-/**
- * ETA real-time saat mitra sudah berjalan (dalam detik).
- * Memadukan kecepatan GPS nyata dengan model lalu lintas:
- *   → 60% kecepatan aktual GPS + 40% model lalu lintas (tahan noise GPS)
- * Tidak ada waktu persiapan — mitra sudah bergerak.
- *
- * @param remainingKm - sisa jarak haversine mitra → pickup
- * @param actualKmh   - kecepatan GPS mitra saat ini (km/h), null jika tidak tersedia
- * @returns detik
- */
 export function calcEtaSecsLive(remainingKm: number, actualKmh?: number | null): number {
   const traffic = trafficSpeedKmh();
   let speed: number;

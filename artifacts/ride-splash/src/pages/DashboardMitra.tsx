@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
-import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
+import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, loadTarif } from "../utils/pricing";
 import { usePushNotification } from "../hooks/usePushNotification";
 import { useRideToast, RideToastContainer } from "../components/RideToast";
 
@@ -173,6 +173,11 @@ export default function DashboardMitra() {
   const [mCancelReason, setMCancelReason] = useState("");
   const [mCancelOther, setMCancelOther] = useState("");
   const [mCancelling, setMCancelling] = useState(false);
+
+  // Laporan masalah modal (dari history mitra)
+  const [mLaporModal, setMLaporModal] = useState<{ open: boolean; orderId: number | null; orderNo: string }>({ open: false, orderId: null, orderNo: "" });
+  const [mLaporMessage, setMLaporMessage] = useState("");
+  const [mLaporSubmitting, setMLaporSubmitting] = useState(false);
   const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
@@ -418,6 +423,36 @@ export default function DashboardMitra() {
       socket.disconnect();
     };
   }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif, showToast]);
+
+  // Load tarif dinamis dari DB
+  useEffect(() => { loadTarif(BASE); }, []);
+
+  // Submit laporan masalah dari riwayat order (mitra)
+  const submitMLaporan = async () => {
+    if (!mLaporModal.orderId || !mLaporMessage.trim() || mLaporSubmitting) return;
+    setMLaporSubmitting(true);
+    try {
+      const r = await fetch(`${BASE}/api/mitra/reports`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "order",
+          title: `Masalah Order #${mLaporModal.orderNo}`,
+          message: mLaporMessage.trim(),
+          orderId: mLaporModal.orderId,
+          orderNo: mLaporModal.orderNo,
+        }),
+      });
+      if (r.ok) {
+        showToast({ type: "success", title: "Laporan terkirim!", message: "Tim RIDE akan memproses laporan Anda segera." });
+        setMLaporModal({ open: false, orderId: null, orderNo: "" });
+        setMLaporMessage("");
+      } else {
+        showToast({ type: "error", title: "Gagal", message: "Laporan gagal dikirim." });
+      }
+    } catch { showToast({ type: "error", title: "Gagal", message: "Terjadi kesalahan." }); }
+    setMLaporSubmitting(false);
+  };
 
   // Fetch riwayat order (paginated)
   useEffect(() => {
@@ -792,6 +827,32 @@ export default function DashboardMitra() {
                 disabled={mCancelling || !mCancelReason || (mCancelReason === "Lainnya" && !mCancelOther.trim())}
                 style={{ flex: 1, padding: "12px", borderRadius: 14, border: "none", background: mCancelling || !mCancelReason ? "#fca5a5" : "#dc2626", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: !mCancelReason || (mCancelReason === "Lainnya" && !mCancelOther.trim()) ? 0.6 : 1 }}>
                 {mCancelling ? "Membatalkan..." : "Ya, Batalkan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Laporan Masalah Modal (Mitra) ── */}
+      {mLaporModal.open && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}
+          onClick={() => !mLaporSubmitting && setMLaporModal({ open: false, orderId: null, orderNo: "" })}>
+          <div style={{ background: "#fff", borderRadius: 22, padding: "24px 20px 20px", width: "100%", maxWidth: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 28, textAlign: "center", marginBottom: 4 }}>⚠️</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", textAlign: "center", marginBottom: 4 }}>Laporkan Masalah</div>
+            <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center", marginBottom: 18 }}>Order #{mLaporModal.orderNo}</div>
+            <textarea value={mLaporMessage} onChange={e => setMLaporMessage(e.target.value)}
+              placeholder="Ceritakan masalah Anda secara detail..."
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, color: "#1a2a3a", resize: "none", outline: "none", minHeight: 100, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 16 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setMLaporModal({ open: false, orderId: null, orderNo: "" })} disabled={mLaporSubmitting}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "1.5px solid #d0dce8", background: "#fff", fontSize: 14, fontWeight: 700, color: "#4a5a6a", cursor: "pointer" }}>
+                Batal
+              </button>
+              <button onClick={submitMLaporan} disabled={mLaporSubmitting || !mLaporMessage.trim()}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "none", background: mLaporMessage.trim() ? "#1a3a5c" : "#e0e8f0", fontSize: 14, fontWeight: 700, color: "#fff", cursor: mLaporMessage.trim() ? "pointer" : "default" }}>
+                {mLaporSubmitting ? "Mengirim..." : "Kirim Laporan"}
               </button>
             </div>
           </div>
@@ -1588,17 +1649,25 @@ export default function DashboardMitra() {
                     {/* Card header */}
                     <button onClick={() => setExpandedOrderId(isOpen ? null : o.id)} style={{ width: "100%", padding: "14px 16px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left" as const }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 46, height: 46, borderRadius: 16, background: "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{cfg.emoji}</div>
+                        <div style={{ width: 46, height: 46, borderRadius: 16, background: o.status === "cancelled" ? "rgba(220,38,38,0.1)" : "rgba(26,122,106,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+                          {o.status === "cancelled" ? "✕" : cfg.emoji}
+                        </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
                             <span style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>{o.penggunaName}</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: "#1a7a6a", background: "rgba(26,122,106,0.1)", borderRadius: 20, padding: "2px 8px" }}>✓ Selesai</span>
+                            {o.status === "cancelled"
+                              ? <span style={{ fontSize: 10, fontWeight: 700, color: "#dc2626", background: "rgba(220,38,38,0.1)", borderRadius: 20, padding: "2px 8px" }}>✕ Dibatalkan</span>
+                              : <span style={{ fontSize: 10, fontWeight: 700, color: "#1a7a6a", background: "rgba(26,122,106,0.1)", borderRadius: 20, padding: "2px 8px" }}>✓ Selesai</span>
+                            }
                           </div>
                           <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear}</div>
                           <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>🕐 {dtStr}</div>
+                          {o.status === "cancelled" && (o as any).canceledBy && (
+                            <div style={{ fontSize: 11, color: "#dc2626", marginTop: 2 }}>Dibatalkan oleh {(o as any).canceledBy === "mitra" ? "Anda" : "konsumen"}</div>
+                          )}
                         </div>
                         <div style={{ textAlign: "right" as const, flexShrink: 0 }}>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: "#1a7a6a" }}>+{fmtRp(o.totalAmount)}</div>
+                          {o.totalAmount ? <div style={{ fontSize: 15, fontWeight: 800, color: o.status === "cancelled" ? "#dc2626" : "#1a7a6a" }}>{o.status !== "cancelled" ? "+" : ""}{fmtRp(o.totalAmount)}</div> : null}
                           <div style={{ fontSize: 18, color: "#b0bec5", marginTop: 4 }}>{isOpen ? "▲" : "▼"}</div>
                         </div>
                       </div>
@@ -1698,6 +1767,23 @@ export default function DashboardMitra() {
                             </>
                           );
                         })()}
+
+                        {/* ALASAN PEMBATALAN */}
+                        {o.status === "cancelled" && (o as any).cancelReason && (
+                          <div style={{ margin: "12px 16px 0", background: "#fef2f2", border: "1.5px solid #fca5a5", borderRadius: 12, padding: "12px 14px" }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: "#dc2626", marginBottom: 4 }}>⚠️ Alasan Pembatalan</div>
+                            <div style={{ fontSize: 13, color: "#7a2020" }}>{(o as any).cancelReason}</div>
+                          </div>
+                        )}
+
+                        {/* TOMBOL LAPORAN */}
+                        <div style={{ padding: "12px 16px 16px" }}>
+                          <button onClick={() => { setMLaporModal({ open: true, orderId: o.id, orderNo: o.orderNo }); setMLaporMessage(""); }}
+                            style={{ width: "100%", padding: "11px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#7a8a9a", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                            ⚠️ Laporkan Masalah
+                          </button>
+                        </div>
+
                       </div>
                     )}
                   </div>

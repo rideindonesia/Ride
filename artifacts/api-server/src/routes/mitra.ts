@@ -2,8 +2,8 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable } from "@workspace/db";
-import { eq, and, or, gt, gte, desc, sql, avg, count, sum } from "drizzle-orm";
+import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable } from "@workspace/db";
+import { eq, and, or, gt, gte, desc, sql, avg, count, sum, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
 import { sendPushToUsers } from "./push";
@@ -715,14 +715,16 @@ router.get("/order-history", requireMitra, async (req, res) => {
       damageCategories: ordersTable.damageCategories,
       penggunaName: usersTable.name,
       createdAt: ordersTable.createdAt,
+      cancelReason: ordersTable.cancelReason,
+      canceledBy: ordersTable.canceledBy,
     }).from(ordersTable)
       .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
-      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")))
+      .where(and(eq(ordersTable.mitraId, mitraId), inArray(ordersTable.status, ["done", "cancelled"])))
       .orderBy(desc(ordersTable.createdAt))
       .limit(parseInt(limit))
       .offset(offset),
     db.select({ total: count() }).from(ordersTable)
-      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"))),
+      .where(and(eq(ordersTable.mitraId, mitraId), inArray(ordersTable.status, ["done", "cancelled"]))),
   ]);
 
   res.json({ rows, total, page: parseInt(page), limit: parseInt(limit) });
@@ -779,6 +781,25 @@ router.put("/change-password", requireMitra, async (req, res) => {
   await db.update(usersTable).set({ passwordHash: hashPassword(newPassword) })
     .where(eq(usersTable.id, mitraId));
   res.json({ ok: true });
+});
+
+// POST /api/mitra/reports — kirim laporan dari mitra
+router.post("/reports", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const { type, title, message, orderId, orderNo } = req.body as { type?: string; title: string; message: string; orderId?: number; orderNo?: string };
+  if (!title?.trim() || !message?.trim()) {
+    res.status(400).json({ error: "Judul dan isi laporan wajib diisi" }); return;
+  }
+  const [inserted] = await db.insert(reportsTable).values({
+    userId: mitraId,
+    orderId: orderId ?? null,
+    orderNo: orderNo ?? null,
+    type: type ?? "order",
+    title: title.trim(),
+    message: message.trim(),
+    status: "open",
+  }).returning();
+  res.json({ ok: true, report: inserted });
 });
 
 export default router;

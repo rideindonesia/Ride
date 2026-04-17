@@ -11,6 +11,9 @@ interface Report {
   status: string;
   createdAt: string;
   userId: number;
+  orderId: number | null;
+  orderNo: string | null;
+  adminNote: string | null;
   userName: string;
   userEmail: string;
   userPhone: string | null;
@@ -47,6 +50,7 @@ export default function Tiket() {
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [adminNotes, setAdminNotes] = useState<Record<number, string>>({});
 
   const { data, isLoading } = useQuery<ReportResponse>({
     queryKey: ["admin-reports", filterStatus, page],
@@ -55,7 +59,8 @@ export default function Tiket() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => api.patch(`/admin/reports/${id}/status`, { status }),
+    mutationFn: ({ id, status, adminNote }: { id: number; status: string; adminNote?: string }) =>
+      api.patch(`/admin/reports/${id}/status`, { status, adminNote }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-reports"] }); setUpdatingId(null); },
   });
 
@@ -110,11 +115,17 @@ export default function Tiket() {
             {data!.rows.map(r => {
               const st = STATUS_LABELS[r.status] ?? STATUS_LABELS.open;
               const isOpen = expanded === r.id;
+              const noteVal = adminNotes[r.id] ?? (r.adminNote ?? "");
               return (
                 <div key={r.id} className="hover:bg-gray-50/50 transition-colors">
                   <button
                     className="w-full text-left px-5 py-4 flex items-start gap-3"
-                    onClick={() => setExpanded(isOpen ? null : r.id)}
+                    onClick={() => {
+                      setExpanded(isOpen ? null : r.id);
+                      if (!isOpen && r.adminNote) {
+                        setAdminNotes(prev => ({ ...prev, [r.id]: r.adminNote ?? "" }));
+                      }
+                    }}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -125,6 +136,11 @@ export default function Tiket() {
                         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                           {TYPE_LABELS[r.type] ?? r.type}
                         </span>
+                        {r.orderNo && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-mono font-medium">
+                            #{r.orderNo}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400">{r.userName} · {r.userEmail}{r.userPhone ? ` · ${r.userPhone}` : ""}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{fmtDate(r.createdAt)}</p>
@@ -133,8 +149,20 @@ export default function Tiket() {
                   </button>
 
                   {isOpen && (
-                    <div className="px-5 pb-5 border-t border-gray-50 bg-gray-50/30">
-                      <p className="text-sm text-gray-700 my-3 leading-relaxed whitespace-pre-wrap">{r.message}</p>
+                    <div className="px-5 pb-5 border-t border-gray-50 bg-gray-50/30 space-y-4">
+                      <p className="text-sm text-gray-700 mt-3 leading-relaxed whitespace-pre-wrap">{r.message}</p>
+
+                      {/* Catatan admin */}
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 mb-1 block">Catatan Admin (opsional)</label>
+                        <textarea
+                          value={noteVal}
+                          onChange={e => setAdminNotes(prev => ({ ...prev, [r.id]: e.target.value }))}
+                          placeholder="Tulis catatan untuk tiket ini..."
+                          rows={2}
+                          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#1a3a5c] resize-none text-gray-700 bg-white"
+                        />
+                      </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-medium text-gray-500 mr-1">Ubah status:</span>
@@ -148,7 +176,10 @@ export default function Tiket() {
                             <button
                               key={s.v}
                               disabled={r.status === s.v || updatingId === r.id}
-                              onClick={() => { setUpdatingId(r.id); updateMut.mutate({ id: r.id, status: s.v }); }}
+                              onClick={() => {
+                                setUpdatingId(r.id);
+                                updateMut.mutate({ id: r.id, status: s.v, adminNote: noteVal });
+                              }}
                               className="px-3 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-40"
                               style={{
                                 color: r.status === s.v ? ss.color : "#6b7280",

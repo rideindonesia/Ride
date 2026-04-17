@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, walletTransactionsTable, vouchersTable, reportsTable } from "@workspace/db";
-import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt } from "drizzle-orm";
+import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt, inArray } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import multer from "multer";
@@ -500,7 +500,7 @@ router.get("/orders/:id/receipt", async (req, res) => {
 });
 
 // DELETE /api/pengguna/orders/:id — batalkan order
-// GET /api/pengguna/order-history — riwayat order selesai milik pengguna
+// GET /api/pengguna/order-history — riwayat order selesai & dibatalkan milik pengguna
 router.get("/order-history", async (req, res) => {
   const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
@@ -518,14 +518,17 @@ router.get("/order-history", async (req, res) => {
     totalAmount: ordersTable.totalAmount,
     paymentData: ordersTable.paymentData,
     createdAt: ordersTable.createdAt,
+    status: ordersTable.status,
     rating: ordersTable.rating,
     reviewComment: ordersTable.reviewComment,
+    cancelReason: ordersTable.cancelReason,
+    canceledBy: ordersTable.canceledBy,
     mitraName: mitraUsers.name,
   }).from(ordersTable)
     .leftJoin(mitraUsers, eq(ordersTable.mitraId, mitraUsers.id))
-    .where(and(eq(ordersTable.penggunaId, penggunaId), eq(ordersTable.status, "done")))
+    .where(and(eq(ordersTable.penggunaId, penggunaId), inArray(ordersTable.status, ["done", "cancelled"])))
     .orderBy(desc(ordersTable.createdAt))
-    .limit(20);
+    .limit(30);
 
   res.json({ orders });
 });
@@ -773,18 +776,31 @@ router.get("/reports", async (req, res) => {
 router.post("/reports", async (req, res) => {
   const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
-  const { type, title, message } = req.body as { type?: string; title: string; message: string };
+  const { type, title, message, orderId, orderNo } = req.body as { type?: string; title: string; message: string; orderId?: number; orderNo?: string };
   if (!title?.trim() || !message?.trim()) {
     res.status(400).json({ error: "Judul dan isi laporan wajib diisi" }); return;
   }
   const [inserted] = await db.insert(reportsTable).values({
     userId: penggunaId,
+    orderId: orderId ?? null,
+    orderNo: orderNo ?? null,
     type: type ?? "general",
     title: title.trim(),
     message: message.trim(),
     status: "open",
   }).returning();
   res.json({ ok: true, report: inserted });
+});
+
+// GET /api/pengguna/tarif — ambil konfigurasi tarif dari sistem settings (public untuk pengguna login)
+router.get("/tarif", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { systemSettingsTable } = await import("@workspace/db/schema");
+  const rows = await db.select().from(systemSettingsTable);
+  const cfg: Record<string, string> = {};
+  rows.forEach(r => { cfg[r.key] = r.value; });
+  res.json({ tarif: cfg });
 });
 
 export default router;

@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
 import { usePushNotification } from "../hooks/usePushNotification";
 import { useRideToast, RideToastContainer } from "../components/RideToast";
+import { loadTarif } from "../utils/pricing";
 
 const SERVICE_ROUTES: Record<string, string> = {
   ride_auto: "/order/bengkel",
@@ -69,9 +70,10 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 
 type OrderHistory = {
   id: number; orderNo: string; serviceType: string; vehicleModel: string; vehicleYear: string;
-  damageCategories: string[] | null; pickupAddress: string | null;
+  damageCategories: string[] | null; pickupAddress: string | null; status: string;
   totalAmount: number; paymentData: { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string } | null;
   createdAt: string; rating?: number | null; reviewComment?: string | null; mitraName?: string | null;
+  cancelReason?: string | null; canceledBy?: string | null;
 };
 
 const SVC_CFG: Record<string, { emoji: string; label: string; serviceLabel: string; route: string }> = {
@@ -207,6 +209,19 @@ export default function DashboardPengguna() {
   const [reportMsg, setReportMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [reportList, setReportList] = useState<{ id: number; title: string; status: string; type: string; createdAt: string }[]>([]);
 
+  // Rating (review) modal — per order dari history
+  const [reviewModal, setReviewModal] = useState<{ open: boolean; orderId: number | null; orderNo: string } >({ open: false, orderId: null, orderNo: "" });
+  const [reviewStars, setReviewStars] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
+  // Laporan masalah modal — per order dari history
+  const [laporModal, setLaporModal] = useState<{ open: boolean; orderId: number | null; orderNo: string }>({ open: false, orderId: null, orderNo: "" });
+  const [laporType, setLaporType] = useState("order");
+  const [laporMessage, setLaporMessage] = useState("");
+  const [laporSubmitting, setLaporSubmitting] = useState(false);
+
   // Keamanan sub-section
   const [keamananSubSection, setKeamananSubSection] = useState<string | null>(null);
 
@@ -302,13 +317,66 @@ export default function DashboardPengguna() {
     };
   }, [showToast]);
 
-  // Fetch order history
-  useEffect(() => {
+  // Load tarif dinamis dari DB
+  useEffect(() => { loadTarif(); }, []);
+
+  // Fetch order history (done + cancelled)
+  const refreshHistory = () => {
     fetch("/api/pengguna/order-history", { credentials: "include" })
       .then(r => r.json())
       .then(d => { if (Array.isArray(d.orders)) setOrderHistory(d.orders); })
       .catch(() => {});
-  }, []);
+  };
+  useEffect(() => { refreshHistory(); }, []);
+
+  // Submit rating & ulasan
+  const submitReview = async () => {
+    if (!reviewModal.orderId || reviewStars === 0 || reviewSubmitting) return;
+    setReviewSubmitting(true);
+    try {
+      const r = await fetch(`/api/pengguna/orders/${reviewModal.orderId}/review`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: reviewStars, comment: reviewComment.trim() || undefined }),
+      });
+      if (r.ok) {
+        showToast({ type: "success", title: "Ulasan terkirim!", message: `Rating ${reviewStars}⭐ berhasil disimpan.` });
+        setReviewModal({ open: false, orderId: null, orderNo: "" });
+        setReviewStars(0); setReviewComment("");
+        refreshHistory();
+      } else {
+        showToast({ type: "error", title: "Gagal", message: "Ulasan gagal dikirim." });
+      }
+    } catch { showToast({ type: "error", title: "Gagal", message: "Terjadi kesalahan." }); }
+    setReviewSubmitting(false);
+  };
+
+  // Submit laporan masalah dari history order
+  const submitLaporan = async () => {
+    if (!laporModal.orderId || !laporMessage.trim() || laporSubmitting) return;
+    setLaporSubmitting(true);
+    try {
+      const r = await fetch("/api/pengguna/reports", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: laporType,
+          title: `Masalah Order #${laporModal.orderNo}`,
+          message: laporMessage.trim(),
+          orderId: laporModal.orderId,
+          orderNo: laporModal.orderNo,
+        }),
+      });
+      if (r.ok) {
+        showToast({ type: "success", title: "Laporan terkirim!", message: "Tim RIDE akan memproses laporan Anda segera." });
+        setLaporModal({ open: false, orderId: null, orderNo: "" });
+        setLaporMessage(""); setLaporType("order");
+      } else {
+        showToast({ type: "error", title: "Gagal", message: "Laporan gagal dikirim." });
+      }
+    } catch { showToast({ type: "error", title: "Gagal", message: "Terjadi kesalahan." }); }
+    setLaporSubmitting(false);
+  };
 
   // Fetch active vouchers
   useEffect(() => {
@@ -721,6 +789,85 @@ export default function DashboardPengguna() {
         </div>
       )}
 
+      {/* ── Rating / Review Modal ── */}
+      {reviewModal.open && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}
+          onClick={() => !reviewSubmitting && setReviewModal({ open: false, orderId: null, orderNo: "" })}>
+          <div style={{ background: "#fff", borderRadius: 22, padding: "24px 20px 20px", width: "100%", maxWidth: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 28, textAlign: "center", marginBottom: 4 }}>⭐</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", textAlign: "center", marginBottom: 4 }}>Beri Ulasan</div>
+            <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center", marginBottom: 20 }}>Order #{reviewModal.orderNo}</div>
+            {/* Bintang */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 16 }}>
+              {[1,2,3,4,5].map(s => (
+                <button key={s}
+                  onMouseEnter={() => setReviewHover(s)}
+                  onMouseLeave={() => setReviewHover(0)}
+                  onClick={() => setReviewStars(s)}
+                  style={{ fontSize: 36, background: "none", border: "none", cursor: "pointer", lineHeight: 1, color: s <= (reviewHover || reviewStars) ? "#f59e0b" : "#e0e8f0", transition: "color 0.1s" }}>★</button>
+              ))}
+            </div>
+            {reviewStars > 0 && <div style={{ textAlign: "center", fontSize: 13, color: "#d97706", fontWeight: 700, marginBottom: 12 }}>
+              {["", "Sangat Buruk", "Buruk", "Cukup", "Baik", "Sangat Baik"][reviewStars]}
+            </div>}
+            <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
+              placeholder="Tulis komentar (opsional)..."
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, color: "#1a2a3a", resize: "none", outline: "none", minHeight: 72, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 14 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setReviewModal({ open: false, orderId: null, orderNo: "" })} disabled={reviewSubmitting}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "1.5px solid #d0dce8", background: "#fff", fontSize: 14, fontWeight: 700, color: "#4a5a6a", cursor: "pointer" }}>
+                Batal
+              </button>
+              <button onClick={submitReview} disabled={reviewSubmitting || reviewStars === 0}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "none", background: reviewStars > 0 ? "#f59e0b" : "#e0e8f0", fontSize: 14, fontWeight: 700, color: "#fff", cursor: reviewStars > 0 ? "pointer" : "default" }}>
+                {reviewSubmitting ? "Mengirim..." : "Kirim Ulasan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Laporkan Masalah Modal ── */}
+      {laporModal.open && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}
+          onClick={() => !laporSubmitting && setLaporModal({ open: false, orderId: null, orderNo: "" })}>
+          <div style={{ background: "#fff", borderRadius: 22, padding: "24px 20px 20px", width: "100%", maxWidth: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 28, textAlign: "center", marginBottom: 4 }}>⚠️</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", textAlign: "center", marginBottom: 4 }}>Laporkan Masalah</div>
+            <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center", marginBottom: 16 }}>Order #{laporModal.orderNo}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#4a5a6a", marginBottom: 8 }}>Kategori laporan:</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+              {[
+                { v: "order", l: "Masalah Order" },
+                { v: "payment", l: "Pembayaran" },
+                { v: "mitra", l: "Mitra" },
+                { v: "app", l: "Aplikasi" },
+              ].map(t => (
+                <button key={t.v} onClick={() => setLaporType(t.v)}
+                  style={{ padding: "8px 14px", borderRadius: 20, border: laporType === t.v ? "2px solid #1a3a5c" : "1.5px solid #e0e8f0", background: laporType === t.v ? "#f0f4f8" : "#fff", fontSize: 12, fontWeight: laporType === t.v ? 700 : 500, color: laporType === t.v ? "#1a3a5c" : "#7a8a9a", cursor: "pointer" }}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+            <textarea value={laporMessage} onChange={e => setLaporMessage(e.target.value)}
+              placeholder="Ceritakan masalah Anda secara detail..."
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 13, color: "#1a2a3a", resize: "none", outline: "none", minHeight: 88, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 14 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setLaporModal({ open: false, orderId: null, orderNo: "" })} disabled={laporSubmitting}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "1.5px solid #d0dce8", background: "#fff", fontSize: 14, fontWeight: 700, color: "#4a5a6a", cursor: "pointer" }}>
+                Batal
+              </button>
+              <button onClick={submitLaporan} disabled={laporSubmitting || !laporMessage.trim()}
+                style={{ flex: 1, padding: "12px", borderRadius: 14, border: "none", background: laporMessage.trim() ? "#1a3a5c" : "#e0e8f0", fontSize: 14, fontWeight: 700, color: "#fff", cursor: laporMessage.trim() ? "pointer" : "default" }}>
+                {laporSubmitting ? "Mengirim..." : "Kirim Laporan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sub-page top bar — shown for non-beranda tabs */}
       {activeTab !== "beranda" && (
         <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "44px 16px 14px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
@@ -1029,24 +1176,30 @@ export default function DashboardPengguna() {
                       {/* Card header */}
                       <button onClick={() => setExpandedHistoryId(isOpen ? null : o.id)} style={{ width: "100%", padding: "14px 16px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left" as const }}>
                         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                          {/* Mitra avatar */}
-                          <div style={{ width: 46, height: 46, borderRadius: 23, background: hasMitraName ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(26,122,106,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: hasMitraName ? 18 : 22, fontWeight: 800, color: hasMitraName ? "#fff" : "#1a7a6a", flexShrink: 0 }}>
-                            {hasMitraName ? mitraInitial : svc.emoji}
+                          {/* Avatar / icon */}
+                          <div style={{ width: 46, height: 46, borderRadius: 23, background: o.status === "cancelled" ? "rgba(220,38,38,0.1)" : hasMitraName ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(26,122,106,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: hasMitraName && o.status !== "cancelled" ? 18 : 22, fontWeight: 800, color: o.status === "cancelled" ? "#dc2626" : hasMitraName ? "#fff" : "#1a7a6a", flexShrink: 0 }}>
+                            {o.status === "cancelled" ? "✕" : hasMitraName ? mitraInitial : svc.emoji}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-                              <span style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a" }}>Mitra: {o.mitraName ?? "—"}</span>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: "#1a7a6a", background: "rgba(26,122,106,0.1)", borderRadius: 20, padding: "2px 8px", flexShrink: 0 }}>✓ Selesai</span>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a" }}>{o.status === "cancelled" ? svc.serviceLabel ?? svc.label : `Mitra: ${o.mitraName ?? "—"}`}</span>
+                              {o.status === "cancelled"
+                                ? <span style={{ fontSize: 10, fontWeight: 700, color: "#dc2626", background: "rgba(220,38,38,0.1)", borderRadius: 20, padding: "2px 8px", flexShrink: 0 }}>✕ Dibatalkan</span>
+                                : <span style={{ fontSize: 10, fontWeight: 700, color: "#1a7a6a", background: "rgba(26,122,106,0.1)", borderRadius: 20, padding: "2px 8px", flexShrink: 0 }}>✓ Selesai</span>
+                              }
                             </div>
                             <div style={{ fontSize: 12, color: "#7a8a9a" }}>{o.vehicleModel} {o.vehicleYear}</div>
                             <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>🕐 {fmtDate(o.createdAt)}</div>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
                               <div style={{ display: "flex", gap: 1 }}>
-                                {[1,2,3,4,5].map(s => (
+                                {o.status === "done" && [1,2,3,4,5].map(s => (
                                   <span key={s} style={{ fontSize: 13, color: s <= (o.rating ?? 0) ? "#f59e0b" : "#e0e8f0" }}>★</span>
                                 ))}
+                                {o.status === "cancelled" && o.canceledBy && (
+                                  <span style={{ fontSize: 11, color: "#dc2626" }}>Dibatalkan oleh {o.canceledBy === "pengguna" ? "Anda" : "mitra"}</span>
+                                )}
                               </div>
-                              <span style={{ fontSize: 15, fontWeight: 800, color: "#1a3a5c" }}>{fmtRp(o.totalAmount)}</span>
+                              {o.totalAmount ? <span style={{ fontSize: 15, fontWeight: 800, color: "#1a3a5c" }}>{fmtRp(o.totalAmount)}</span> : null}
                             </div>
                           </div>
                         </div>
@@ -1108,8 +1261,17 @@ export default function DashboardPengguna() {
                             </div>
                           )}
 
-                          {/* ULASAN ANDA */}
-                          {o.rating != null && (
+                          {/* ALASAN PEMBATALAN */}
+                          {o.status === "cancelled" && o.cancelReason && (
+                            <div style={{ margin: "0 16px 14px", background: "#fef2f2", border: "1.5px solid #fca5a5", borderRadius: 14, padding: "12px 14px" }}>
+                              <div style={{ fontSize: 11, fontWeight: 800, color: "#dc2626", marginBottom: 4 }}>⚠️ Alasan Pembatalan</div>
+                              <div style={{ fontSize: 13, color: "#7a2020" }}>{o.cancelReason}</div>
+                              {o.canceledBy && <div style={{ fontSize: 11, color: "#dc2626", marginTop: 4 }}>Dibatalkan oleh: {o.canceledBy === "pengguna" ? "Anda" : "mitra"}</div>}
+                            </div>
+                          )}
+
+                          {/* ULASAN ANDA (sudah ada) */}
+                          {o.status === "done" && o.rating != null && (
                             <div style={{ margin: "0 16px 10px", background: "#fffbeb", border: "1.5px solid #fde68a", borderRadius: 14, padding: "12px 14px" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                                 <div style={{ display: "flex", gap: 1 }}>
@@ -1121,6 +1283,22 @@ export default function DashboardPengguna() {
                               {o.reviewComment && <div style={{ fontSize: 12, color: "#4a5a6a", fontStyle: "italic" as const, marginTop: 4 }}>"{o.reviewComment}"</div>}
                             </div>
                           )}
+
+                          {/* TOMBOL AKSI */}
+                          <div style={{ padding: "0 16px 16px", display: "flex", gap: 8, flexDirection: "column" }}>
+                            {/* Beri Ulasan — untuk order selesai yang belum dirating */}
+                            {o.status === "done" && o.rating == null && (
+                              <button onClick={() => { setReviewModal({ open: true, orderId: o.id, orderNo: o.orderNo }); setReviewStars(0); setReviewComment(""); }}
+                                style={{ width: "100%", padding: "11px", borderRadius: 14, border: "1.5px solid #f59e0b", background: "#fffbeb", color: "#d97706", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                                ⭐ Beri Ulasan untuk Mitra
+                              </button>
+                            )}
+                            {/* Laporkan Masalah */}
+                            <button onClick={() => { setLaporModal({ open: true, orderId: o.id, orderNo: o.orderNo }); setLaporMessage(""); setLaporType("order"); }}
+                              style={{ width: "100%", padding: "11px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#7a8a9a", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                              ⚠️ Laporkan Masalah
+                            </button>
+                          </div>
 
                         </div>
                       )}
