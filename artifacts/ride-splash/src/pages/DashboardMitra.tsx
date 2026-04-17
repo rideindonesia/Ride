@@ -237,20 +237,38 @@ export default function DashboardMitra() {
       const res = await fetch(`${BASE}/api/mitra/active-order`, { credentials: "include" });
       if (!res.ok) return;
       const d = await res.json();
-      if (!d.order) return;
+      if (!d.order) {
+        // Tidak ada order aktif — bersihkan state agar tidak tersisa dari sesi sebelumnya
+        setActiveOrder(prev => {
+          if (prev) { setPenggunaConfirmed(false); setMitraPhase("diterima"); }
+          return null;
+        });
+        return;
+      }
       const o = d.order;
-      // Selalu update totalAmount dari DB (callFee dihitung server saat accept)
-      // tapi jaga state lain agar tidak reset
-      setActiveOrder(prev => prev
-        ? { ...prev, totalAmount: o.totalAmount ?? prev.totalAmount, ...(o.paymentData && { paymentData: o.paymentData }) }
-        : o
-      );
+      // Update order data (totalAmount & paymentData dari server)
+      setActiveOrder(prev => {
+        if (prev && prev.id === o.id) {
+          // Order sama — hanya update data yang bisa berubah dari server
+          return { ...prev, totalAmount: o.totalAmount ?? prev.totalAmount, ...(o.paymentData && { paymentData: o.paymentData }) };
+        }
+        // Order berbeda atau pertama kali load — gunakan data server sepenuhnya
+        return o;
+      });
       // Restore penggunaConfirmed dari DB
-      if (o.penggunaConfirmed) setPenggunaConfirmed(true);
+      const confirmed = !!o.penggunaConfirmed;
+      if (confirmed) setPenggunaConfirmed(true);
       // Restore phase dari DB
+      // PENTING: jangan restore fase "menuju" dst jika user belum konfirmasi
+      // Ini mencegah mitra masuk fase menuju tanpa persetujuan pengguna
       const phaseMap: Record<string, string> = { menuju: "menuju", tiba: "tiba", pengerjaan: "pengerjaan", selesai: "selesai" };
-      const dbPhase = phaseMap[o.trackingPhase ?? ""] ?? "diterima";
-      setMitraPhase(prev => prev !== "diterima" ? prev : dbPhase as any);
+      const rawDbPhase = phaseMap[o.trackingPhase ?? ""] ?? "diterima";
+      const safeDbPhase = !confirmed && rawDbPhase === "menuju" ? "diterima" : rawDbPhase;
+      setMitraPhase(prev => {
+        // Kalau prev sudah di fase aktif (bukan diterima), pertahankan
+        if (prev !== "diterima" && prev !== "chat") return prev;
+        return safeDbPhase as any;
+      });
       // Restore paymentData & rincianSent kalau sudah pernah kirim
       if (o.paymentData) {
         setBiayaJasa(String(o.paymentData.biayaJasa ?? ""));
@@ -969,12 +987,6 @@ export default function DashboardMitra() {
                 {/* ── FASE 3: Menuju Lokasi ── */}
                 {mitraPhase === "menuju" && (
                   <>
-                    {!penggunaConfirmed && (
-                      <div style={{ background: "#fff8e1", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-                        <span style={{ fontSize: 15 }}>⏳</span>
-                        <span style={{ fontSize: 12, color: "#7a5a00", fontWeight: 600 }}>Menunggu konsumen mengkonfirmasi panggilan...</span>
-                      </div>
-                    )}
                     <div style={{ background: "#fff", borderRadius: 16, padding: "14px", marginBottom: 12, border: "1.5px solid #d4ede5" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div>
