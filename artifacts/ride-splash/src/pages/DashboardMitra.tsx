@@ -193,6 +193,18 @@ export default function DashboardMitra() {
   const [pesananSubTab, setPesananSubTab] = useState<"aktif" | "riwayat">("aktif");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
+  // Riwayat Order pagination
+  const [riwayatPage, setRiwayatPage] = useState(1);
+  const [riwayatRows, setRiwayatRows] = useState<any[]>([]);
+  const [riwayatTotal, setRiwayatTotal] = useState(0);
+  const [riwayatLoading, setRiwayatLoading] = useState(false);
+  const RIWAYAT_LIMIT = 15;
+
+  // Reviews & Rating
+  const [reviewsData, setReviewsData] = useState<{ rows: any[]; total: number; avgRating: number | null; totalReviews: number } | null>(null);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+
   // Chat sub-tab
   const [chatSubTab, setChatSubTab] = useState<"aktif" | "riwayat">("aktif");
 
@@ -401,6 +413,30 @@ export default function DashboardMitra() {
       socket.disconnect();
     };
   }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif, showToast]);
+
+  // Fetch riwayat order (paginated)
+  useEffect(() => {
+    if (activeTab !== "pesanan" || pesananSubTab !== "riwayat") return;
+    setRiwayatLoading(true);
+    fetch(`${BASE}/api/mitra/order-history?page=${riwayatPage}&limit=${RIWAYAT_LIMIT}`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { setRiwayatRows(d.rows ?? []); setRiwayatTotal(d.total ?? 0); })
+      .catch(() => {})
+      .finally(() => setRiwayatLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, pesananSubTab, riwayatPage]);
+
+  // Fetch reviews
+  useEffect(() => {
+    if (activeTab !== "akun") return;
+    setReviewsLoading(true);
+    fetch(`${BASE}/api/mitra/reviews?page=${reviewsPage}&limit=10`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => setReviewsData(d))
+      .catch(() => {})
+      .finally(() => setReviewsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, reviewsPage]);
 
   // Fetch mitra profile detail (dokumen, phone, dll)
   useEffect(() => {
@@ -873,7 +909,7 @@ export default function DashboardMitra() {
           <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
             {([
               { id: "aktif" as const, label: "Order Aktif", count: (activeOrder ? 1 : 0) + (incoming ? 1 : 0) },
-              { id: "riwayat" as const, label: "Riwayat Order", count: data?.recentOrders?.length ?? 0 },
+              { id: "riwayat" as const, label: "Riwayat Order", count: riwayatTotal > 0 ? riwayatTotal : (data?.recentOrders?.length ?? 0) },
             ]).map(tab => (
               <button key={tab.id} onClick={() => setPesananSubTab(tab.id)}
                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 24, border: pesananSubTab === tab.id ? "none" : "1.5px solid #d0dce8", background: pesananSubTab === tab.id ? "#1a3a5c" : "#fff", color: pesananSubTab === tab.id ? "#fff" : "#7a8a9a", fontWeight: pesananSubTab === tab.id ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
@@ -1457,7 +1493,9 @@ export default function DashboardMitra() {
 
         {/* ══ PESANAN TAB: Riwayat Order (accordion) ══ */}
         {activeTab === "pesanan" && pesananSubTab === "riwayat" && (
-          (data?.recentOrders?.length ?? 0) === 0 ? (
+          riwayatLoading && riwayatRows.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "56px 24px", color: "#9aa5b4", fontSize: 14 }}>Memuat riwayat...</div>
+          ) : riwayatRows.length === 0 ? (
             <div style={{ textAlign: "center", padding: "56px 24px" }}>
               <div style={{ fontSize: 52, marginBottom: 12 }}>🗓️</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Belum ada riwayat</div>
@@ -1465,7 +1503,7 @@ export default function DashboardMitra() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {data!.recentOrders.map(o => {
+              {riwayatRows.map(o => {
                 const cfg = getSvcCfg(o.serviceType);
                 const isOpen = expandedOrderId === o.id;
                 const pd = o.paymentData;
@@ -1592,6 +1630,26 @@ export default function DashboardMitra() {
                   </div>
                 );
               })}
+
+              {/* Pagination riwayat */}
+              {riwayatTotal > RIWAYAT_LIMIT && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, padding: "8px 0 4px" }}>
+                  <button disabled={riwayatPage === 1 || riwayatLoading}
+                    onClick={() => setRiwayatPage(p => Math.max(1, p - 1))}
+                    style={{ padding: "8px 18px", borderRadius: 20, border: "1.5px solid #d0dce8", background: "#fff", color: "#4a5a6a", fontSize: 13, fontWeight: 600, cursor: riwayatPage === 1 ? "not-allowed" : "pointer", opacity: riwayatPage === 1 ? 0.4 : 1 }}>
+                    ← Sebelumnya
+                  </button>
+                  <span style={{ fontSize: 13, color: "#7a8a9a" }}>{riwayatPage} / {Math.ceil(riwayatTotal / RIWAYAT_LIMIT)}</span>
+                  <button disabled={riwayatPage >= Math.ceil(riwayatTotal / RIWAYAT_LIMIT) || riwayatLoading}
+                    onClick={() => setRiwayatPage(p => p + 1)}
+                    style={{ padding: "8px 18px", borderRadius: 20, border: "1.5px solid #d0dce8", background: "#fff", color: "#4a5a6a", fontSize: 13, fontWeight: 600, cursor: riwayatPage >= Math.ceil(riwayatTotal / RIWAYAT_LIMIT) ? "not-allowed" : "pointer", opacity: riwayatPage >= Math.ceil(riwayatTotal / RIWAYAT_LIMIT) ? 0.4 : 1 }}>
+                    Berikutnya →
+                  </button>
+                </div>
+              )}
+              <div style={{ textAlign: "center", fontSize: 12, color: "#b0bec5", paddingBottom: 4 }}>
+                Menampilkan {Math.min(riwayatRows.length, RIWAYAT_LIMIT)} dari {riwayatTotal} order selesai
+              </div>
             </div>
           )
         )}
@@ -1768,6 +1826,86 @@ export default function DashboardMitra() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* ── Ulasan & Rating yang Diterima ── */}
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+              <button onClick={() => setOpenAkunSection(openAkunSection === "ulasan" ? null : "ulasan")}
+                style={{ width: "100%", background: "none", border: "none", padding: "14px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const }}>
+                <span style={{ fontSize: 20 }}>⭐</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Ulasan & Rating</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>
+                    {reviewsData ? `${reviewsData.totalReviews} ulasan · Rata-rata ${reviewsData.avgRating ?? "—"} ⭐` : "Memuat..."}
+                  </div>
+                </div>
+                <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "ulasan" ? "∨" : "›"}</span>
+              </button>
+              {openAkunSection === "ulasan" && (
+                <div style={{ borderTop: "1px solid #f0f4f8", padding: "14px" }}>
+                  {reviewsLoading && !reviewsData ? (
+                    <div style={{ textAlign: "center", padding: "24px 0", color: "#9aa5b4", fontSize: 13 }}>Memuat ulasan...</div>
+                  ) : (reviewsData?.rows?.length ?? 0) === 0 ? (
+                    <div style={{ textAlign: "center", padding: "24px 0" }}>
+                      <div style={{ fontSize: 36, marginBottom: 8 }}>💬</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 4 }}>Belum ada ulasan</div>
+                      <div style={{ fontSize: 12, color: "#9aa5b4" }}>Ulasan dari konsumen akan muncul di sini setelah order selesai</div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Summary row */}
+                      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+                        <div style={{ flex: 1, background: "linear-gradient(135deg, #fffbeb, #fef3c7)", borderRadius: 14, padding: "12px", textAlign: "center" as const }}>
+                          <div style={{ fontSize: 26, fontWeight: 900, color: "#d97706" }}>{reviewsData?.avgRating ?? "—"}</div>
+                          <div style={{ fontSize: 11, color: "#92400e", marginTop: 2 }}>★ Rata-rata</div>
+                        </div>
+                        <div style={{ flex: 1, background: "#f0faf7", borderRadius: 14, padding: "12px", textAlign: "center" as const }}>
+                          <div style={{ fontSize: 26, fontWeight: 900, color: "#1a7a6a" }}>{reviewsData?.totalReviews ?? 0}</div>
+                          <div style={{ fontSize: 11, color: "#1a7a6a", marginTop: 2 }}>Total Ulasan</div>
+                        </div>
+                      </div>
+                      {/* Review cards */}
+                      {reviewsData!.rows.map((r: any) => {
+                        const stars = Math.round(r.rating ?? 0);
+                        const starStr = "★".repeat(stars) + "☆".repeat(5 - stars);
+                        const svcEmoji2: Record<string,string> = { bengkel:"🔧", elektronik:"💡", cuci:"🚿", barber:"✂️", inspeksi:"🔍", towing:"🚛" };
+                        return (
+                          <div key={r.id} style={{ background: "#f8fafc", borderRadius: 14, padding: "12px 14px", marginBottom: 8 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{r.penggunaName}</div>
+                                <div style={{ fontSize: 11, color: "#9aa5b4" }}>{svcEmoji2[r.serviceType] ?? "🔧"} {serviceLabel(r.serviceType)} · {new Date(r.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</div>
+                              </div>
+                              <div style={{ fontSize: 15, color: "#f59e0b", fontWeight: 700, letterSpacing: 1 }}>{starStr}</div>
+                            </div>
+                            {r.reviewComment && (
+                              <div style={{ fontSize: 13, color: "#4a5a6a", lineHeight: 1.5, background: "#fff", borderRadius: 10, padding: "8px 10px", marginTop: 4 }}>
+                                "{r.reviewComment}"
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {/* Reviews pagination */}
+                      {(reviewsData?.total ?? 0) > 10 && (
+                        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 10 }}>
+                          <button disabled={reviewsPage === 1 || reviewsLoading}
+                            onClick={() => setReviewsPage(p => Math.max(1, p - 1))}
+                            style={{ padding: "7px 16px", borderRadius: 20, border: "1.5px solid #d0dce8", background: "#fff", fontSize: 13, color: "#4a5a6a", cursor: "pointer", opacity: reviewsPage === 1 ? 0.4 : 1 }}>
+                            ← Sebelumnya
+                          </button>
+                          <span style={{ fontSize: 12, color: "#9aa5b4", display: "flex", alignItems: "center" }}>{reviewsPage} / {Math.ceil((reviewsData?.total ?? 0) / 10)}</span>
+                          <button disabled={reviewsPage >= Math.ceil((reviewsData?.total ?? 0) / 10) || reviewsLoading}
+                            onClick={() => setReviewsPage(p => p + 1)}
+                            style={{ padding: "7px 16px", borderRadius: 20, border: "1.5px solid #d0dce8", background: "#fff", fontSize: 13, color: "#4a5a6a", cursor: "pointer", opacity: reviewsPage >= Math.ceil((reviewsData?.total ?? 0) / 10) ? 0.4 : 1 }}>
+                            Berikutnya →
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* ── Ringkasan Penghasilan ── */}

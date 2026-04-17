@@ -657,6 +657,79 @@ router.get("/profile-detail", requireMitra, async (req, res) => {
 });
 
 // PUT /api/mitra/change-password
+// GET /api/mitra/order-history — full paginated order history
+router.get("/order-history", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const { page = "1", limit = "20" } = req.query as Record<string, string>;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  const [rows, [{ total }]] = await Promise.all([
+    db.select({
+      id: ordersTable.id,
+      orderNo: ordersTable.orderNo,
+      serviceType: ordersTable.serviceType,
+      status: ordersTable.status,
+      vehicleModel: ordersTable.vehicleModel,
+      vehicleYear: ordersTable.vehicleYear,
+      pickupAddress: ordersTable.pickupAddress,
+      totalAmount: ordersTable.totalAmount,
+      platformFee: ordersTable.platformFee,
+      rating: ordersTable.rating,
+      reviewComment: ordersTable.reviewComment,
+      paymentData: ordersTable.paymentData,
+      damageCategories: ordersTable.damageCategories,
+      penggunaName: usersTable.name,
+      createdAt: ordersTable.createdAt,
+    }).from(ordersTable)
+      .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")))
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(parseInt(limit))
+      .offset(offset),
+    db.select({ total: count() }).from(ordersTable)
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"))),
+  ]);
+
+  res.json({ rows, total, page: parseInt(page), limit: parseInt(limit) });
+});
+
+// GET /api/mitra/reviews — ulasan & rating yang diterima mitra
+router.get("/reviews", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const { page = "1", limit = "20" } = req.query as Record<string, string>;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  const [rows, [{ total }], [stats]] = await Promise.all([
+    db.select({
+      id: ordersTable.id,
+      orderNo: ordersTable.orderNo,
+      serviceType: ordersTable.serviceType,
+      rating: ordersTable.rating,
+      reviewComment: ordersTable.reviewComment,
+      penggunaName: usersTable.name,
+      createdAt: ordersTable.createdAt,
+    }).from(ordersTable)
+      .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"), sql`${ordersTable.rating} IS NOT NULL`))
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(parseInt(limit))
+      .offset(offset),
+    db.select({ total: count() }).from(ordersTable)
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"), sql`${ordersTable.rating} IS NOT NULL`)),
+    db.select({ avg: avg(ordersTable.rating), total: count() }).from(ordersTable)
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"), sql`${ordersTable.rating} IS NOT NULL`)),
+  ]);
+
+  res.json({
+    rows,
+    total,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    avgRating: stats?.avg != null ? parseFloat(Number(stats.avg).toFixed(1)) : null,
+    totalReviews: stats?.total ?? 0,
+  });
+});
+
 router.put("/change-password", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
   const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };

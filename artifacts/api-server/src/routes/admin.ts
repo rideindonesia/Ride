@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable } from "@workspace/db";
 import { eq, and, or, desc, asc, sql, count, sum, ilike, gte, lte, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
@@ -472,6 +472,89 @@ router.patch("/keuangan/mark-paid/:mitraId", requireAdmin, async (req, res) => {
   res.json({ ok: true, paidAt: now });
 });
 
+// ── Orders Live ───────────────────────────────────────────────────────────────
+
+// GET /api/admin/orders/live — order yang sedang aktif (pending/accepted)
+router.get("/orders/live", requireAdmin, async (_req, res) => {
+  const rows = await db.select({
+    id: ordersTable.id,
+    orderNo: ordersTable.orderNo,
+    serviceType: ordersTable.serviceType,
+    status: ordersTable.status,
+    totalAmount: ordersTable.totalAmount,
+    createdAt: ordersTable.createdAt,
+    updatedAt: ordersTable.updatedAt,
+    penggunaId: ordersTable.penggunaId,
+    mitraId: ordersTable.mitraId,
+    pickupAddress: ordersTable.pickupAddress,
+  }).from(ordersTable)
+    .where(inArray(ordersTable.status, ["pending", "accepted"] as [string, ...string[]]))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(50);
+
+  const penggunaIds = [...new Set(rows.map(r => r.penggunaId).filter(Boolean))];
+  const mitraIds = [...new Set(rows.map(r => r.mitraId).filter(Boolean))] as number[];
+
+  const [penggunaList, mitraList] = await Promise.all([
+    penggunaIds.length > 0 ? db.select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone }).from(usersTable).where(inArray(usersTable.id, penggunaIds as number[])) : [],
+    mitraIds.length > 0 ? db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, mitraIds)) : [],
+  ]);
+
+  const penggunaMap = Object.fromEntries(penggunaList.map(u => [u.id, u]));
+  const mitraMap = Object.fromEntries(mitraList.map(u => [u.id, u]));
+
+  res.json(rows.map(r => ({
+    ...r,
+    pengguna: r.penggunaId ? penggunaMap[r.penggunaId] ?? null : null,
+    mitra: r.mitraId ? mitraMap[r.mitraId] ?? null : null,
+  })));
+});
+
+// ── Tiket / Laporan Pengguna ───────────────────────────────────────────────────
+
+// GET /api/admin/reports — semua laporan dari pengguna
+router.get("/reports", requireAdmin, async (req, res) => {
+  const { status = "all", page = "1", limit = "20" } = req.query as Record<string, string>;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const conditions: any[] = [];
+  if (status !== "all") conditions.push(eq(reportsTable.status, status));
+
+  const [rows, [{ total }]] = await Promise.all([
+    db.select({
+      id: reportsTable.id,
+      title: reportsTable.title,
+      type: reportsTable.type,
+      message: reportsTable.message,
+      status: reportsTable.status,
+      createdAt: reportsTable.createdAt,
+      userId: reportsTable.userId,
+      userName: usersTable.name,
+      userEmail: usersTable.email,
+      userPhone: usersTable.phone,
+    }).from(reportsTable)
+      .innerJoin(usersTable, eq(usersTable.id, reportsTable.userId))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(reportsTable.createdAt))
+      .limit(parseInt(limit))
+      .offset(offset),
+    db.select({ total: count() }).from(reportsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined),
+  ]);
+
+  res.json({ rows, total, page: parseInt(page), limit: parseInt(limit) });
+});
+
+// PATCH /api/admin/reports/:id/status — update status tiket
+router.patch("/reports/:id/status", requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { status } = req.body as { status: string };
+  if (!["open", "in_progress", "resolved"].includes(status)) {
+    res.status(400).json({ error: "Status tidak valid" }); return;
+  }
+  await db.update(reportsTable).set({ status } as any).where(eq(reportsTable.id, id));
+  res.json({ ok: true });
+});
+
 // ── Vouchers ──────────────────────────────────────────────────────────────────
 
 // GET /api/admin/vouchers
@@ -569,7 +652,9 @@ router.get("/settings", requireAdmin, async (_req, res) => {
 router.patch("/settings", requireAdmin, async (req, res) => {
   const updates = req.body as Record<string, string>;
   for (const [key, value] of Object.entries(updates)) {
-    await db.update(systemSettingsTable).set({ value: String(value), updatedAt: new Date() }).where(eq(systemSettingsTable.key, key));
+    await db.insert(systemSettingsTable)
+      .values({ key, value: String(value), label: key, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: String(value), updatedAt: new Date() } });
   }
   res.json({ ok: true });
 });

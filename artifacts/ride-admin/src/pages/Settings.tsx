@@ -6,6 +6,24 @@ import { Save, Loader2, Plus, RefreshCw, Send } from "lucide-react";
 interface SettingEntry { value: string; label: string }
 type SettingsMap = Record<string, SettingEntry>;
 
+const KEY_LABELS: Record<string, string> = {
+  call_fee_bengkel_base: "Bengkel — Tarif Dasar (Rp)",
+  call_fee_bengkel_per_km: "Bengkel — Per KM (Rp)",
+  call_fee_barber_base: "Barber — Tarif Dasar (Rp)",
+  call_fee_barber_per_km: "Barber — Per KM (Rp)",
+  call_fee_cuci_base: "Cuci Motor — Tarif Dasar (Rp)",
+  call_fee_cuci_per_km: "Cuci Motor — Per KM (Rp)",
+  call_fee_elektronik_base: "Elektronik — Tarif Dasar (Rp)",
+  call_fee_elektronik_per_km: "Elektronik — Per KM (Rp)",
+  call_fee_inspeksi_base: "Inspeksi — Tarif Dasar (Rp)",
+  call_fee_inspeksi_per_km: "Inspeksi — Per KM (Rp)",
+  call_fee_towing_base: "Towing — Tarif Dasar (Rp)",
+  call_fee_towing_per_km: "Towing — Per KM (Rp)",
+  call_fee_free_km: "KM Gratis (tidak ada biaya per km sebelum jarak ini)",
+  biaya_layanan_admin: "Biaya Admin/Layanan Tetap (Rp)",
+  platform_fee_pct: "Platform Fee RIDE (%)",
+};
+
 const SETTING_GROUPS = [
   {
     label: "Biaya Panggilan per Layanan",
@@ -94,9 +112,9 @@ export default function Settings() {
           </div>
           <div className="p-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {group.keys.filter(k => settings?.[k]).map(key => (
+              {group.keys.map(key => (
                 <div key={key}>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{settings?.[key]?.label ?? key}</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{KEY_LABELS[key] ?? settings?.[key]?.label ?? key}</label>
                   <div className="relative">
                     <input
                       type="number" value={getValue(key)}

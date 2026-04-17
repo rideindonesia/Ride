@@ -98,6 +98,7 @@ export default function DashboardPengguna() {
   const [userLng, setUserLng] = useState<number | null>(null);
   const [address, setAddress] = useState<string>("Mendeteksi lokasi...");
   const [onlineMitra, setOnlineMitra] = useState<OnlineMitra[]>([]);
+  const [mitraFilter, setMitraFilter] = useState<"all" | "repair" | "towing" | "care">("all");
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [pickLat, setPickLat] = useState<number | null>(null);
@@ -580,19 +581,28 @@ export default function DashboardPengguna() {
     map.setView([userLat, userLng], 14);
   }, [userLat, userLng]);
 
+  // Filter mitra by category
+  const FILTER_SVC: Record<string, string[]> = {
+    repair: ["bengkel", "inspeksi", "elektronik"],
+    towing: ["towing"],
+    care: ["barber", "cuci"],
+  };
+  const filteredMitra = mitraFilter === "all" ? onlineMitra : onlineMitra.filter(m => (FILTER_SVC[mitraFilter] ?? []).includes(m.serviceType));
+
   // Update mitra markers
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
     mitraMarkersRef.current.forEach(m => m.remove());
     mitraMarkersRef.current = [];
-    onlineMitra.forEach(mitra => {
+    filteredMitra.forEach(mitra => {
       const marker = L.circleMarker([mitra.lat, mitra.lng], {
         radius: 8, color: "#16a34a", fillColor: "#22c55e", fillOpacity: 1, weight: 2,
       }).bindTooltip(`<b>${mitra.name}</b><br/>${mitra.serviceType}`, { permanent: false }).addTo(map);
       mitraMarkersRef.current.push(marker);
     });
-  }, [onlineMitra]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMitra]);
 
   // Init location picker map
   useEffect(() => {
@@ -827,11 +837,20 @@ export default function DashboardPengguna() {
                 <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>Tap pin untuk lihat detail</div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                {["🔧", "🚛", "✂️"].map((icon, i) => (
-                  <div key={i} style={{ width: 36, height: 36, borderRadius: 10, background: "#f0f4f8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>
-                    {icon}
-                  </div>
-                ))}
+                {([
+                  { icon: "🔧", filter: "repair" as const, label: "Servis" },
+                  { icon: "🚛", filter: "towing" as const, label: "Towing" },
+                  { icon: "✂️", filter: "care" as const, label: "Perawatan" },
+                ] as const).map(({ icon, filter, label }) => {
+                  const isActive = mitraFilter === filter;
+                  return (
+                    <button key={filter} title={label}
+                      onClick={() => setMitraFilter(isActive ? "all" : filter)}
+                      style={{ width: 36, height: 36, borderRadius: 10, background: isActive ? "#1a3a5c" : "#f0f4f8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer", border: isActive ? "2px solid #1a3a5c" : "2px solid transparent", transition: "all 0.18s" }}>
+                      {icon}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -850,7 +869,7 @@ export default function DashboardPengguna() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#1a3a5c", borderRadius: 20, padding: "5px 12px" }}>
                 <div style={{ width: 7, height: 7, borderRadius: 4, background: "#22c55e" }} />
-                <span style={{ color: "#fff", fontSize: 12, fontWeight: 600 }}>{onlineMitra.length} online</span>
+                <span style={{ color: "#fff", fontSize: 12, fontWeight: 600 }}>{filteredMitra.length}{mitraFilter !== "all" ? ` / ${onlineMitra.length}` : ""} online</span>
               </div>
             </div>
           </div>
