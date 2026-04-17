@@ -1,8 +1,23 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, formatDatetime, rupiahFormat, SERVICE_LABELS, STATUS_LABELS, STATUS_COLORS } from "@/lib/api";
-import { Search, Eye, ChevronLeft, ChevronRight, Star, MapPin, Car, Phone, Mail, CreditCard, Wrench, MessageSquare, Clock, User, Shield } from "lucide-react";
+import { Search, Eye, ChevronLeft, ChevronRight, Star, MapPin, Car, Phone, Mail, CreditCard, Wrench, MessageSquare, Clock, User, Shield, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function exportToCSV(rows: any[], filename: string) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(","), ...rows.map(r => headers.map(h => {
+    const v = r[h] ?? "";
+    const s = String(v).replace(/"/g, '""');
+    return s.includes(",") || s.includes("\n") || s.includes('"') ? `"${s}"` : s;
+  }).join(","))];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
 
 interface OrderItem {
   id: number; orderNo: string; serviceType: string; status: string;
@@ -94,7 +109,30 @@ export default function Orders() {
   const [status, setStatus] = useState("all");
   const [serviceType, setServiceType] = useState("all");
   const [selected, setSelected] = useState<OrderItem | null>(null);
+  const [exporting, setExporting] = useState(false);
   const qc = useQueryClient();
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (status !== "all") params.set("status", status);
+      if (serviceType !== "all") params.set("serviceType", serviceType);
+      const rows: any[] = await api.get(`/admin/orders/export?${params.toString()}`);
+      const mapped = rows.map(r => ({
+        "No. Order": r.orderNo,
+        "Layanan": SERVICE_LABELS[r.serviceType] ?? r.serviceType,
+        "Status": STATUS_LABELS[r.status] ?? r.status,
+        "Konsumen": r.penggunaName ?? "",
+        "Alamat": r.pickupAddress ?? "",
+        "Total (Rp)": r.totalAmount ?? 0,
+        "Platform Fee (Rp)": r.platformFee ?? 0,
+        "Fee Lunas": r.isPlatformFeePaid ? "Ya" : "Tidak",
+        "Tanggal": r.createdAt ? new Date(r.createdAt).toLocaleString("id-ID") : "",
+      }));
+      exportToCSV(mapped, `RIDE_Orders_${new Date().toISOString().slice(0,10)}.csv`);
+    } finally { setExporting(false); }
+  };
 
   const { data } = useQuery<{ data: OrderItem[]; total: number }>({
     queryKey: ["admin-orders", page, status, serviceType],
@@ -122,8 +160,18 @@ export default function Orders() {
           <h1 className="text-2xl font-bold text-gray-900">Monitoring Order</h1>
           <p className="text-sm text-gray-500">Total: {data?.total ?? "–"} order • Refresh otomatis 15 detik</p>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Live
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1a3a5c] text-white text-xs font-semibold hover:bg-[#1a2a4c] transition-colors disabled:opacity-60"
+          >
+            <Download size={13} />
+            {exporting ? "Mengekspor..." : "Export CSV"}
+          </button>
+          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Live
+          </div>
         </div>
       </div>
 

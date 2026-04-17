@@ -125,6 +125,25 @@ function getSvcCfg(serviceType?: string | null) {
   return SERVICE_CONFIG[serviceType ?? "bengkel"] ?? SERVICE_CONFIG["bengkel"];
 }
 
+function playOrderBeep() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const beep = (freq: number, start: number, dur: number) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = freq; o.type = "sine";
+      g.gain.setValueAtTime(0.4, ctx.currentTime + start);
+      g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + start + dur);
+      o.start(ctx.currentTime + start);
+      o.stop(ctx.currentTime + start + dur + 0.05);
+    };
+    beep(880, 0, 0.15);
+    beep(1100, 0.2, 0.15);
+    beep(880, 0.4, 0.2);
+  } catch { /* ignore — browser may block if no user interaction yet */ }
+}
+
 export default function DashboardMitra() {
   usePushNotification(true);
   const { toasts, showToast, removeToast } = useRideToast();
@@ -298,6 +317,7 @@ export default function DashboardMitra() {
         seenOrderIds.current.add(d.incoming.id);
         setIncoming(d.incoming);
         setIncomingTimer(30);
+        playOrderBeep();
         pushNotif({
           type: "order",
           icon: getSvcCfg(d.incoming.serviceType).emoji,
@@ -338,6 +358,8 @@ export default function DashboardMitra() {
       seenOrderIds.current.add(data.id);
       setIncoming(data);
       setIncomingTimer(30);
+      playOrderBeep();
+      showToast({ icon: getSvcCfg(data.serviceType).emoji, title: "Pesanan Masuk!", body: `${data.penggunaName} — ${data.vehicleModel}`, color: "green" });
       pushNotif({
         type: "order",
         icon: getSvcCfg(data.serviceType).emoji,

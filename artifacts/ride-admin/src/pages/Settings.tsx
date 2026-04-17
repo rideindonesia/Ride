@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Save, Loader2, Plus, RefreshCw } from "lucide-react";
+import { Save, Loader2, Plus, RefreshCw, Send } from "lucide-react";
 
 interface SettingEntry { value: string; label: string }
 type SettingsMap = Record<string, SettingEntry>;
@@ -52,6 +52,16 @@ export default function Settings() {
 
   const getValue = (key: string) => edits[key] ?? settings?.[key]?.value ?? "";
   const set = (key: string, val: string) => setEdits(e => ({ ...e, [key]: val }));
+
+  // Broadcast notifikasi
+  const [bcTitle, setBcTitle] = useState("");
+  const [bcBody, setBcBody] = useState("");
+  const [bcTarget, setBcTarget] = useState<"all" | "mitra" | "pengguna">("all");
+  const [bcResult, setBcResult] = useState<{ sent: number } | null>(null);
+  const broadcastMut = useMutation({
+    mutationFn: () => api.post("/admin/broadcast", { title: bcTitle, body: bcBody, target: bcTarget }),
+    onSuccess: (r: any) => { setBcResult(r); setBcTitle(""); setBcBody(""); setTimeout(() => setBcResult(null), 5000); },
+  });
 
   const handleSave = () => {
     if (Object.keys(edits).length === 0) return;
@@ -150,6 +160,51 @@ export default function Settings() {
               {createAdminMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Tambah Admin
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Broadcast Notifikasi */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Send size={16} className="text-[#1a7a6a]" />
+          <h2 className="text-base font-bold text-gray-800">Broadcast Notifikasi</h2>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">Kirim push notification ke pengguna yang sudah mengaktifkan notifikasi di browser mereka.</p>
+        <div className="space-y-3 max-w-lg">
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Target Penerima</label>
+            <div className="flex gap-2">
+              {[{ v: "all", l: "Semua" }, { v: "pengguna", l: "Konsumen" }, { v: "mitra", l: "Mitra" }].map(t => (
+                <button key={t.v} onClick={() => setBcTarget(t.v as any)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${bcTarget === t.v ? "bg-[#1a3a5c] text-white border-[#1a3a5c]" : "bg-white text-gray-600 border-gray-200 hover:border-[#1a3a5c]"}`}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Judul Notifikasi</label>
+            <input value={bcTitle} onChange={e => setBcTitle(e.target.value)} placeholder="Contoh: Promo Spesial RIDE!"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a7a6a]" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Isi Pesan</label>
+            <textarea value={bcBody} onChange={e => setBcBody(e.target.value)} rows={3} placeholder="Isi pesan notifikasi yang akan diterima pengguna..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a7a6a] resize-none" />
+          </div>
+          {bcResult && (
+            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              ✅ Notifikasi berhasil dikirim ke {bcResult.sent} perangkat
+            </div>
+          )}
+          <button
+            onClick={() => broadcastMut.mutate()}
+            disabled={!bcTitle.trim() || !bcBody.trim() || broadcastMut.isPending}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#1a7a6a] text-white rounded-lg text-sm font-semibold hover:bg-[#156a5a] disabled:opacity-50 transition-colors"
+          >
+            {broadcastMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {broadcastMut.isPending ? "Mengirim..." : "Kirim Notifikasi"}
+          </button>
         </div>
       </div>
     </div>

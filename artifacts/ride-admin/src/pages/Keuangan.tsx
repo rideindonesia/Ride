@@ -1,9 +1,24 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, rupiahFormat } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
-import { Wallet, TrendingUp, BarChart3, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, BadgeCheck } from "lucide-react";
+import { Wallet, TrendingUp, BarChart3, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, BadgeCheck, Download } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+
+function exportToCSV(rows: any[], filename: string) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(","), ...rows.map(r => headers.map(h => {
+    const v = r[h] ?? "";
+    const s = String(v).replace(/"/g, '""');
+    return s.includes(",") || s.includes("\n") || s.includes('"') ? `"${s}"` : s;
+  }).join(","))];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
 
 interface KeuanganSummary {
   allTimeTotal: number; allTimeOrders: number;
@@ -118,9 +133,29 @@ export default function Keuangan() {
 
       {/* Fee per Mitra table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">Platform Fee per Mitra</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Diurutkan dari fee terbesar • Tandai lunas setelah mitra menyetor ke RIDE</p>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-800">Platform Fee per Mitra</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Diurutkan dari fee terbesar • Tandai lunas setelah mitra menyetor ke RIDE</p>
+          </div>
+          <button
+            onClick={() => {
+              if (!feeRows?.length) return;
+              const mapped = feeRows.map(r => ({
+                "Nama Mitra": r.mitraName,
+                "Email": r.mitraEmail,
+                "Total Order": r.totalOrders,
+                "Total Fee (Rp)": r.totalFee,
+                "Belum Diterima (Rp)": r.unpaidFee,
+                "Sudah Diterima (Rp)": r.totalFee - r.unpaidFee,
+              }));
+              exportToCSV(mapped, `RIDE_Keuangan_${new Date().toISOString().slice(0,10)}.csv`);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1a7a6a] text-white text-xs font-semibold hover:bg-[#156a5a] transition-colors shrink-0"
+          >
+            <Download size={13} />
+            Export CSV
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

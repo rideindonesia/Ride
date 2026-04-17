@@ -3,6 +3,7 @@ import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTabl
 import { eq, and, or, desc, asc, sql, count, sum, ilike, gte, lte, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import { sendPushToUsers } from "./push";
 
 const router = Router();
 
@@ -598,6 +599,53 @@ router.patch("/accounts/:id/password", requireAdmin, async (req, res) => {
   if (!password || password.length < 6) { res.status(400).json({ error: "Password minimal 6 karakter" }); return; }
   await db.update(usersTable).set({ passwordHash: hashPassword(password) }).where(and(eq(usersTable.id, id), eq(usersTable.isAdmin, true)));
   res.json({ ok: true });
+});
+
+// GET /api/admin/orders/export — export semua order sebagai JSON untuk CSV di client
+router.get("/orders/export", requireAdmin, async (req, res) => {
+  const { status = "all", serviceType = "all", from, to } = req.query as Record<string, string>;
+  const conditions: any[] = [];
+  if (status !== "all") conditions.push(eq(ordersTable.status, status));
+  if (serviceType !== "all") conditions.push(eq(ordersTable.serviceType, serviceType));
+  if (from) conditions.push(gte(ordersTable.createdAt, new Date(from)));
+  if (to) conditions.push(lte(ordersTable.createdAt, new Date(to)));
+
+  const rows = await db
+    .select({
+      id: ordersTable.id, orderNo: ordersTable.orderNo,
+      serviceType: ordersTable.serviceType, status: ordersTable.status,
+      totalAmount: ordersTable.totalAmount, platformFee: ordersTable.platformFee,
+      isPlatformFeePaid: ordersTable.isPlatformFeePaid,
+      pickupAddress: ordersTable.pickupAddress,
+      penggunaName: usersTable.name,
+      createdAt: ordersTable.createdAt, updatedAt: ordersTable.updatedAt,
+    })
+    .from(ordersTable)
+    .leftJoin(usersTable, eq(ordersTable.penggunaId, usersTable.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(5000);
+
+  res.json(rows);
+});
+
+// POST /api/admin/broadcast — kirim push notification ke semua user/mitra/pengguna
+router.post("/broadcast", requireAdmin, async (req, res) => {
+  const { title, body, target = "all" } = req.body;
+  if (!title || !body) { res.status(400).json({ error: "title dan body wajib diisi" }); return; }
+
+  const roleCondition = target === "mitra" ? eq(usersTable.role, "mitra")
+    : target === "pengguna" ? eq(usersTable.role, "pengguna") : null;
+  const whereClause = roleCondition
+    ? and(eq(usersTable.isSuspended, false), roleCondition)
+    : eq(usersTable.isSuspended, false);
+
+  const allUsers = await db.select({ id: usersTable.id }).from(usersTable).where(whereClause);
+  const userIds = allUsers.map(u => u.id);
+  if (userIds.length === 0) { res.json({ sent: 0 }); return; }
+
+  await sendPushToUsers(userIds, { title, body, url: "/" });
+  res.json({ sent: userIds.length });
 });
 
 export default router;
