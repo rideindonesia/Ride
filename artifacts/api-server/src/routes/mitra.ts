@@ -515,6 +515,7 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
         callFee,
         biayaLayanan: BIAYA_LAYANAN,
       });
+      io?.to("room:admin").emit("admin:order_update", { type: "accepted", orderId });
       // Push notification ke pengguna (walau browser ditutup)
       sendPushToUsers([updated.penggunaId], {
         title: "✅ Mitra Ditemukan!",
@@ -563,6 +564,7 @@ router.patch("/orders/:id/cancel", requireMitra, async (req, res) => {
     try {
       io?.to(`order:${orderId}`).emit("order:cancelled", { orderId, canceledBy: "mitra", cancelReason });
       io?.to(`user:${cancelled.penggunaId}`).emit("order:cancelled", { orderId, canceledBy: "mitra", cancelReason });
+      io?.to("room:admin").emit("admin:order_update", { type: "cancelled", orderId });
       sendPushToUsers([cancelled.penggunaId], {
         title: "❌ Mitra Membatalkan Order",
         body: cancelReason ? `Alasan: ${cancelReason}` : "Mitra tidak dapat melanjutkan pesanan.",
@@ -613,10 +615,13 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   const { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod } = req.body;
   const paymentData = { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod };
 
-  // Hitung platform fee: 15% dari biaya panggilan + 100% biaya layanan & admin
+  // Hitung platform fee: baca pct dari DB (default 15%)
   const callFee = Number(biayaPanggilan) || 0;
   const layanan = Number(biayaLayanan) || 0;
-  const platformFee = Math.round(callFee * 0.15) + layanan;
+  const [feePctRow] = await db.select({ value: systemSettingsTable.value })
+    .from(systemSettingsTable).where(eq(systemSettingsTable.key, "platform_fee_pct")).limit(1);
+  const feePct = (parseFloat(feePctRow?.value ?? "15") || 15) / 100;
+  const platformFee = Math.round(callFee * feePct) + layanan;
 
   const [updated] = await db.update(ordersTable)
     .set({ paymentData, platformFee, updatedAt: new Date() })
@@ -644,10 +649,11 @@ router.patch("/orders/:id/done", requireMitra, async (req, res) => {
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
     .returning({ penggunaId: ordersTable.penggunaId });
 
-  // Notify pengguna order is done
+  // Notify pengguna order is done + admin
   try {
     if (updated) {
       io?.to(`user:${updated.penggunaId}`).emit("order:done", { orderId, totalAmount });
+      io?.to("room:admin").emit("admin:order_update", { type: "done", orderId });
     }
   } catch {}
 

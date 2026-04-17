@@ -1,10 +1,30 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { api, rupiahFormat, SERVICE_LABELS, SERVICE_COLORS } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { ShoppingBag, Wallet, Users, Wrench, AlertCircle, Activity, Radio } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
+import { io as socketIO, type Socket } from "socket.io-client";
+
+// Hook: connect admin to socket.io room:admin and invalidate queries on order events
+function useAdminSocket() {
+  const qc = useQueryClient();
+  const socketRef = useRef<Socket | null>(null);
+  useEffect(() => {
+    const socket = socketIO({ path: "/api/socket.io", transports: ["websocket", "polling"] });
+    socketRef.current = socket;
+    socket.on("connect", () => {
+      socket.emit("identify", { userId: 0, role: "admin" });
+    });
+    socket.on("admin:order_update", () => {
+      qc.invalidateQueries({ queryKey: ["live-orders"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    });
+    return () => { socket.disconnect(); };
+  }, [qc]);
+}
 
 interface LiveOrder {
   id: number;
@@ -93,6 +113,7 @@ interface Stats {
 }
 
 export default function Dashboard() {
+  useAdminSocket();
   const { data: stats } = useQuery<Stats>({ queryKey: ["dashboard-stats"], queryFn: () => api.get("/admin/dashboard/stats") });
   const { data: ordersChart } = useQuery<{ date: string; count: number }[]>({ queryKey: ["chart-orders"], queryFn: () => api.get("/admin/dashboard/chart/orders") });
   const { data: revenueChart } = useQuery<{ date: string; revenue: number }[]>({ queryKey: ["chart-revenue"], queryFn: () => api.get("/admin/dashboard/chart/revenue") });

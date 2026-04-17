@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
-import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, loadTarif } from "../utils/pricing";
+import { BIAYA_LAYANAN, PLATFORM_FEE_PCT, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, loadTarif } from "../utils/pricing";
 import { usePushNotification } from "../hooks/usePushNotification";
 import { useRideToast, RideToastContainer } from "../components/RideToast";
 
@@ -178,6 +178,7 @@ export default function DashboardMitra() {
   const [mLaporModal, setMLaporModal] = useState<{ open: boolean; orderId: number | null; orderNo: string }>({ open: false, orderId: null, orderNo: "" });
   const [mLaporMessage, setMLaporMessage] = useState("");
   const [mLaporSubmitting, setMLaporSubmitting] = useState(false);
+  const [platformFeePct, setPlatformFeePct] = useState(PLATFORM_FEE_PCT);
   const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
@@ -425,7 +426,9 @@ export default function DashboardMitra() {
   }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif, showToast]);
 
   // Load tarif dinamis dari DB
-  useEffect(() => { loadTarif(BASE); }, []);
+  useEffect(() => {
+    loadTarif(BASE).then(() => setPlatformFeePct(PLATFORM_FEE_PCT));
+  }, []);
 
   // Submit laporan masalah dari riwayat order (mitra)
   const submitMLaporan = async () => {
@@ -1740,7 +1743,7 @@ export default function DashboardMitra() {
                                 {/* Row 1: Biaya Panggilan × 15% */}
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                                   <div>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>Biaya Panggilan × 15%</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>Biaya Panggilan × {platformFeePct}%</div>
                                     <div style={{ fontSize: 11, color: "#ea580c", marginTop: 2 }}>Kontribusi ke platform RIDE</div>
                                   </div>
                                   <span style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(feePanggilan)}</span>
@@ -2095,7 +2098,7 @@ export default function DashboardMitra() {
                         </div>
                       ))}
                     </div>
-                    <div style={{ marginTop: 10, fontSize: 11, color: "#9aa5b4", textAlign: "center" as const }}>Platform fee 5% dari biaya jasa per order</div>
+                    <div style={{ marginTop: 10, fontSize: 11, color: "#9aa5b4", textAlign: "center" as const }}>Platform fee {platformFeePct}% dari biaya panggilan per order</div>
                     <button onClick={() => setActiveTab("beranda")}
                       style={{ width:"100%", marginTop:10, background:"#f0f4f8", border:"none", borderRadius:10, padding:"9px 0", fontSize:13, fontWeight:700, color:"#1a3a5c", cursor:"pointer" }}>
                       📈 Lihat Grafik Detail di Beranda
@@ -2314,7 +2317,7 @@ export default function DashboardMitra() {
                   <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
                     {[
                       { q:"Bagaimana cara menerima order?", a:"Aktifkan status Online di halaman Beranda. Order masuk akan tampil sebagai notifikasi, Anda punya 30 detik untuk menerima atau menolak." },
-                      { q:"Kapan pendapatan saya masuk?", a:"Pendapatan dihitung dari setiap order yang berhasil diselesaikan dikurangi platform fee 5% dari biaya jasa." },
+                      { q:"Kapan pendapatan saya masuk?", a:`Pendapatan dihitung dari setiap order yang berhasil diselesaikan dikurangi platform fee ${platformFeePct}% dari biaya panggilan.` },
                       { q:"Apa yang harus dilakukan jika ada masalah dengan pengguna?", a:"Hubungi Tim Mitra RIDE atau laporkan melalui menu Laporkan Masalah Teknis." },
                       { q:"Bagaimana jika pengguna tidak bayar?", a:"Laporkan melalui fitur Bantuan. Tim kami akan meninjau dan menyelesaikan dalam 3 hari kerja." },
                     ].map((faq, i) => (
@@ -2434,8 +2437,8 @@ export default function DashboardMitra() {
             <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
               <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Legal & Kemitraan</div>
               {[
-                { id:"perjanjian-m", icon:"📋", label:"Perjanjian Kemitraan RIDE", sub:"Syarat & ketentuan sebagai mitra", content:"Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar 5% dari biaya jasa berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan. Perjanjian ini berlaku selama akun mitra aktif." },
-                { id:"kebijakan-m", icon:"💼", label:"Kebijakan Platform & Komisi", sub:"Sistem komisi dan kebijakan mitra", content:"Platform fee RIDE adalah 5% dari total biaya jasa per order (tidak termasuk biaya sparepart). Fee dihitung otomatis saat order selesai dan disetujui pelanggan. RIDE berhak mengubah kebijakan komisi dengan pemberitahuan 14 hari sebelumnya. Mitra dengan performa tinggi (rating ≥4.8, order ≥50) dapat mengajukan program mitra unggulan dengan fee lebih rendah." },
+                { id:"perjanjian-m", icon:"📋", label:"Perjanjian Kemitraan RIDE", sub:"Syarat & ketentuan sebagai mitra", content:`Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar ${platformFeePct}% dari biaya panggilan berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan. Perjanjian ini berlaku selama akun mitra aktif.` },
+                { id:"kebijakan-m", icon:"💼", label:"Kebijakan Platform & Komisi", sub:"Sistem komisi dan kebijakan mitra", content:`Platform fee RIDE adalah ${platformFeePct}% dari biaya panggilan per order (tidak termasuk biaya sparepart dan biaya jasa). Fee dihitung otomatis saat order selesai dan disetujui pelanggan. RIDE berhak mengubah kebijakan komisi dengan pemberitahuan 14 hari sebelumnya. Mitra dengan performa tinggi (rating ≥4.8, order ≥50) dapat mengajukan program mitra unggulan dengan fee lebih rendah.` },
                 { id:"privasi-m", icon:"🛡️", label:"Kebijakan Privasi", sub:"Data dan keamanan informasi mitra", content:"Data pribadi mitra disimpan dengan enkripsi dan tidak dibagikan kepada pihak ketiga tanpa izin. Kami menggunakan data lokasi hanya selama sesi layanan aktif. Dokumen verifikasi digunakan hanya untuk keperluan verifikasi identitas mitra. Untuk penghapusan data, hubungi mitra@ride.app." },
               ].map(item => (
                 <div key={item.id}>

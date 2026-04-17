@@ -8,6 +8,7 @@ export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm
 };
 
 export let BIAYA_LAYANAN = 2000;
+export let PLATFORM_FEE_PCT = 15;
 
 let _tarifLoaded = false;
 
@@ -19,6 +20,7 @@ export async function loadTarif(apiBase: string = ""): Promise<void> {
     const { tarif } = await r.json() as { tarif: Record<string, string> };
     const freeKm = parseFloat(tarif["call_fee_free_km"] ?? "3") || 3;
     const biayaLayanan = parseInt(tarif["biaya_layanan_admin"] ?? "2000") || 2000;
+    PLATFORM_FEE_PCT = parseInt(tarif["platform_fee_pct"] ?? "15") || 15;
 
     const map: Record<string, string> = {
       bengkel: "bengkel", elektronik: "elektronik", barber: "barber",

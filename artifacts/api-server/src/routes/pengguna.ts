@@ -309,6 +309,7 @@ router.post("/orders", async (req, res) => {
       platformFee: 0,
       createdAt: new Date().toISOString(),
     });
+    io?.to("room:admin").emit("admin:order_update", { type: "new", orderId: order.id });
   } catch {}
 
   res.json({ orderId: order.id, orderNo: order.orderNo });
@@ -560,6 +561,7 @@ router.delete("/orders/:id", async (req, res) => {
       if (cancelled.mitraId) {
         io?.to(`mitra:${cancelled.mitraId}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
       }
+      io?.to("room:admin").emit("admin:order_update", { type: "cancelled", orderId: cancelled.id });
     } catch { /* ignore */ }
   }
 

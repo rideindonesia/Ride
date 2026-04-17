@@ -18,6 +18,10 @@ export function initSocket(server: http.Server): Server {
       if (role === "mitra" && serviceType) {
         socket.join(`service:${serviceType}`);
       }
+      // Admin joins a special room to receive all order events
+      if (role === "admin") {
+        socket.join("room:admin");
+      }
     });
 
     // Client joins an order room (for chat + order updates)
