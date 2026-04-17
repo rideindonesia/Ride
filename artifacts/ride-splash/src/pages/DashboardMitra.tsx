@@ -191,38 +191,6 @@ export default function DashboardMitra() {
   const [mKeamananSub, setMKeamananSub] = useState<string | null>(null);
   const [mEditPhone, setMEditPhone] = useState("");
 
-  // Pengaturan layanan
-  const [workRadius, setWorkRadius] = useState<number>(() => {
-    try { return Number(localStorage.getItem("ride-m-radius") ?? "10"); } catch { return 10; }
-  });
-  const [baseTariff, setBaseTariff] = useState<string>(() => {
-    try { return localStorage.getItem("ride-m-tariff") ?? "50000"; } catch { return "50000"; }
-  });
-  const [baseTariffSaving, setBaseTariffSaving] = useState(false);
-  const [baseTariffMsg, setBaseTariffMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [operationalHours, setOperationalHours] = useState<Record<string, { open: string; close: string; active: boolean }>>(() => {
-    try {
-      const saved = localStorage.getItem("ride-m-ophours");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
-      Senin: { open: "08:00", close: "20:00", active: true },
-      Selasa: { open: "08:00", close: "20:00", active: true },
-      Rabu: { open: "08:00", close: "20:00", active: true },
-      Kamis: { open: "08:00", close: "20:00", active: true },
-      Jumat: { open: "08:00", close: "20:00", active: true },
-      Sabtu: { open: "09:00", close: "18:00", active: true },
-      Minggu: { open: "10:00", close: "16:00", active: false },
-    };
-  });
-  const [serviceCategories, setServiceCategories] = useState<Record<string, boolean>>(() => {
-    try {
-      const saved = localStorage.getItem("ride-m-svccat");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { bengkel: true, elektronik: false, cuci: false, barber: false, inspeksi: false, towing: false };
-  });
-
   // Report mitra
   const [mReportInput, setMReportInput] = useState("");
   const [mReportType, setMReportType] = useState("teknis");
@@ -368,12 +336,6 @@ export default function DashboardMitra() {
   useEffect(() => {
     localStorage.setItem("ride-notif-m", JSON.stringify(mNotifSettings));
   }, [mNotifSettings]);
-
-  // Sync pengaturan layanan to localStorage
-  useEffect(() => { localStorage.setItem("ride-m-radius", String(workRadius)); }, [workRadius]);
-  useEffect(() => { localStorage.setItem("ride-m-tariff", baseTariff); }, [baseTariff]);
-  useEffect(() => { localStorage.setItem("ride-m-ophours", JSON.stringify(operationalHours)); }, [operationalHours]);
-  useEffect(() => { localStorage.setItem("ride-m-svccat", JSON.stringify(serviceCategories)); }, [serviceCategories]);
 
   // Countdown timer for incoming order
   useEffect(() => {
@@ -1695,132 +1657,6 @@ export default function DashboardMitra() {
                       );
                     })}
                     {!mitraProfile && <div style={{ fontSize:12, color:"#9aa5b4", padding:"8px 0" }}>Memuat data dokumen...</div>}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ── Pengaturan Layanan ── */}
-            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Pengaturan Layanan</div>
-              {/* Radius */}
-              <div>
-                <button onClick={() => setOpenAkunSection(openAkunSection === "radius" ? null : "radius")}
-                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
-                  <span style={{ fontSize:20 }}>📍</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Radius Jangkauan Kerja</div>
-                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Saat ini: {workRadius} km dari lokasi Anda</div>
-                  </div>
-                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="radius"?"∨":"›"}</span>
-                </button>
-                {openAkunSection === "radius" && (
-                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6, marginTop:8 }}>
-                      <span style={{ fontSize:12, color:"#7a8a9a" }}>1 km</span>
-                      <span style={{ fontSize:14, fontWeight:800, color:"#1a7a6a" }}>{workRadius} km</span>
-                      <span style={{ fontSize:12, color:"#7a8a9a" }}>50 km</span>
-                    </div>
-                    <input type="range" min={1} max={50} value={workRadius} onChange={e => setWorkRadius(Number(e.target.value))}
-                      style={{ width:"100%", accentColor:"#1a7a6a" }} />
-                    <div style={{ fontSize:11, color:"#9aa5b4", marginTop:6, textAlign:"center" as const }}>Geser untuk mengatur jangkauan area kerja Anda</div>
-                  </div>
-                )}
-              </div>
-              {/* Jam Operasional */}
-              <div>
-                <button onClick={() => setOpenAkunSection(openAkunSection === "jam-ops" ? null : "jam-ops")}
-                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
-                  <span style={{ fontSize:20 }}>🕐</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Jam Operasional</div>
-                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Atur jam buka-tutup per hari</div>
-                  </div>
-                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="jam-ops"?"∨":"›"}</span>
-                </button>
-                {openAkunSection === "jam-ops" && (
-                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
-                    {Object.entries(operationalHours).map(([day, val]) => (
-                      <div key={day} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderTop:"1px solid #f0f4f8" }}>
-                        <div onClick={() => setOperationalHours(h => ({ ...h, [day]: { ...h[day], active: !h[day].active } }))}
-                          style={{ width:36, height:20, borderRadius:10, background: val.active?"#1a7a6a":"#d0d9e2", cursor:"pointer", position:"relative" as const, flexShrink:0 }}>
-                          <div style={{ position:"absolute" as const, top:2, left: val.active?17:2, width:16, height:16, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", transition:"left 0.2s" }} />
-                        </div>
-                        <div style={{ width:50, fontSize:12, fontWeight:700, color: val.active?"#1a2a3a":"#b0bec5" }}>{day}</div>
-                        {val.active ? (
-                          <div style={{ flex:1, display:"flex", gap:6, alignItems:"center" }}>
-                            <input type="time" value={val.open} onChange={e => setOperationalHours(h => ({ ...h, [day]: { ...h[day], open: e.target.value } }))}
-                              style={{ flex:1, border:"1.5px solid #e0e8ef", borderRadius:8, padding:"4px 6px", fontSize:12, outline:"none" }} />
-                            <span style={{ fontSize:11, color:"#9aa5b4" }}>—</span>
-                            <input type="time" value={val.close} onChange={e => setOperationalHours(h => ({ ...h, [day]: { ...h[day], close: e.target.value } }))}
-                              style={{ flex:1, border:"1.5px solid #e0e8ef", borderRadius:8, padding:"4px 6px", fontSize:12, outline:"none" }} />
-                          </div>
-                        ) : (
-                          <div style={{ flex:1, fontSize:12, color:"#b0bec5", fontStyle:"italic" }}>Libur</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {/* Jenis Pekerjaan */}
-              <div>
-                <button onClick={() => setOpenAkunSection(openAkunSection === "jenis-kerja" ? null : "jenis-kerja")}
-                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
-                  <span style={{ fontSize:20 }}>🛠️</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Jenis Pekerjaan</div>
-                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Kategori yang bisa Anda tangani</div>
-                  </div>
-                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="jenis-kerja"?"∨":"›"}</span>
-                </button>
-                {openAkunSection === "jenis-kerja" && (
-                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
-                    {[
-                      { key:"bengkel", label:"Bengkel / Mekanik", emoji:"🔧" },
-                      { key:"elektronik", label:"Service Elektronik", emoji:"💡" },
-                      { key:"cuci", label:"Cuci Kendaraan", emoji:"🚿" },
-                      { key:"barber", label:"Pangkas Rambut", emoji:"✂️" },
-                      { key:"inspeksi", label:"Inspeksi Kendaraan", emoji:"🔍" },
-                      { key:"towing", label:"Towing / Derek", emoji:"🚛" },
-                    ].map(cat => (
-                      <div key={cat.key} onClick={() => setServiceCategories(s => ({ ...s, [cat.key]: !s[cat.key] }))}
-                        style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderTop:"1px solid #f0f4f8", cursor:"pointer" }}>
-                        <span style={{ fontSize:20 }}>{cat.emoji}</span>
-                        <div style={{ flex:1, fontSize:13, fontWeight:600, color:"#1a2a3a" }}>{cat.label}</div>
-                        <div style={{ width:22, height:22, borderRadius:6, border:`2px solid ${serviceCategories[cat.key]?"#1a7a6a":"#d0d9e2"}`, background: serviceCategories[cat.key]?"#1a7a6a":"#fff", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                          {serviceCategories[cat.key] && <span style={{ fontSize:13, color:"#fff", lineHeight:1 }}>✓</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {/* Tarif Dasar */}
-              <div>
-                <button onClick={() => setOpenAkunSection(openAkunSection === "tarif" ? null : "tarif")}
-                  style={{ width:"100%", background:"none", border:"none", padding:"12px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer", textAlign:"left" as const, borderTop:"1px solid #f0f4f8" }}>
-                  <span style={{ fontSize:20 }}>💵</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#1a2a3a" }}>Tarif Jasa Dasar</div>
-                    <div style={{ fontSize:12, color:"#9aa5b4", marginTop:1 }}>Saat ini: {fmtRp(Number(baseTariff))}</div>
-                  </div>
-                  <span style={{ fontSize:16, color:"#b0bec5" }}>{openAkunSection==="tarif"?"∨":"›"}</span>
-                </button>
-                {openAkunSection === "tarif" && (
-                  <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8" }}>
-                    <div style={{ fontSize:12, color:"#7a8a9a", marginBottom:8, marginTop:8 }}>Tarif minimal yang Anda kenakan kepada pelanggan (belum termasuk sparepart).</div>
-                    <input value={baseTariff} onChange={e => setBaseTariff(e.target.value.replace(/\D/g,""))} placeholder="Nominal tarif (misal: 50000)"
-                      style={{ width:"100%", border:"1.5px solid #e0e8ef", borderRadius:10, padding:"9px 12px", fontSize:14, boxSizing:"border-box" as const, marginBottom:8, outline:"none" }} />
-                    {baseTariffMsg && <div style={{ fontSize:12, color: baseTariffMsg.type==="ok"?"#1a7a6a":"#e74c3c", marginBottom:8 }}>{baseTariffMsg.text}</div>}
-                    <button disabled={baseTariffSaving} onClick={async () => {
-                      setBaseTariffSaving(true); setBaseTariffMsg(null);
-                      await new Promise(r => setTimeout(r, 600));
-                      setBaseTariffSaving(false);
-                      setBaseTariffMsg({ type:"ok", text:"Tarif dasar berhasil disimpan!" });
-                    }} style={{ width:"100%", background:"#1a7a6a", color:"#fff", border:"none", borderRadius:10, padding:"10px 0", fontSize:14, fontWeight:700, cursor:"pointer" }}>
-                      {baseTariffSaving ? "Menyimpan..." : "Simpan Tarif"}
-                    </button>
                   </div>
                 )}
               </div>
