@@ -299,8 +299,13 @@ router.post("/orders", async (req, res) => {
       vehicleModel,
       vehicleYear,
       damageCategories: Array.isArray(damageCategories) ? damageCategories : [],
+      description: description ?? null,
       pickupAddress,
+      pickupLat: typeof pickupLat === "number" ? pickupLat : null,
+      pickupLng: typeof pickupLng === "number" ? pickupLng : null,
       penggunaName: pengguna?.name ?? "",
+      totalAmount: 0,
+      platformFee: 0,
       createdAt: new Date().toISOString(),
     });
   } catch {}
