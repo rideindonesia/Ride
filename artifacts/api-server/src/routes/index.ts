@@ -6,6 +6,7 @@ import mitraRouter from "./mitra";
 import seedRouter from "./seed";
 import chatRouter from "./chat";
 import adminRouter from "./admin";
+import pushRouter from "./push";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use("/mitra", mitraRouter);
 router.use("/seed", seedRouter);
 router.use("/chat", chatRouter);
 router.use("/admin", adminRouter);
+router.use("/push", pushRouter);
 
 export default router;

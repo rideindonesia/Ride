@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
+import { usePushNotification } from "../hooks/usePushNotification";
 
 const SERVICE_ROUTES: Record<string, string> = {
   ride_auto: "/order/bengkel",
@@ -88,6 +89,7 @@ const fmtDate = (s: string) => {
 };
 
 export default function DashboardPengguna() {
+  usePushNotification(true);
   const [, navigate] = useLocation();
   const [user, setUser] = useState<{ name: string; id: number } | null>(null);
   const [userLat, setUserLat] = useState<number | null>(null);

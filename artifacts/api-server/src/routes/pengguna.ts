@@ -7,6 +7,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { io } from "../socket";
+import { sendPushToUsers } from "./push";
 
 // Profile photo upload setup
 const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
@@ -429,6 +430,12 @@ router.patch("/orders/:id/confirm", async (req, res) => {
   try {
     if (order.mitraId) {
       io?.to(`user:${order.mitraId}`).emit("order:confirmed", { orderId });
+      // Push ke mitra (walau browser ditutup)
+      sendPushToUsers([order.mitraId], {
+        title: "🚀 Konsumen Siap!",
+        body: "Konsumen telah mengkonfirmasi. Segera menuju lokasi!",
+        url: "/",
+      });
     }
   } catch {}
 

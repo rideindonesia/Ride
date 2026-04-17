@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
 import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
+import { usePushNotification } from "../hooks/usePushNotification";
 
 function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -124,6 +125,7 @@ function getSvcCfg(serviceType?: string | null) {
 }
 
 export default function DashboardMitra() {
+  usePushNotification(true);
   const [, navigate] = useLocation();
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);

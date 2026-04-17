@@ -6,6 +6,7 @@ import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTabl
 import { eq, and, or, gt, gte, desc, sql, avg, count, sum } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
+import { sendPushToUsers } from "./push";
 
 const router = Router();
 
@@ -498,6 +499,12 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
         callFee,
         biayaLayanan: BIAYA_LAYANAN,
       });
+      // Push notification ke pengguna (walau browser ditutup)
+      sendPushToUsers([updated.penggunaId], {
+        title: "✅ Mitra Ditemukan!",
+        body: `${mitraUser?.name ?? "Mitra"} menerima pesanan Anda. Ketuk untuk melihat detail.`,
+        url: "/",
+      });
     }
   } catch {}
 
@@ -529,10 +536,19 @@ router.patch("/orders/:id/phase", requireMitra, async (req, res) => {
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
     .returning({ penggunaId: ordersTable.penggunaId });
 
-  // Notify pengguna of phase change in real-time
+  // Notify pengguna of phase change in real-time + push notification
   try {
     if (updated) {
       io?.to(`user:${updated.penggunaId}`).emit("order:phase", { orderId, phase });
+      // Push berdasarkan fase
+      const phaseMessages: Record<string, { title: string; body: string }> = {
+        tiba:       { title: "📍 Mitra Sudah Tiba!", body: "Mitra sudah tiba di lokasi Anda." },
+        pengerjaan: { title: "🔧 Pengerjaan Dimulai", body: "Mitra sedang mengerjakan pesanan Anda." },
+        selesai:    { title: "✅ Pesanan Selesai", body: "Layanan selesai. Silakan lakukan pembayaran." },
+      };
+      if (phaseMessages[phase]) {
+        sendPushToUsers([updated.penggunaId], { ...phaseMessages[phase], url: "/" });
+      }
     }
   } catch {}
 
