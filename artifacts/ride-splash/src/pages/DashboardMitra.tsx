@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
-import { BIAYA_LAYANAN } from "../utils/pricing";
+import { BIAYA_LAYANAN, calcBiayaPanggilan } from "../utils/pricing";
+
+function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function etaMinutes(km: number): number { return Math.max(3, Math.round(km * 3.5 + 2)); }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -123,6 +132,7 @@ export default function DashboardMitra() {
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [incoming, setIncoming] = useState<IncomingOrder | null>(null);
   const [incomingTimer, setIncomingTimer] = useState(30);
+  const [incomingDistInfo, setIncomingDistInfo] = useState<{ km: number; eta: number; callFee: number } | null>(null);
   const [showNotif, setShowNotif] = useState(false);
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const seenOrderIds = useRef<Set<number>>(new Set());
@@ -228,8 +238,12 @@ export default function DashboardMitra() {
       const d = await res.json();
       if (!d.order) return;
       const o = d.order;
-      // Jangan override kalau sudah ada activeOrder (mitra baru saja accept)
-      setActiveOrder(prev => prev ? prev : o);
+      // Selalu update totalAmount dari DB (callFee dihitung server saat accept)
+      // tapi jaga state lain agar tidak reset
+      setActiveOrder(prev => prev
+        ? { ...prev, totalAmount: o.totalAmount ?? prev.totalAmount, ...(o.paymentData && { paymentData: o.paymentData }) }
+        : o
+      );
       // Restore penggunaConfirmed dari DB
       if (o.penggunaConfirmed) setPenggunaConfirmed(true);
       // Restore phase dari DB
@@ -349,6 +363,35 @@ export default function DashboardMitra() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [incoming?.id]);
 
+  // Hitung jarak + ETA + biaya panggilan saat ada pesanan masuk
+  useEffect(() => {
+    if (!incoming) { setIncomingDistInfo(null); return; }
+    const pLat = incoming.pickupLat;
+    const pLng = incoming.pickupLng;
+    if (!pLat || !pLng) {
+      // Tanpa GPS user, pakai base fee (dist = 0)
+      const callFee = calcBiayaPanggilan(incoming.serviceType, 0);
+      setIncomingDistInfo({ km: 0, eta: etaMinutes(0), callFee });
+      return;
+    }
+    navigator.geolocation?.getCurrentPosition(
+      pos => {
+        const mLat = pos.coords.latitude;
+        const mLng = pos.coords.longitude;
+        const km = haversineKmMitra(mLat, mLng, pLat, pLng);
+        const eta = etaMinutes(km);
+        const callFee = calcBiayaPanggilan(incoming.serviceType, km);
+        setIncomingDistInfo({ km: Math.round(km * 10) / 10, eta, callFee });
+      },
+      () => {
+        // GPS ditolak — pakai base fee
+        const callFee = calcBiayaPanggilan(incoming.serviceType, 0);
+        setIncomingDistInfo({ km: 0, eta: 10, callFee });
+      },
+      { timeout: 5000, maximumAge: 30000 }
+    );
+  }, [incoming?.id]);
+
   const toggleOnline = async () => {
     setTogglingOnline(true);
     const next = !isOnline;
@@ -457,6 +500,8 @@ export default function DashboardMitra() {
       setChatOpen(false);
       setMitraPhase("diterima");
       joinOrderRoom(orderId);
+      // Re-fetch setelah server hitung callFee (totalAmount) berdasarkan jarak GPS
+      setTimeout(() => { fetchActiveOrder(); }, 1500);
     }
     pushNotif({ type: "system", icon: "✅", title: "Pesanan Diterima", body: "Anda telah menerima pesanan. Segera menuju lokasi pelanggan." });
     fetchDashboard();
@@ -1102,15 +1147,40 @@ export default function DashboardMitra() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#ea580c" }}>{fmtRp(incoming.totalAmount ?? 0)}</div>
-                  <div style={{ fontSize: 11, color: "#9aa5b4" }}>Fee: {fmtRp(incoming.platformFee ?? 0)}</div>
+                  <div style={{ fontSize: 17, fontWeight: 900, color: "#ea580c" }}>
+                    {incomingDistInfo ? fmtRp(incomingDistInfo.callFee) : "Menghitung…"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#9aa5b4" }}>Biaya panggilan</div>
+                  {incomingDistInfo && incomingDistInfo.km > 0 && (
+                    <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600, marginTop: 2 }}>
+                      {incomingDistInfo.km} km · Est. {incomingDistInfo.eta} mnt
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#f0f8f6", borderRadius: 10, marginBottom: 14 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#f0f8f6", borderRadius: 10, marginBottom: 8 }}>
                 <span style={{ fontSize: 13 }}>📍</span>
                 <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.pickupAddress ?? "-"}</span>
               </div>
+              {incomingDistInfo && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  {incomingDistInfo.km > 0 && (
+                    <div style={{ flex: 1, padding: "6px 10px", background: "#e6f4f1", borderRadius: 8, textAlign: "center" }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#1a7a6a" }}>{incomingDistInfo.km} km</div>
+                      <div style={{ fontSize: 10, color: "#5a8a80" }}>Jarak</div>
+                    </div>
+                  )}
+                  <div style={{ flex: 1, padding: "6px 10px", background: "#e6f4f1", borderRadius: 8, textAlign: "center" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#1a7a6a" }}>{incomingDistInfo.eta} mnt</div>
+                    <div style={{ fontSize: 10, color: "#5a8a80" }}>Est. tiba</div>
+                  </div>
+                  <div style={{ flex: 1.5, padding: "6px 10px", background: "#fff3e0", borderRadius: 8, textAlign: "center" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#ea580c" }}>{fmtRp(incomingDistInfo.callFee)}</div>
+                    <div style={{ fontSize: 10, color: "#a06030" }}>Biaya Panggilan</div>
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: "flex", gap: 10 }}>
                 <button
