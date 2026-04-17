@@ -5,3 +5,5 @@ export * from "./mitra_locations";
 export * from "./orders";
 export * from "./chat_messages";
 export * from "./wallet_transactions";
+export * from "./system_settings";
+export * from "./vouchers";

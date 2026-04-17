@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/admin/"
+title = "RIDE Admin Panel"
+version = "1.0.0"
+id = "artifacts/ride-admin"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/admin/" ]
+localPort = 25116
+
+[services.development]
+run = "pnpm --filter @workspace/ride-admin run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ride-admin", "run", "build" ]
+publicDir = "artifacts/ride-admin/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25116"
+BASE_PATH = "/admin/"

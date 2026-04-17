@@ -16,6 +16,48 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 - **Socket.io (real-time)**: Singleton socket.ts (frontend), HTTP+Socket.io server (backend index.ts), identifySocket/joinOrderRoom/leaveOrderRoom utilities. Events: `order:new` (mitra broadcast), `order:accepted/phase/payment/done` (pengguna user room), `chat:message` (order room). DashboardPengguna, DashboardMitra, dan semua 6 Order pages (Bengkel/Cuci/Barber/Elektronik/Inspeksi/Towing) sudah socket-integrated. Polling direduksi ke 30s backup. ✅
 - **Chat Auth (cross-role fix)**: `chat.ts` menggunakan `getAllUserIds()` yang mengumpulkan semua identitas (session + `ride-p-uid` cookie + `ride-m-uid` cookie) ke dalam Set, lalu memeriksa apakah ANY ID cocok dengan `penggunaId` atau `mitraId` order. Ini mengatasi bug di mana testing pada device yang sama (multiple account login) menyebabkan session dari pengguna lain mem-override autentikasi mitra dan memunculkan 403. ✅
 
+## Admin Panel
+
+URL: `/admin/` — Dibangun terpisah sebagai artifact react-vite di `artifacts/ride-admin/`, localPort 25116.
+
+### Admin Account
+| Email | Password |
+|-------|----------|
+| admin@ride.app | admin1234 |
+
+> Akun admin dibuat dengan `isAdmin=true`, role='pengguna'. Seed via `POST /api/seed/admin`.
+> Login lewat `/api/admin/login`, protected oleh session `adminId`.
+
+### Halaman Admin Panel
+1. **Dashboard** — Stats (order, pengguna, mitra, platform fee) + 4 chart (area, bar, pie, radar)
+2. **Mitra** — List + filter status/search + detail modal + approve/reject/suspend
+3. **Pengguna** — List + search + detail modal + suspend/aktifkan
+4. **Order** — Monitoring real-time (refetch 15s) + filter status+layanan + detail + cancel
+5. **Keuangan** — Summary bulan ini/lalu + fee per mitra tabel + MoM trend
+6. **Voucher** — CRUD penuh (buat/edit/hapus/toggle aktif) — kartu grid
+7. **Laporan** — Recharts: order per layanan, avg order value, distribusi fee pie, per kota, top 10 mitra
+8. **Pengaturan** — Edit semua tarif (dari system_settings DB), buat admin baru, init admin default
+
+### Backend Admin Routes
+Semua di `/api/admin/*`, semua protected `requireAdmin` (session.adminId).
+- `POST /admin/login` / `GET /admin/me` / `POST /admin/logout`
+- `GET /admin/dashboard/stats` + 3 chart endpoints
+- `GET/PATCH /admin/mitra` + status/suspend endpoints
+- `GET/PATCH /admin/pengguna` + suspend endpoint
+- `GET /admin/orders` + cancel endpoint
+- `GET /admin/keuangan/summary` + fee-per-mitra
+- `GET /admin/vouchers` + POST/PATCH/DELETE
+- `GET /admin/laporan/by-service` + by-city + top-mitra
+- `GET/PATCH /admin/settings`
+- `GET/POST /admin/accounts` + change-password
+
+### System Settings (DB table)
+Semua tarif dibaca dari `system_settings` table, admin bisa edit via panel:
+- `call_fee_{layanan}_base` / `call_fee_{layanan}_per_km` per 6 layanan
+- `call_fee_free_km` = 3 (km gratis)
+- `biaya_layanan_admin` = 2000 (dibayar pengguna)
+- `platform_fee_pct` = 15 (% dari biaya panggilan → pendapatan platform)
+
 ## Demo Accounts
 
 ### Pengguna (User) — Password: `demo1234`

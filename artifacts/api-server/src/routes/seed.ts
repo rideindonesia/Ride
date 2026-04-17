@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraLocationsTable, mitraApplicationsTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraLocationsTable, mitraApplicationsTable, systemSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -213,6 +213,50 @@ router.post("/incoming", async (_req, res) => {
   });
 
   res.json({ message: "Incoming order berhasil dibuat", orderNo });
+});
+
+// POST /api/seed/admin — buat akun admin default
+router.post("/admin", async (_req, res) => {
+  const email = "admin@ride.app";
+  const password = "admin1234";
+  const salt = process.env.SESSION_SECRET;
+  if (!salt) { res.status(500).json({ error: "SESSION_SECRET tidak ditemukan" }); return; }
+
+  const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  if (existing.length > 0) {
+    res.json({ message: "Admin sudah ada", email, password: "(sudah diatur)" });
+    return;
+  }
+
+  const { createHash } = await import("crypto");
+  const passwordHash = createHash("sha256").update(password + salt).digest("hex");
+  const [user] = await db.insert(usersTable).values({
+    name: "Super Admin", email, passwordHash, role: "pengguna", isAdmin: true,
+  }).returning({ id: usersTable.id, name: usersTable.name, email: usersTable.email });
+
+  // Upsert all system settings defaults
+  const settings = [
+    { key: "call_fee_bengkel_base", value: "12000", label: "Bengkel — Biaya Dasar (Rp)" },
+    { key: "call_fee_bengkel_per_km", value: "2500", label: "Bengkel — Per Km Lebih (Rp)" },
+    { key: "call_fee_barber_base", value: "12000", label: "Barber — Biaya Dasar (Rp)" },
+    { key: "call_fee_barber_per_km", value: "2500", label: "Barber — Per Km Lebih (Rp)" },
+    { key: "call_fee_cuci_base", value: "12000", label: "Cuci — Biaya Dasar (Rp)" },
+    { key: "call_fee_cuci_per_km", value: "2500", label: "Cuci — Per Km Lebih (Rp)" },
+    { key: "call_fee_elektronik_base", value: "12000", label: "Elektronik — Biaya Dasar (Rp)" },
+    { key: "call_fee_elektronik_per_km", value: "2500", label: "Elektronik — Per Km Lebih (Rp)" },
+    { key: "call_fee_inspeksi_base", value: "20000", label: "Inspeksi — Biaya Dasar (Rp)" },
+    { key: "call_fee_inspeksi_per_km", value: "3000", label: "Inspeksi — Per Km Lebih (Rp)" },
+    { key: "call_fee_towing_base", value: "75000", label: "Towing — Biaya Dasar (Rp)" },
+    { key: "call_fee_towing_per_km", value: "8000", label: "Towing — Per Km Lebih (Rp)" },
+    { key: "call_fee_free_km", value: "3", label: "Jarak Gratis (km)" },
+    { key: "biaya_layanan_admin", value: "2000", label: "Biaya Layanan & Admin (Rp)" },
+    { key: "platform_fee_pct", value: "15", label: "Platform Fee Mitra (%)" },
+  ];
+  for (const s of settings) {
+    await db.insert(systemSettingsTable).values(s).onConflictDoNothing();
+  }
+
+  res.json({ message: "Admin berhasil dibuat", id: user.id, email, password });
 });
 
 export default router;
