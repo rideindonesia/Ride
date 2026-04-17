@@ -81,6 +81,7 @@ interface DashData {
 interface IncomingOrder {
   id: number; orderNo: string; serviceType: string; vehicleType: string;
   vehicleModel: string; vehicleYear: string; damageCategories: string[];
+  description: string | null;
   pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
   totalAmount: number; platformFee: number;
   penggunaName: string; createdAt: string;
@@ -841,12 +842,27 @@ export default function DashboardMitra() {
               </div>
 
               {/* Customer + vehicle */}
-              <div style={{ padding: "0 10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ padding: "0 10px 8px", display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 18 }}>📍</span>
                 <span style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>
                   {activeOrder.penggunaName} · {activeOrder.vehicleModel} {activeOrder.vehicleYear}
                 </span>
               </div>
+              {/* Kategori & deskripsi kerusakan */}
+              {(Array.isArray((activeOrder as any).damageCategories) || (activeOrder as any).description) && (
+                <div style={{ padding: "0 10px 12px" }}>
+                  {Array.isArray((activeOrder as any).damageCategories) && (activeOrder as any).damageCategories.length > 0 && (
+                    <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 2 }}>
+                      🔧 {(activeOrder as any).damageCategories.join(", ")}
+                    </div>
+                  )}
+                  {(activeOrder as any).description && (
+                    <div style={{ fontSize: 12, color: "#4a5568", background: "#f0f4f8", borderRadius: 8, padding: "6px 10px", fontStyle: "italic", lineHeight: 1.5 }}>
+                      "{(activeOrder as any).description}"
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ padding: "0 10px 16px" }}>
 
@@ -1198,6 +1214,11 @@ export default function DashboardMitra() {
                   <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>
                     {Array.isArray(incoming.damageCategories) ? incoming.damageCategories.join(", ") : ""}
                   </div>
+                  {incoming.description && (
+                    <div style={{ fontSize: 12, color: "#4a5568", marginTop: 4, fontStyle: "italic", maxWidth: 200 }}>
+                      "{incoming.description}"
+                    </div>
+                  )}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 17, fontWeight: 900, color: "#ea580c" }}>
