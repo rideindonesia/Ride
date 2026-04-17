@@ -443,6 +443,92 @@ router.patch("/orders/:id/confirm", async (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/pengguna/orders/:id/confirm-payment — konfirmasi pembayaran oleh pengguna
+router.post("/orders/:id/confirm-payment", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orderId = parseInt(req.params.id);
+  if (isNaN(orderId)) { res.status(400).json({ error: "ID tidak valid" }); return; }
+
+  const { paymentMethod, voucherCode } = req.body as { paymentMethod: string; voucherCode?: string | null };
+  if (!paymentMethod) { res.status(400).json({ error: "paymentMethod wajib diisi" }); return; }
+
+  const [order] = await db.select({
+    id: ordersTable.id,
+    status: ordersTable.status,
+    penggunaId: ordersTable.penggunaId,
+    paymentData: ordersTable.paymentData,
+    paymentConfirmedAt: ordersTable.paymentConfirmedAt,
+  }).from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId)))
+    .limit(1);
+
+  if (!order) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+  if (!order.paymentData) { res.status(400).json({ error: "Data pembayaran belum tersedia" }); return; }
+  if (order.paymentConfirmedAt) { res.json({ ok: true, alreadyConfirmed: true }); return; }
+
+  let total: number = (order.paymentData as any).total ?? 0;
+  let discount = 0;
+
+  // Terapkan voucher jika ada
+  if (voucherCode) {
+    const now = new Date();
+    const [voucher] = await db.select().from(vouchersTable)
+      .where(and(
+        eq(vouchersTable.code, voucherCode.toUpperCase()),
+        eq(vouchersTable.isActive, true),
+        or(isNull(vouchersTable.expiresAt), gt(vouchersTable.expiresAt, now))
+      )).limit(1);
+
+    if (voucher) {
+      const withinUsageLimit = !voucher.usageLimit || voucher.usageCount < voucher.usageLimit;
+      if (withinUsageLimit && total >= voucher.minOrder) {
+        if (voucher.discountType === "percent") {
+          discount = Math.round((total * voucher.discountValue) / 100);
+          if (voucher.maxDiscount) discount = Math.min(discount, voucher.maxDiscount);
+        } else {
+          discount = Math.min(voucher.discountValue, total);
+        }
+        await db.update(vouchersTable)
+          .set({ usageCount: sql`${vouchersTable.usageCount} + 1` })
+          .where(eq(vouchersTable.id, voucher.id));
+      }
+    }
+  }
+
+  const finalTotal = Math.max(0, total - discount);
+
+  // Jika bayar via wallet, deduct saldo
+  if (paymentMethod === "wallet") {
+    const [user] = await db.select({ walletBalance: usersTable.walletBalance })
+      .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+    const balance = user?.walletBalance ?? 0;
+    if (balance < finalTotal) {
+      res.status(400).json({ error: "Saldo wallet tidak cukup", balance, required: finalTotal }); return;
+    }
+    await db.transaction(async (tx) => {
+      await tx.update(usersTable)
+        .set({ walletBalance: sql`${usersTable.walletBalance} - ${finalTotal}` })
+        .where(eq(usersTable.id, penggunaId));
+      await tx.insert(walletTransactionsTable).values({
+        userId: penggunaId,
+        type: "debit" as const,
+        amount: finalTotal,
+        description: `Pembayaran order #${orderId}`,
+      });
+    });
+  }
+
+  // Simpan metode pembayaran + waktu konfirmasi ke order
+  const updatedPaymentData = { ...(order.paymentData as any), paymentMethod, discount, finalTotal };
+  await db.update(ordersTable)
+    .set({ paymentData: updatedPaymentData, paymentConfirmedAt: new Date(), updatedAt: new Date() })
+    .where(eq(ordersTable.id, orderId));
+
+  res.json({ ok: true, discount, finalTotal });
+});
+
 // POST /api/pengguna/orders/:id/review — kirim ulasan & rating
 router.post("/orders/:id/review", async (req, res) => {
   const penggunaId = getPenggunaId(req);
@@ -759,6 +845,52 @@ router.get("/vouchers/active", async (req, res) => {
     .orderBy(desc(vouchersTable.createdAt))
     .limit(10);
   res.json({ vouchers: rows });
+});
+
+// GET /api/pengguna/vouchers/check?code=RIDE10&total=50000 — validasi voucher & hitung diskon
+router.get("/vouchers/check", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const code = String(req.query.code ?? "").toUpperCase().trim();
+  const total = parseInt(String(req.query.total ?? "0")) || 0;
+
+  if (!code) { res.status(400).json({ error: "Kode voucher wajib diisi" }); return; }
+
+  const now = new Date();
+  const [voucher] = await db.select().from(vouchersTable)
+    .where(and(
+      eq(vouchersTable.code, code),
+      eq(vouchersTable.isActive, true),
+      or(isNull(vouchersTable.expiresAt), gt(vouchersTable.expiresAt, now))
+    )).limit(1);
+
+  if (!voucher) { res.json({ valid: false, error: "Kode voucher tidak valid atau sudah kadaluarsa" }); return; }
+
+  const withinUsageLimit = !voucher.usageLimit || voucher.usageCount < voucher.usageLimit;
+  if (!withinUsageLimit) { res.json({ valid: false, error: "Voucher sudah mencapai batas penggunaan" }); return; }
+
+  if (total < voucher.minOrder) {
+    res.json({ valid: false, error: `Minimum order Rp ${voucher.minOrder.toLocaleString("id-ID")} untuk voucher ini` }); return;
+  }
+
+  let discount = 0;
+  if (voucher.discountType === "percent") {
+    discount = Math.round((total * voucher.discountValue) / 100);
+    if (voucher.maxDiscount) discount = Math.min(discount, voucher.maxDiscount);
+  } else {
+    discount = Math.min(voucher.discountValue, total);
+  }
+
+  res.json({
+    valid: true,
+    code: voucher.code,
+    discount,
+    finalTotal: Math.max(0, total - discount),
+    description: voucher.description ?? "",
+    discountType: voucher.discountType,
+    discountValue: voucher.discountValue,
+  });
 });
 
 // GET /api/pengguna/reports — ambil laporan milik user ini

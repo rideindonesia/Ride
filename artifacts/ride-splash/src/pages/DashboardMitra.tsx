@@ -2390,10 +2390,16 @@ export default function DashboardMitra() {
                     {mReportMsg && <div style={{ fontSize:12, color: mReportMsg.type==="ok"?"#1a7a6a":"#e74c3c", marginBottom:8 }}>{mReportMsg.text}</div>}
                     <button disabled={mReportLoading||!mReportInput.trim()} onClick={async () => {
                       setMReportLoading(true); setMReportMsg(null);
-                      await new Promise(r => setTimeout(r, 800));
+                      try {
+                        const r = await fetch(`${BASE}/api/mitra/reports`, {
+                          method:"POST", credentials:"include",
+                          headers:{"Content-Type":"application/json"},
+                          body: JSON.stringify({ type:"general", title:"Laporan Teknis Mitra", message: mReportInput.trim() }),
+                        });
+                        if (r.ok) { setMReportMsg({ type:"ok", text:"Laporan berhasil dikirim! Tim teknis kami akan merespons dalam 1x24 jam." }); setMReportInput(""); }
+                        else setMReportMsg({ type:"err", text:"Gagal mengirim laporan, coba lagi." });
+                      } catch { setMReportMsg({ type:"err", text:"Terjadi kesalahan jaringan." }); }
                       setMReportLoading(false);
-                      setMReportMsg({ type:"ok", text:"Laporan berhasil dikirim! Tim teknis kami akan merespons dalam 1x24 jam." });
-                      setMReportInput("");
                     }} style={{ width:"100%", background: mReportLoading?"#b2dfdb":"#e74c3c", color:"#fff", border:"none", borderRadius:10, padding:"10px 0", fontSize:14, fontWeight:700, cursor:"pointer" }}>
                       {mReportLoading?"Mengirim...":"Kirim Laporan"}
                     </button>

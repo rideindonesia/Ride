@@ -107,7 +107,16 @@ export default function DashboardPengguna() {
   const [pickLng, setPickLng] = useState<number | null>(null);
   const [unreadChat, setUnreadChat] = useState(0);
   const notifCount = unreadChat;
-  const [activeVouchers, setActiveVouchers] = useState<any[]>([]);
+  const [activeVouchers, setActiveVouchers] = useState<{ id: number; code: string; discountType: string; discountValue: number; minOrder: number; maxDiscount: number | null; description: string | null; expiresAt: string | null }[]>([]);
+  const [activeVouchersLoaded, setActiveVouchersLoaded] = useState(false);
+  const fetchActiveVouchers = async () => {
+    try {
+      const r = await fetch("/api/pengguna/vouchers/active", { credentials: "include" });
+      const d = await r.json();
+      setActiveVouchers(d.vouchers ?? []);
+      setActiveVouchersLoaded(true);
+    } catch {}
+  };
   const [activeOrder, setActiveOrder] = useState<null | {
     id: number; orderNo: string; status: string; trackingPhase: string;
     vehicleModel: string; damageCategories: string[]; mitraName: string | null;
@@ -195,11 +204,30 @@ export default function DashboardPengguna() {
     { device: "Safari · iPhone", time: "10 Apr 2026, 09:12 WIB", current: false },
   ];
 
-  // Voucher usage history
-  const voucherHistory = [
-    { code: "RIDE5", desc: "Diskon 5%", usedAt: "12 Apr 2026", order: "#RD-20260412" },
-    { code: "GRATIS", desc: "Gratis biaya panggilan", usedAt: "05 Apr 2026", order: "#RD-20260405" },
-  ];
+  // Voucher usage history — now empty (no history API; vouchers used at checkout)
+  const voucherHistory: { code: string; desc: string; usedAt: string; order: string }[] = [];
+
+  // Wallet / Dompet
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletTxs, setWalletTxs] = useState<{ id: number; type: string; amount: number; description: string; createdAt: string }[]>([]);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletLoaded, setWalletLoaded] = useState(false);
+  const [topupAmt, setTopupAmt] = useState("");
+  const [topupMethod, setTopupMethod] = useState("Transfer Bank");
+  const [withdrawAmt, setWithdrawAmt] = useState("");
+  const [withdrawDest, setWithdrawDest] = useState("");
+  const [walletMsg, setWalletMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [walletSubView, setWalletSubView] = useState<"main" | "topup" | "withdraw">("main");
+  const fetchWallet = async () => {
+    setWalletLoading(true);
+    try {
+      const r = await fetch("/api/pengguna/wallet", { credentials: "include" });
+      const d = await r.json();
+      setWalletBalance(d.balance ?? 0);
+      setWalletTxs(d.transactions ?? []);
+      setWalletLoaded(true);
+    } catch {} finally { setWalletLoading(false); }
+  };
 
   // Report / ticket
   const [reportInput, setReportInput] = useState("");
@@ -1646,31 +1674,33 @@ export default function DashboardPengguna() {
                 <span style={{ fontSize: 20 }}>🎟️</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Voucher Aktif Saya</div>
-                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>3 voucher tersedia</div>
+                  <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{activeVouchersLoaded ? `${activeVouchers.length} voucher tersedia` : "Lihat voucher aktif"}</div>
                 </div>
                 <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "voucher" ? "∨" : "›"}</span>
               </button>
               {openAkunSection === "voucher" && (
                 <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                  {[
-                    { code: "RIDE10", desc: "Diskon 10% untuk order berikutnya", exp: "30 Apr 2026" },
-                    { code: "RIDE20", desc: "Diskon 20% min. order Rp 150.000", exp: "15 Mei 2026" },
-                    { code: "GRATIS", desc: "Gratis biaya panggilan 1x", exp: "01 Jun 2026" },
-                  ].map(v => (
-                    <div key={v.code} style={{ background: "#f0faf8", borderRadius: 12, padding: "10px 12px", marginTop: 8, display: "flex", gap: 10, alignItems: "center" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#1a7a6a" }}>{v.code}</div>
-                        <div style={{ fontSize: 11, color: "#5a7a6a", marginTop: 2 }}>{v.desc}</div>
-                        <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 2 }}>s/d {v.exp}</div>
+                  {!activeVouchersLoaded && <button onClick={fetchActiveVouchers} style={{ width: "100%", marginTop: 8, padding: "8px", borderRadius: 10, border: "1.5px solid #e0e8ef", background: "#f8fafc", color: "#1a3a5c", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Muat Voucher Aktif</button>}
+                  {activeVouchersLoaded && activeVouchers.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 8 }}>Tidak ada voucher aktif saat ini.</div>}
+                  {activeVouchers.map(v => {
+                    const discLabel = v.discountType === "percent" ? `Diskon ${v.discountValue}%${v.maxDiscount ? ` (maks. Rp ${v.maxDiscount.toLocaleString("id-ID")})` : ""}` : `Diskon Rp ${v.discountValue.toLocaleString("id-ID")}`;
+                    const expLabel = v.expiresAt ? `s/d ${new Date(v.expiresAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}` : "Tidak ada batas waktu";
+                    return (
+                      <div key={v.id} style={{ background: "#f0faf8", borderRadius: 12, padding: "10px 12px", marginTop: 8, display: "flex", gap: 10, alignItems: "center" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: "#1a7a6a" }}>{v.code}</div>
+                          <div style={{ fontSize: 11, color: "#5a7a6a", marginTop: 2 }}>{v.description ?? discLabel}</div>
+                          <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 2 }}>{expLabel}{v.minOrder > 0 ? ` · Min. Rp ${v.minOrder.toLocaleString("id-ID")}` : ""}</div>
+                        </div>
+                        <button onClick={() => { setVoucherInput(v.code); }} style={{ background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Pakai</button>
                       </div>
-                      <button style={{ background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Pakai</button>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <input value={voucherInput} onChange={e => setVoucherInput(e.target.value)} placeholder="Punya kode voucher?"
+                    <input value={voucherInput} onChange={e => { setVoucherInput(e.target.value.toUpperCase()); setVoucherMsg(null); }} placeholder="Punya kode voucher?"
                       style={{ flex: 1, border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "8px 10px", fontSize: 13, outline: "none" }} />
-                    <button onClick={() => { if (voucherInput.trim()) { setVoucherMsg({ type: "err", text: "Kode tidak valid atau sudah digunakan." }); setVoucherInput(""); } }}
-                      style={{ background: "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Tukar</button>
+                    <button onClick={async () => { if (!voucherInput.trim()) return; try { const r = await fetch(`/api/pengguna/vouchers/check?code=${encodeURIComponent(voucherInput)}&total=0`, { credentials: "include" }); const d = await r.json(); if (d.valid) { setVoucherMsg({ type: "ok", text: `✅ Kode "${voucherInput}" valid! ${d.description || ""}` }); } else { setVoucherMsg({ type: "err", text: d.error ?? "Kode tidak valid." }); } } catch { setVoucherMsg({ type: "err", text: "Gagal memverifikasi kode voucher." }); } }}
+                      style={{ background: "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cek</button>
                   </div>
                   {voucherMsg && <div style={{ fontSize: 11, color: voucherMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginTop: 6 }}>{voucherMsg.text}</div>}
                   {/* Riwayat Penggunaan Voucher */}
@@ -1716,6 +1746,126 @@ export default function DashboardPengguna() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Menu grup: Dompet */}
+          <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Dompet</div>
+            <button
+              onClick={() => {
+                const next = openAkunSection === "dompet" ? null : "dompet";
+                setOpenAkunSection(next);
+                if (next === "dompet" && !walletLoaded) fetchWallet();
+              }}
+              style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
+              <span style={{ fontSize: 20 }}>💰</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>Dompet RIDE</div>
+                <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 1 }}>{walletBalance !== null ? `Saldo: Rp ${walletBalance.toLocaleString("id-ID")}` : "Lihat & isi saldo"}</div>
+              </div>
+              <span style={{ fontSize: 16, color: "#b0bec5" }}>{openAkunSection === "dompet" ? "∨" : "›"}</span>
+            </button>
+            {openAkunSection === "dompet" && (
+              <div style={{ padding: "0 14px 16px", borderTop: "1px solid #f0f4f8" }}>
+                {walletLoading && <div style={{ fontSize: 13, color: "#9aa5b4", padding: "12px 0", textAlign: "center" as const }}>⏳ Memuat...</div>}
+                {walletLoaded && walletSubView === "main" && (
+                  <>
+                    {/* Saldo */}
+                    <div style={{ background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", borderRadius: 14, padding: "16px", marginTop: 10, color: "#fff", textAlign: "center" as const }}>
+                      <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Saldo Saat Ini</div>
+                      <div style={{ fontSize: 26, fontWeight: 900 }}>Rp {(walletBalance ?? 0).toLocaleString("id-ID")}</div>
+                    </div>
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                      <button onClick={() => { setWalletSubView("topup"); setWalletMsg(null); setTopupAmt(""); }}
+                        style={{ flex: 1, background: "#1a7a6a", color: "#fff", border: "none", borderRadius: 12, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>⬆️ Top-up</button>
+                      <button onClick={() => { setWalletSubView("withdraw"); setWalletMsg(null); setWithdrawAmt(""); setWithdrawDest(""); }}
+                        style={{ flex: 1, background: "#f0f4f8", color: "#1a2a3a", border: "1.5px solid #e0e8f0", borderRadius: 12, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>⬇️ Tarik</button>
+                    </div>
+                    {/* Riwayat */}
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#1a2a3a", marginTop: 14, marginBottom: 6 }}>Riwayat Transaksi</div>
+                    {walletTxs.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4" }}>Belum ada transaksi.</div>}
+                    {walletTxs.map(tx => (
+                      <div key={tx.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f0f4f8" }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: tx.type === "topup" ? "#f0faf8" : tx.type === "debit" || tx.type === "withdraw" ? "#fff5f5" : "#f0f4f8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+                          {tx.type === "topup" ? "⬆️" : tx.type === "debit" || tx.type === "withdraw" ? "⬇️" : "↔️"}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{tx.description}</div>
+                          <div style={{ fontSize: 10, color: "#9aa5b4" }}>{new Date(tx.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: tx.type === "topup" ? "#1a7a6a" : "#e74c3c" }}>
+                          {tx.type === "topup" ? "+" : "-"}Rp {tx.amount.toLocaleString("id-ID")}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {walletLoaded && walletSubView === "topup" && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 8 }}>⬆️ Top-up Dompet</div>
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: 12, color: "#7a8a9a" }}>Jumlah (Rp)</label>
+                      <input type="number" value={topupAmt} onChange={e => setTopupAmt(e.target.value)} placeholder="Contoh: 50000"
+                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginTop: 4, outline: "none" }} />
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ fontSize: 12, color: "#7a8a9a" }}>Metode</label>
+                      <select value={topupMethod} onChange={e => setTopupMethod(e.target.value)}
+                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginTop: 4, outline: "none", background: "#fff" }}>
+                        <option>Transfer Bank</option>
+                        <option>QRIS</option>
+                        <option>Virtual Account</option>
+                      </select>
+                    </div>
+                    {walletMsg && <div style={{ fontSize: 12, color: walletMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{walletMsg.text}</div>}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => { setWalletSubView("main"); setWalletMsg(null); }} style={{ flex: 1, background: "#f0f4f8", color: "#1a2a3a", border: "none", borderRadius: 10, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Batal</button>
+                      <button onClick={async () => {
+                        const amt = parseInt(topupAmt);
+                        if (!amt || amt < 10000) { setWalletMsg({ type: "err", text: "Minimal top-up Rp 10.000" }); return; }
+                        try {
+                          const r = await fetch("/api/pengguna/wallet/topup", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: amt, method: topupMethod }) });
+                          const d = await r.json();
+                          if (r.ok) { setWalletBalance(d.newBalance); setWalletMsg({ type: "ok", text: `✅ Top-up berhasil! Saldo: Rp ${d.newBalance.toLocaleString("id-ID")}` }); setWalletSubView("main"); fetchWallet(); }
+                          else { setWalletMsg({ type: "err", text: d.error ?? "Gagal top-up" }); }
+                        } catch { setWalletMsg({ type: "err", text: "Terjadi kesalahan. Coba lagi." }); }
+                      }} style={{ flex: 2, background: "linear-gradient(135deg, #1a7a6a, #1a3a5c)", color: "#fff", border: "none", borderRadius: 10, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Lanjutkan Top-up</button>
+                    </div>
+                  </div>
+                )}
+                {walletLoaded && walletSubView === "withdraw" && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 8 }}>⬇️ Tarik Saldo</div>
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: 12, color: "#7a8a9a" }}>Jumlah (Rp)</label>
+                      <input type="number" value={withdrawAmt} onChange={e => setWithdrawAmt(e.target.value)} placeholder="Contoh: 50000"
+                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginTop: 4, outline: "none" }} />
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ fontSize: 12, color: "#7a8a9a" }}>Tujuan</label>
+                      <input value={withdrawDest} onChange={e => setWithdrawDest(e.target.value)} placeholder="Nama bank dan nomor rekening"
+                        style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "10px 12px", fontSize: 14, boxSizing: "border-box" as const, marginTop: 4, outline: "none" }} />
+                    </div>
+                    {walletMsg && <div style={{ fontSize: 12, color: walletMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{walletMsg.text}</div>}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => { setWalletSubView("main"); setWalletMsg(null); }} style={{ flex: 1, background: "#f0f4f8", color: "#1a2a3a", border: "none", borderRadius: 10, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Batal</button>
+                      <button onClick={async () => {
+                        const amt = parseInt(withdrawAmt);
+                        if (!amt || amt < 10000) { setWalletMsg({ type: "err", text: "Minimal tarik Rp 10.000" }); return; }
+                        if (!withdrawDest.trim()) { setWalletMsg({ type: "err", text: "Tujuan penarikan wajib diisi" }); return; }
+                        try {
+                          const r = await fetch("/api/pengguna/wallet/withdraw", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: amt, destination: withdrawDest }) });
+                          const d = await r.json();
+                          if (r.ok) { setWalletBalance(d.newBalance); setWalletMsg({ type: "ok", text: `✅ Penarikan diajukan! Saldo: Rp ${d.newBalance.toLocaleString("id-ID")}` }); setWalletSubView("main"); fetchWallet(); }
+                          else { setWalletMsg({ type: "err", text: d.error ?? "Gagal menarik saldo" }); }
+                        } catch { setWalletMsg({ type: "err", text: "Terjadi kesalahan. Coba lagi." }); }
+                      }} style={{ flex: 2, background: "linear-gradient(135deg, #c0392b, #922b21)", color: "#fff", border: "none", borderRadius: 10, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Tarik Saldo</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Menu grup 2: Preferensi */}

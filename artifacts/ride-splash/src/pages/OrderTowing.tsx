@@ -135,6 +135,7 @@ export default function OrderTowing() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [voucherMsg, setVoucherMsg] = useState("");
   const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
   const trackMapRef = useRef<HTMLDivElement>(null);
   const trackLeafletRef = useRef<L.Map | null>(null);
@@ -359,15 +360,19 @@ export default function OrderTowing() {
     setStep(2);
   };
 
-  const VOUCHER_CODES: Record<string, number> = { RIDE10: 0.10, RIDE20: 0.20, GRATIS: 0.05 };
-  const applyVoucher = () => {
-    const disc = VOUCHER_CODES[voucherCode.toUpperCase()];
-    if (disc) setVoucherDiscount(disc);
-    else setVoucherDiscount(0);
+  const applyVoucher = async () => {
+    if (!voucherCode || !paymentData) return;
+    try {
+      const r = await fetch(`/api/pengguna/vouchers/check?code=${encodeURIComponent(voucherCode)}&total=${paymentData.total}`, { credentials: "include" });
+      const d = await r.json();
+      const fmt = (n: number) => "Rp " + n.toLocaleString("id-ID");
+      if (d.valid) { setVoucherDiscount(d.discount); setVoucherMsg(`✅ Diskon ${fmt(d.discount)}`); }
+      else { setVoucherDiscount(0); setVoucherMsg(`❌ ${d.error}`); }
+    } catch { setVoucherMsg("❌ Gagal cek voucher"); }
   };
 
   const computedTotal = paymentData
-    ? Math.round(paymentData.total * (1 - voucherDiscount))
+    ? Math.max(0, paymentData.total - voucherDiscount)
     : null;
 
   return (
@@ -911,8 +916,8 @@ export default function OrderTowing() {
                       ))}
                       {voucherDiscount > 0 && (
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a" }}>
-                          <span>Diskon Voucher ({Math.round(voucherDiscount * 100)}%)</span>
-                          <span style={{ fontWeight: 700 }}>- Rp {Math.round(paymentData.total * voucherDiscount).toLocaleString("id-ID")}</span>
+                          <span>Diskon Voucher ({voucherCode.toUpperCase()})</span>
+                          <span style={{ fontWeight: 700 }}>- Rp {voucherDiscount.toLocaleString("id-ID")}</span>
                         </div>
                       )}
                       <div style={{ borderTop: "1.5px solid #e0e8f0", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 800 }}>
@@ -929,8 +934,8 @@ export default function OrderTowing() {
                       <input
                         type="text"
                         value={voucherCode}
-                        onChange={e => setVoucherCode(e.target.value.toUpperCase())}
-                        placeholder="RIDE10, RIDE20, GRATIS"
+                        onChange={e => { setVoucherCode(e.target.value.toUpperCase()); setVoucherDiscount(0); setVoucherMsg(""); }}
+                        placeholder="Contoh: RIDE10"
                         style={{ flex: 1, padding: "12px 16px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 14, outline: "none", background: "#f8fafc" }}
                       />
                       <button
@@ -938,7 +943,7 @@ export default function OrderTowing() {
                         style={{ padding: "12px 20px", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${ACCENT_DARK}, ${ACCENT})`, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                       >Pakai</button>
                     </div>
-                    {voucherDiscount > 0 && <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 700, marginTop: 6 }}>✅ Voucher berhasil! Diskon {Math.round(voucherDiscount * 100)}%</div>}
+                    {voucherMsg && <div style={{ fontSize: 12, color: voucherMsg.startsWith("✅") ? "#16a34a" : "#dc2626", fontWeight: 700, marginTop: 6 }}>{voucherMsg}</div>}
                   </div>
 
                   {/* Metode bayar */}

@@ -28,6 +28,7 @@ export const ordersTable = pgTable("orders", {
   platformFeePaidAt: timestamp("platform_fee_paid_at"),
   cancelReason: text("cancel_reason"),
   canceledBy: varchar("canceled_by", { length: 20 }),
+  paymentConfirmedAt: timestamp("payment_confirmed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

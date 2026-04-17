@@ -130,6 +130,7 @@ export default function OrderBengkel() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
   const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [voucherMsg, setVoucherMsg] = useState("");
   const [paymentMethodUser, setPaymentMethodUser] = useState<"cash"|"transfer"|"qris">("cash");
   const trackMapRef = useRef<HTMLDivElement>(null);
   const trackLeafletRef = useRef<L.Map | null>(null);
@@ -1130,8 +1131,7 @@ export default function OrderBengkel() {
       {/* ── STEP 5: BAYAR ── */}
       {step === 5 && (() => {
         const fmtIdr = (n: number) => n.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
-        const VOUCHERS: Record<string, number> = { "RIDE10": 0.10, "RIDE20": 0.20, "GRATIS": 0.05 };
-        const discountAmt = paymentData ? Math.round((paymentData.total * (VOUCHERS[voucherCode.toUpperCase()] ?? 0))) : 0;
+        const discountAmt = voucherDiscount;
         const finalTotal = paymentData ? Math.max(0, paymentData.total - discountAmt) : 0;
         const pmLabel: Record<string, string> = {
           cash: "Bayar Tunai ke Mitra",
@@ -1203,25 +1203,17 @@ export default function OrderBengkel() {
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 10 }}>🎁 Kode Voucher</div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <input
-                          type="text" value={voucherCode} onChange={e => { setVoucherCode(e.target.value.toUpperCase()); setVoucherDiscount(0); }}
+                          type="text" value={voucherCode} onChange={e => { setVoucherCode(e.target.value.toUpperCase()); setVoucherDiscount(0); setVoucherMsg(""); }}
                           placeholder="Contoh: RIDE10"
                           style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1.5px solid #e0e8f0", fontSize: 14, outline: "none", fontWeight: 600 }}
                         />
                         <button
-                          onClick={() => {
-                            const disc = VOUCHERS[voucherCode.toUpperCase()];
-                            setVoucherDiscount(disc ?? 0);
-                          }}
+                          onClick={async () => { if (!voucherCode || !paymentData) return; try { const r = await fetch(`/api/pengguna/vouchers/check?code=${encodeURIComponent(voucherCode)}&total=${paymentData.total}`, { credentials: "include" }); const d = await r.json(); if (d.valid) { setVoucherDiscount(d.discount); setVoucherMsg(`✅ Diskon ${fmtIdr(d.discount)}`); } else { setVoucherDiscount(0); setVoucherMsg(`❌ ${d.error}`); } } catch { setVoucherMsg("❌ Gagal cek voucher"); } }}
                           style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                           Pakai
                         </button>
                       </div>
-                      {voucherCode && VOUCHERS[voucherCode.toUpperCase()] == null && (
-                        <div style={{ fontSize: 11, color: "#dc2626", marginTop: 6 }}>Kode voucher tidak valid</div>
-                      )}
-                      {voucherCode && VOUCHERS[voucherCode.toUpperCase()] != null && discountAmt > 0 && (
-                        <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600, marginTop: 6 }}>✅ Voucher berhasil! Diskon {fmtIdr(discountAmt)}</div>
-                      )}
+                      {voucherMsg && <div style={{ fontSize: 11, color: voucherMsg.startsWith("✅") ? "#1a7a6a" : "#dc2626", fontWeight: 600, marginTop: 6 }}>{voucherMsg}</div>}
                     </div>
 
                     {/* Metode Pembayaran */}
@@ -1256,7 +1248,7 @@ export default function OrderBengkel() {
                       <button
                         onClick={() => {
                           if (!paymentData) return;
-                          const disc = voucherCode && paymentData ? Math.round(paymentData.total * ({"RIDE10":0.10,"RIDE20":0.20,"GRATIS":0.05}[voucherCode.toUpperCase()] ?? 0)) : 0;
+                          const disc = voucherDiscount;
                           const fin = Math.max(0, paymentData.total - disc);
                           const fmt = (n: number) => "Rp " + n.toLocaleString("id-ID");
                           const now = new Date();
@@ -1352,7 +1344,18 @@ export default function OrderBengkel() {
               )}
               {paymentData && !paymentConfirmed && (
                 <button
-                  onClick={() => setPaymentConfirmed(true)}
+                  onClick={async () => {
+                    try {
+                      const selectedMethod = paymentMethodUser ?? paymentData?.paymentMethod ?? "cash";
+                      await fetch(`/api/pengguna/orders/${orderId}/confirm-payment`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ paymentMethod: selectedMethod, voucherCode: voucherCode || null }),
+                      });
+                      setPaymentConfirmed(true);
+                    } catch { alert("Gagal konfirmasi. Coba lagi."); }
+                  }}
                   style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
                   ✅ Konfirmasi Pembayaran
                 </button>

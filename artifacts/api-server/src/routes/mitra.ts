@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable } from "@workspace/db";
+import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable, systemSettingsTable } from "@workspace/db";
 import { eq, and, or, gt, gte, desc, sql, avg, count, sum, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
@@ -35,9 +35,10 @@ function serverHaversineKm(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 const uploadDir = path.resolve(process.cwd(), "uploads", "mitra");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
+if (!fs.existsSync(profileUploadDir)) fs.mkdirSync(profileUploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
@@ -46,7 +47,6 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
   },
 });
-
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -54,6 +54,23 @@ const upload = multer({
     const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
     if (allowed.includes(file.mimetype)) cb(null, true);
     else cb(new Error("Format file tidak didukung"));
+  },
+});
+
+const profileStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, profileUploadDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const uploadProfilePhoto = multer({
+  storage: profileStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Hanya format gambar yang didukung (jpg, png, webp)"));
   },
 });
 
@@ -497,12 +514,22 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
       const [mitraLoc] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
         .from(mitraLocationsTable).where(eq(mitraLocationsTable.userId, mitraId)).limit(1);
 
-      // Calculate & store callFee at acceptance time (totalAmount used as temp storage)
-      let callFee = serverCalcBiayaPanggilan(updated.serviceType, 0);
+      // Calculate & store callFee at acceptance time — baca tarif dari DB
+      const settingsRows = await db.select().from(systemSettingsTable);
+      const sMap: Record<string, string> = {};
+      settingsRows.forEach(r => { sMap[r.key] = r.value; });
+      const freeKm = parseFloat(sMap["call_fee_free_km"] ?? "3") || 3;
+      const svcKey = updated.serviceType.toLowerCase().replace(/[\s_-]+/g, "");
+      const base = parseInt(sMap[`call_fee_${svcKey}_base`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.base ?? 12000);
+      const perKm = parseInt(sMap[`call_fee_${svcKey}_per_km`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.perKm ?? 2500);
+      const biayaLayananDB = parseInt(sMap["biaya_layanan_admin"] ?? "2000") || 2000;
+
+      let distKm = 0;
       if (mitraLoc && updated.pickupLat != null && updated.pickupLng != null) {
-        const distKm = serverHaversineKm(mitraLoc.lat, mitraLoc.lng, updated.pickupLat, updated.pickupLng);
-        callFee = serverCalcBiayaPanggilan(updated.serviceType, distKm);
+        distKm = serverHaversineKm(mitraLoc.lat, mitraLoc.lng, updated.pickupLat, updated.pickupLng);
       }
+      const rawFee = base + Math.max(0, distKm - freeKm) * perKm;
+      let callFee = Math.round(rawFee / 500) * 500;
       await db.update(ordersTable).set({ totalAmount: callFee }).where(eq(ordersTable.id, orderId));
 
       io?.to(`user:${updated.penggunaId}`).emit("order:accepted", {
@@ -513,7 +540,7 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
         mitraLat: mitraLoc?.lat ?? null,
         mitraLng: mitraLoc?.lng ?? null,
         callFee,
-        biayaLayanan: BIAYA_LAYANAN,
+        biayaLayanan: biayaLayananDB,
       });
       io?.to("room:admin").emit("admin:order_update", { type: "accepted", orderId });
       // Push notification ke pengguna (walau browser ditutup)
@@ -787,6 +814,21 @@ router.put("/change-password", requireMitra, async (req, res) => {
   await db.update(usersTable).set({ passwordHash: hashPassword(newPassword) })
     .where(eq(usersTable.id, mitraId));
   res.json({ ok: true });
+});
+
+// POST /api/mitra/upload-photo — upload foto profil mitra
+router.post("/upload-photo", (req, res, next) => {
+  uploadProfilePhoto.single("photo")(req, res, (err) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    next();
+  });
+}, async (req: any, res) => {
+  const mitraId = getMitraId(req);
+  if (!mitraId) { res.status(401).json({ error: "Belum login" }); return; }
+  if (!req.file) { res.status(400).json({ error: "Tidak ada file yang diunggah" }); return; }
+  const relativePath = `/uploads/profile/${req.file.filename}`;
+  await db.update(usersTable).set({ profilePhotoPath: relativePath }).where(eq(usersTable.id, mitraId as number));
+  res.json({ ok: true, photoUrl: relativePath });
 });
 
 // POST /api/mitra/reports — kirim laporan dari mitra
