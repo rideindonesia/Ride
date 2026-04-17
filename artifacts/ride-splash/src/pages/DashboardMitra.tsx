@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
 import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
 import { usePushNotification } from "../hooks/usePushNotification";
+import { useRideToast, RideToastContainer } from "../components/RideToast";
 
 function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -126,6 +127,7 @@ function getSvcCfg(serviceType?: string | null) {
 
 export default function DashboardMitra() {
   usePushNotification(true);
+  const { toasts, showToast, removeToast } = useRideToast();
   const [, navigate] = useLocation();
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -348,6 +350,7 @@ export default function DashboardMitra() {
 
     const onPenggunaConfirmed = () => {
       setPenggunaConfirmed(true);
+      showToast({ icon: "🚀", title: "Konsumen Siap!", body: "Segera menuju lokasi konsumen", color: "green" });
     };
     socket.on("order:confirmed", onPenggunaConfirmed);
 
@@ -356,6 +359,7 @@ export default function DashboardMitra() {
       setActiveOrder(prev => {
         if (prev && prev.id === data.orderId) {
           pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain." });
+          showToast({ icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain", color: "red" });
           return null;
         }
         return prev;
@@ -373,7 +377,7 @@ export default function DashboardMitra() {
       socket.off("order:cancelled", onOrderCancelled);
       socket.disconnect();
     };
-  }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif]);
+  }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif, showToast]);
 
   // Fetch mitra profile detail (dokumen, phone, dll)
   useEffect(() => {
@@ -669,6 +673,7 @@ export default function DashboardMitra() {
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", overflow: "hidden", position: "relative" }}>
+      <RideToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Header */}
       <div style={{ background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 60%, #1a7a6a 100%)", padding: "52px 14px 16px", flexShrink: 0 }}>

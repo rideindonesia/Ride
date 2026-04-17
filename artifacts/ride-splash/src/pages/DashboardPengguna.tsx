@@ -4,6 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
 import { usePushNotification } from "../hooks/usePushNotification";
+import { useRideToast, RideToastContainer } from "../components/RideToast";
 
 const SERVICE_ROUTES: Record<string, string> = {
   ride_auto: "/order/bengkel",
@@ -90,6 +91,7 @@ const fmtDate = (s: string) => {
 
 export default function DashboardPengguna() {
   usePushNotification(true);
+  const { toasts, showToast, removeToast } = useRideToast();
   const [, navigate] = useLocation();
   const [user, setUser] = useState<{ name: string; id: number } | null>(null);
   const [userLat, setUserLat] = useState<number | null>(null);
@@ -253,18 +255,27 @@ export default function DashboardPengguna() {
         mitraLat: data.mitraLat,
         mitraLng: data.mitraLng,
       } : prev);
+      showToast({ icon: "✅", title: "Mitra Ditemukan!", body: `${data.mitraName || "Mitra"} menerima pesanan Anda`, color: "green" });
       // Refresh full order data
       fetch("/api/pengguna/active-order", { credentials: "include" })
         .then(r => r.json()).then(d => { if (d.order) setActiveOrder(d.order); }).catch(() => {});
     };
     const onPhase = (data: any) => {
       setActiveOrder(prev => prev && prev.id === data.orderId ? { ...prev, trackingPhase: data.phase } : prev);
+      const phaseToast: Record<string, { icon: string; title: string; body: string; color: "green"|"blue"|"orange"|"red"|"purple" }> = {
+        tiba:       { icon: "📍", title: "Mitra Sudah Tiba!", body: "Mitra sudah tiba di lokasi Anda", color: "blue" },
+        pengerjaan: { icon: "🔧", title: "Pengerjaan Dimulai", body: "Mitra sedang mengerjakan pesanan Anda", color: "orange" },
+        selesai:    { icon: "🎉", title: "Layanan Selesai", body: "Silakan lakukan pembayaran", color: "green" },
+      };
+      if (phaseToast[data.phase]) showToast(phaseToast[data.phase]);
     };
     const onPayment = (data: any) => {
       setActiveOrder(prev => prev && prev.id === data.orderId ? { ...prev, paymentData: data.paymentData } : prev);
+      showToast({ icon: "💳", title: "Rincian Biaya Dikirim", body: "Mitra mengirim rincian biaya layanan", color: "blue" });
     };
     const onDone = (data: any) => {
       setActiveOrder(prev => prev && prev.id === data.orderId ? { ...prev, status: "done" } : prev);
+      showToast({ icon: "⭐", title: "Pesanan Selesai!", body: "Beri ulasan untuk mitra Anda", color: "green", duration: 6000 });
       // Refresh full order + history
       fetch("/api/pengguna/active-order", { credentials: "include" })
         .then(r => r.json()).then(d => setActiveOrder(d.order ?? null)).catch(() => {});
@@ -281,7 +292,7 @@ export default function DashboardPengguna() {
       socket.off("order:payment", onPayment);
       socket.off("order:done", onDone);
     };
-  }, []);
+  }, [showToast]);
 
   // Fetch order history
   useEffect(() => {
@@ -585,6 +596,7 @@ export default function DashboardPengguna() {
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#f0f4f8", fontFamily: "'Inter', sans-serif", overflow: "hidden" }}>
+      <RideToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Sub-page top bar — shown for non-beranda tabs */}
       {activeTab !== "beranda" && (
