@@ -356,16 +356,17 @@ export default function DashboardMitra() {
 
     // When pengguna cancels / picks a different mitra, clear active order immediately
     const onOrderCancelled = (data: { orderId: number }) => {
-      setActiveOrder(prev => {
-        if (prev && prev.id === data.orderId) {
-          pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain." });
-          showToast({ icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain", color: "red" });
-          return null;
-        }
-        return prev;
-      });
+      // Jangan taruh setState lain di dalam functional updater — menyebabkan race condition
+      setActiveOrder(prev => (prev?.id === data.orderId ? null : prev));
+      setMitraPhase("diterima");
       setChatMsgs([]);
       setPenggunaConfirmed(false);
+      if (locationWatchRef.current != null) {
+        navigator.geolocation?.clearWatch(locationWatchRef.current);
+        locationWatchRef.current = null;
+      }
+      pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain." });
+      showToast({ icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain", color: "red" });
     };
     socket.on("order:cancelled", onOrderCancelled);
 
