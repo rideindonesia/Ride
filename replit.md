@@ -120,6 +120,32 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 
+### Model Bisnis & Struktur Biaya (KRUSIAL — JANGAN DIUBAH)
+
+**Biaya yang dibayar Pengguna ke Mitra:**
+| Komponen | Keterangan |
+|---|---|
+| Biaya Panggilan | Biaya dasar + (biaya per km × jarak melebihi batas gratis) |
+| Biaya Layanan & Admin | Flat **Rp 2.000** — selalu tetap |
+
+**Tarif Biaya Panggilan per Layanan:**
+| Layanan | Biaya Dasar | Gratis s/d | Per Km Lebih |
+|---|---|---|---|
+| Bengkel, Barber, Cuci, Elektronik | Rp 12.000 | 3 km | Rp 2.500/km |
+| Inspeksi | Rp 20.000 | 3 km | Rp 3.000/km |
+| Towing/Derek | Rp 75.000 | 3 km | Rp 8.000/km |
+
+**Platform Fee yang dibayar Mitra ke RIDE (setelah order selesai):**
+```
+Platform Fee = (Biaya Panggilan × 15%) + Rp 2.000 (biaya layanan & admin)
+```
+Contoh: Bengkel jarak 5 km → Panggilan = Rp 12.000 + (2×Rp 2.500) = Rp 17.000 → Platform Fee = (Rp 17.000 × 15%) + Rp 2.000 = **Rp 4.550**
+
+**Mitra menyimpan:** Biaya Jasa + Biaya Sparepart (jika ada)
+
+> Implementasi: `PATCH /api/mitra/orders/:id/payment-data` → `platformFee = Math.round(callFee * 0.15) + layanan`
+> Sumber tarif: `artifacts/ride-splash/src/utils/pricing.ts` (frontend) dan fungsi `serverCalcBiayaPanggilan` di `mitra.ts` (backend)
+
 ### Alur Pembayaran (Payment Flow)
 - **Mitra side**: Form rincian biaya (biaya jasa + sparepart) di fase "selesai"; tombol "Kirim Rincian" → `PATCH /api/mitra/orders/:id/payment-data` + chat message; "Konfirmasi Pembayaran Selesai" → `PATCH /api/mitra/orders/:id/done`
 - **Pengguna side (Step 5)**: 3 state: (1) Menunggu — paymentData null; (2) Rincian diterima — breakdown + kode voucher (RIDE10/RIDE20/GRATIS) + pilih metode bayar cash/transfer/QRIS + "Konfirmasi Pembayaran"; (3) Berhasil — Struk + Beri Ulasan
