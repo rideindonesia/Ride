@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, walletTransactionsTable } from "@workspace/db";
-import { eq, and, gt, sql, avg, count, or, desc, aliasedTable } from "drizzle-orm";
+import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, walletTransactionsTable, vouchersTable, reportsTable } from "@workspace/db";
+import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import multer from "multer";
@@ -713,6 +713,68 @@ router.post("/wallet/withdraw", async (req, res) => {
   const [updated] = await db.select({ walletBalance: usersTable.walletBalance })
     .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
   res.json({ ok: true, newBalance: updated?.walletBalance ?? 0 });
+});
+
+// GET /api/pengguna/vouchers/active — ambil voucher yang masih aktif & belum habis
+router.get("/vouchers/active", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const now = new Date();
+  const rows = await db
+    .select({
+      id: vouchersTable.id,
+      code: vouchersTable.code,
+      discountType: vouchersTable.discountType,
+      discountValue: vouchersTable.discountValue,
+      minOrder: vouchersTable.minOrder,
+      maxDiscount: vouchersTable.maxDiscount,
+      description: vouchersTable.description,
+      expiresAt: vouchersTable.expiresAt,
+      usageLimit: vouchersTable.usageLimit,
+      usageCount: vouchersTable.usageCount,
+    })
+    .from(vouchersTable)
+    .where(
+      and(
+        eq(vouchersTable.isActive, true),
+        or(isNull(vouchersTable.expiresAt), gt(vouchersTable.expiresAt, now)),
+        or(isNull(vouchersTable.usageLimit), lt(vouchersTable.usageCount, vouchersTable.usageLimit))
+      )
+    )
+    .orderBy(desc(vouchersTable.createdAt))
+    .limit(10);
+  res.json({ vouchers: rows });
+});
+
+// GET /api/pengguna/reports — ambil laporan milik user ini
+router.get("/reports", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const rows = await db
+    .select()
+    .from(reportsTable)
+    .where(eq(reportsTable.userId, penggunaId))
+    .orderBy(desc(reportsTable.createdAt))
+    .limit(50);
+  res.json({ reports: rows });
+});
+
+// POST /api/pengguna/reports — kirim laporan baru
+router.post("/reports", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+  const { type, title, message } = req.body as { type?: string; title: string; message: string };
+  if (!title?.trim() || !message?.trim()) {
+    res.status(400).json({ error: "Judul dan isi laporan wajib diisi" }); return;
+  }
+  const [inserted] = await db.insert(reportsTable).values({
+    userId: penggunaId,
+    type: type ?? "general",
+    title: title.trim(),
+    message: message.trim(),
+    status: "open",
+  }).returning();
+  res.json({ ok: true, report: inserted });
 });
 
 export default router;

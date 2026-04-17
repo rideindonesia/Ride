@@ -333,6 +333,22 @@ router.patch("/location", requireMitra, async (req, res) => {
   await db.update(mitraLocationsTable)
     .set(updates)
     .where(eq(mitraLocationsTable.userId, mitraId));
+
+  // Emit real-time lokasi ke pengguna yang sedang order aktif dengan mitra ini
+  const [activeOrder] = await db
+    .select({ penggunaId: ordersTable.penggunaId })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      or(eq(ordersTable.status, "accepted"), eq(ordersTable.status, "in_progress"))
+    ))
+    .limit(1);
+  if (activeOrder?.penggunaId) {
+    io?.to(`user:${activeOrder.penggunaId}`).emit("mitra:location", {
+      lat, lng, speedKmh: typeof speedKmh === "number" ? speedKmh : 0,
+    });
+  }
+
   res.json({ ok: true });
 });
 

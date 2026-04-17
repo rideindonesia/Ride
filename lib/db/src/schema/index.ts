@@ -8,3 +8,4 @@ export * from "./wallet_transactions";
 export * from "./system_settings";
 export * from "./vouchers";
 export * from "./push_subscriptions";
+export * from "./reports";

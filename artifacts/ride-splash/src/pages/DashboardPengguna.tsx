@@ -102,7 +102,9 @@ export default function DashboardPengguna() {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [pickLat, setPickLat] = useState<number | null>(null);
   const [pickLng, setPickLng] = useState<number | null>(null);
-  const [notifCount] = useState(0);
+  const [unreadChat, setUnreadChat] = useState(0);
+  const notifCount = unreadChat;
+  const [activeVouchers, setActiveVouchers] = useState<any[]>([]);
   const [activeOrder, setActiveOrder] = useState<null | {
     id: number; orderNo: string; status: string; trackingPhase: string;
     vehicleModel: string; damageCategories: string[]; mitraName: string | null;
@@ -193,12 +195,11 @@ export default function DashboardPengguna() {
 
   // Report / ticket
   const [reportInput, setReportInput] = useState("");
+  const [reportTitle, setReportTitle] = useState("");
   const [reportType, setReportType] = useState("order");
   const [reportLoading, setReportLoading] = useState(false);
   const [reportMsg, setReportMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [reportList] = useState([
-    { id: "TKT-001", title: "Order tidak selesai dengan benar", status: "Sedang diproses", date: "15 Apr 2026" },
-  ]);
+  const [reportList, setReportList] = useState<{ id: number; title: string; status: string; type: string; createdAt: string }[]>([]);
 
   // Keamanan sub-section
   const [keamananSubSection, setKeamananSubSection] = useState<string | null>(null);
@@ -217,6 +218,7 @@ export default function DashboardPengguna() {
   const pickerMapRef = useRef<HTMLDivElement>(null);
   const pickerLeafletRef = useRef<L.Map | null>(null);
   const pickerMarkerRef = useRef<L.Marker | null>(null);
+  const activeMitraMarkerRef = useRef<L.Marker | null>(null);
 
   // Load logged in user
   useEffect(() => {
@@ -299,6 +301,22 @@ export default function DashboardPengguna() {
     fetch("/api/pengguna/order-history", { credentials: "include" })
       .then(r => r.json())
       .then(d => { if (Array.isArray(d.orders)) setOrderHistory(d.orders); })
+      .catch(() => {});
+  }, []);
+
+  // Fetch active vouchers
+  useEffect(() => {
+    fetch("/api/pengguna/vouchers/active", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.vouchers)) setActiveVouchers(d.vouchers); })
+      .catch(() => {});
+  }, []);
+
+  // Fetch reports
+  useEffect(() => {
+    fetch("/api/pengguna/reports", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.reports)) setReportList(d.reports); })
       .catch(() => {});
   }, []);
 
@@ -414,6 +432,10 @@ export default function DashboardPengguna() {
         setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         return next;
       });
+      // Increment unread badge jika pesan dari mitra dan user tidak di tab chat
+      if (data.senderRole !== "pengguna") {
+        setUnreadChat(c => c + 1);
+      }
     };
     socket.on("chat:message", onChat);
 
@@ -422,6 +444,32 @@ export default function DashboardPengguna() {
       socket.off("chat:message", onChat);
     };
   }, [activeOrder?.id]);
+
+  // Socket: terima update lokasi mitra real-time saat order aktif
+  useEffect(() => {
+    const onMitraLocation = (data: { lat: number; lng: number; speedKmh: number }) => {
+      const map = leafletMapRef.current;
+      if (!map) return;
+      if (activeMitraMarkerRef.current) {
+        activeMitraMarkerRef.current.setLatLng([data.lat, data.lng]);
+      } else {
+        const icon = L.divIcon({
+          html: `<div style="width:36px;height:36px;background:linear-gradient(135deg,#1a3a5c,#1a7a6a);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3)">🏍️</div>`,
+          iconSize: [36, 36], iconAnchor: [18, 18], className: "",
+        });
+        activeMitraMarkerRef.current = L.marker([data.lat, data.lng], { icon })
+          .addTo(map)
+          .bindTooltip("Mitra menuju lokasi Anda", { permanent: false });
+      }
+    };
+    socket.on("mitra:location", onMitraLocation);
+    return () => {
+      socket.off("mitra:location", onMitraLocation);
+      // Hapus marker saat cleanup (order selesai/dibatalkan)
+      activeMitraMarkerRef.current?.remove();
+      activeMitraMarkerRef.current = null;
+    };
+  }, []);
 
   const sendChat = async () => {
     if (!chatInput.trim() || !activeOrder || chatSending) return;
@@ -737,17 +785,39 @@ export default function DashboardPengguna() {
             <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>📆</div>
           </div>
 
-          {/* Promo banner */}
-          <div style={{ borderRadius: 16, background: "linear-gradient(135deg, #ea580c 0%, #f97316 100%)", padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>Diskon 10% Service Pertama! 🎁</div>
-              <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 4 }}>Kode: RIDE10 · Khusus pengguna baru</div>
+          {/* Voucher / Promo banner */}
+          {activeVouchers.length > 0 ? activeVouchers.slice(0, 3).map(v => {
+            const isPercent = v.discountType === "percent";
+            const valLabel = isPercent ? `${v.discountValue}%` : `Rp ${v.discountValue.toLocaleString("id-ID")}`;
+            const expiry = v.expiresAt ? new Date(v.expiresAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : null;
+            return (
+              <div key={v.id} style={{ borderRadius: 16, background: "linear-gradient(135deg, #ea580c 0%, #f97316 100%)", padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>🎁 {v.description || `Diskon ${valLabel}`}</div>
+                  <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 4 }}>
+                    Kode: <span style={{ fontWeight: 800, letterSpacing: 1 }}>{v.code}</span>
+                    {v.minOrder > 0 && ` · Min. Rp ${v.minOrder.toLocaleString("id-ID")}`}
+                    {expiry && ` · s/d ${expiry}`}
+                  </div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 12, padding: "8px 12px", textAlign: "center", flexShrink: 0, marginLeft: 12 }}>
+                  <div style={{ color: "#fff", fontSize: isPercent ? 18 : 13, fontWeight: 900, lineHeight: 1 }}>{valLabel}</div>
+                  <div style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>OFF</div>
+                </div>
+              </div>
+            );
+          }) : (
+            <div style={{ borderRadius: 16, background: "linear-gradient(135deg, #ea580c 0%, #f97316 100%)", padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>Diskon 10% Service Pertama! 🎁</div>
+                <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 4 }}>Kode: RIDE10 · Khusus pengguna baru</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 12, padding: "8px 12px", textAlign: "center", flexShrink: 0 }}>
+                <div style={{ color: "#fff", fontSize: 18, fontWeight: 900, lineHeight: 1 }}>10%</div>
+                <div style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>OFF</div>
+              </div>
             </div>
-            <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 12, padding: "8px 12px", textAlign: "center", flexShrink: 0 }}>
-              <div style={{ color: "#fff", fontSize: 18, fontWeight: 900, lineHeight: 1 }}>10%</div>
-              <div style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>OFF</div>
-            </div>
-          </div>
+          )}
 
           {/* Mitra Terdekat */}
           <div style={{ background: "#fff", borderRadius: 20, padding: 16 }}>
@@ -1689,15 +1759,29 @@ export default function DashboardPengguna() {
                     <option value="pembayaran">Masalah pembayaran / saldo</option>
                     <option value="lainnya">Masalah lainnya</option>
                   </select>
+                  <input value={reportTitle} onChange={e => setReportTitle(e.target.value)} placeholder="Judul singkat laporan Anda..."
+                    style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "9px 12px", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 8, outline: "none" }} />
                   <textarea value={reportInput} onChange={e => setReportInput(e.target.value)} placeholder="Ceritakan masalah Anda secara detail..."
                     style={{ width: "100%", border: "1.5px solid #e0e8ef", borderRadius: 10, padding: "9px 12px", fontSize: 13, boxSizing: "border-box" as const, resize: "none", height: 80, marginBottom: 10, outline: "none" }} />
                   {reportMsg && <div style={{ fontSize: 12, color: reportMsg.type === "ok" ? "#1a7a6a" : "#e74c3c", marginBottom: 8 }}>{reportMsg.text}</div>}
-                  <button disabled={reportLoading || !reportInput.trim()} onClick={async () => {
+                  <button disabled={reportLoading || !reportInput.trim() || !reportTitle.trim()} onClick={async () => {
                     setReportLoading(true); setReportMsg(null);
-                    await new Promise(r => setTimeout(r, 800));
+                    try {
+                      const r = await fetch("/api/pengguna/reports", {
+                        method: "POST", credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ type: reportType, title: reportTitle.trim(), message: reportInput.trim() }),
+                      });
+                      const d = await r.json();
+                      if (d.ok) {
+                        setReportMsg({ type: "ok", text: "Laporan berhasil dikirim! Tim kami akan menindaklanjuti dalam 1x24 jam." });
+                        setReportInput(""); setReportTitle("");
+                        if (d.report) setReportList(prev => [d.report, ...prev]);
+                      } else {
+                        setReportMsg({ type: "err", text: d.error ?? "Gagal mengirim laporan" });
+                      }
+                    } catch { setReportMsg({ type: "err", text: "Gagal terhubung ke server" }); }
                     setReportLoading(false);
-                    setReportMsg({ type: "ok", text: "Laporan berhasil dikirim! Tim kami akan menindaklanjuti dalam 1x24 jam." });
-                    setReportInput("");
                   }} style={{ width: "100%", background: reportLoading ? "#b2dfdb" : "#e74c3c", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                     {reportLoading ? "Mengirim..." : "Kirim Laporan"}
                   </button>
@@ -1717,17 +1801,25 @@ export default function DashboardPengguna() {
               </button>
               {openAkunSection === "tiket" && (
                 <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8" }}>
-                  {reportList.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center" as const, padding: "12px 0" }}>Tidak ada tiket laporan aktif.</div>}
-                  {reportList.map(t => (
-                    <div key={t.id} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", marginTop: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: "#1a3a5c" }}>{t.id}</div>
-                        <span style={{ background: "#fff9e6", color: "#c8960c", fontSize: 10, fontWeight: 800, borderRadius: 6, padding: "1px 7px" }}>{t.status}</span>
+                  {reportList.length === 0 && <div style={{ fontSize: 12, color: "#9aa5b4", textAlign: "center" as const, padding: "12px 0" }}>Belum ada tiket laporan.</div>}
+                  {reportList.map(t => {
+                    const statusColors: Record<string, { bg: string; color: string; label: string }> = {
+                      open: { bg: "#fff9e6", color: "#c8960c", label: "Menunggu" },
+                      in_progress: { bg: "#e8f4ff", color: "#1a3a5c", label: "Diproses" },
+                      resolved: { bg: "#e8f8f0", color: "#1a7a6a", label: "Selesai" },
+                    };
+                    const sc = statusColors[t.status] ?? statusColors.open;
+                    return (
+                      <div key={t.id} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 12px", marginTop: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: "#1a3a5c" }}>#{String(t.id).padStart(4, "0")}</div>
+                          <span style={{ background: sc.bg, color: sc.color, fontSize: 10, fontWeight: 800, borderRadius: 6, padding: "1px 7px" }}>{sc.label}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: "#1a2a3a", fontWeight: 600 }}>{t.title}</div>
+                        <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 4 }}>Dibuat: {new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</div>
                       </div>
-                      <div style={{ fontSize: 12, color: "#1a2a3a" }}>{t.title}</div>
-                      <div style={{ fontSize: 10, color: "#9aa5b4", marginTop: 4 }}>Dibuat: {t.date}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1792,12 +1884,12 @@ export default function DashboardPengguna() {
         {([
           { id: "beranda" as TabId, icon: "🏠", label: "Beranda", badge: 0 },
           { id: "pesanan" as TabId, icon: "📋", label: "Pesanan", badge: activeOrder ? 1 : 0 },
-          { id: "chat" as TabId, icon: "💬", label: "Chat", badge: activeOrder ? 1 : 0 },
+          { id: "chat" as TabId, icon: "💬", label: "Chat", badge: unreadChat > 0 ? unreadChat : (activeOrder ? 1 : 0) },
           { id: "akun" as TabId, icon: "👤", label: "Akun", badge: 0 },
         ]).map(item => {
           const isActive = activeTab === item.id;
           return (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "10px 0 6px", background: "none", border: "none", cursor: "pointer", position: "relative" }}>
+            <button key={item.id} onClick={() => { setActiveTab(item.id); if (item.id === "chat") setUnreadChat(0); }} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "10px 0 6px", background: "none", border: "none", cursor: "pointer", position: "relative" }}>
               <span style={{ fontSize: 22 }}>{item.icon}</span>
               <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? "#1a7a6a" : "#9aa5b4" }}>{item.label}</span>
               {item.badge > 0 && (
