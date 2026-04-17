@@ -270,7 +270,9 @@ export default function DashboardMitra() {
       const res = await fetch(`${BASE}/api/mitra/incoming-orders`);
       if (!res.ok) return;
       const d = await res.json();
-      if (d.incoming && !seenOrderIds.current.has(d.incoming.id)) {
+      if (!d.incoming) return;
+      if (!seenOrderIds.current.has(d.incoming.id)) {
+        // Order baru — set sebagai incoming
         seenOrderIds.current.add(d.incoming.id);
         setIncoming(d.incoming);
         setIncomingTimer(30);
@@ -281,6 +283,19 @@ export default function DashboardMitra() {
           body: `${d.incoming.penggunaName} — ${d.incoming.vehicleModel} ${d.incoming.vehicleYear}`,
           orderId: d.incoming.id,
         });
+      } else {
+        // Order sudah ada — refresh koordinat dan deskripsi kalau sebelumnya kosong (dari socket)
+        setIncoming(prev => {
+          if (!prev || prev.id !== d.incoming.id) return prev;
+          const needsRefresh = !prev.pickupLat || !prev.pickupLng || prev.description === undefined;
+          if (!needsRefresh) return prev;
+          return {
+            ...prev,
+            pickupLat: d.incoming.pickupLat,
+            pickupLng: d.incoming.pickupLng,
+            description: d.incoming.description ?? prev.description,
+          };
+        });
       }
     } catch { /* ignore */ }
   }, [pushNotif]);
@@ -289,11 +304,11 @@ export default function DashboardMitra() {
     fetchDashboard();
     fetchIncoming();
     fetchActiveOrder();
-    // Backup polling (reduced to 30s) — primary incoming order via socket
+    // Backup polling — refresh incoming koordinat & dashboard
     pollRef.current = setInterval(() => {
       fetchDashboard();
       fetchIncoming();
-    }, 30000);
+    }, 10000);
 
     // Socket: real-time incoming order notification for mitra
     const onNewOrder = (data: any) => {
@@ -366,12 +381,13 @@ export default function DashboardMitra() {
   }, [incoming?.id]);
 
   // Hitung jarak + ETA + biaya panggilan saat ada pesanan masuk
+  // Dependency: id, pickupLat, pickupLng — agar recalculate saat koordinat direfresh dari polling
   useEffect(() => {
     if (!incoming) { setIncomingDistInfo(null); return; }
     const pLat = incoming.pickupLat;
     const pLng = incoming.pickupLng;
-    if (!pLat || !pLng) {
-      // Tanpa GPS user, pakai base fee (dist = 0)
+    if (pLat == null || pLng == null) {
+      // Koordinat belum tersedia — tampilkan base fee sementara, polling akan refresh
       const callFee = calcBiayaPanggilan(incoming.serviceType, 0);
       setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
       return;
@@ -386,13 +402,13 @@ export default function DashboardMitra() {
         setIncomingDistInfo({ km: Math.round(km * 10) / 10, eta, callFee });
       },
       () => {
-        // GPS ditolak — pakai base fee
+        // GPS ditolak — hitung berdasarkan koordinat saja tanpa posisi mitra
         const callFee = calcBiayaPanggilan(incoming.serviceType, 0);
-        setIncomingDistInfo({ km: 0, eta: 10, callFee });
+        setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
       },
-      { timeout: 5000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
-  }, [incoming?.id]);
+  }, [incoming?.id, incoming?.pickupLat, incoming?.pickupLng]);
 
   const toggleOnline = async () => {
     setTogglingOnline(true);
