@@ -10,7 +10,7 @@ function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-function etaMinutes(km: number): number { return Math.max(3, Math.round(km * 3.5 + 2)); }
+function etaMinutes(km: number): number { return Math.max(5, Math.round(km * 2 + 5)); }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
