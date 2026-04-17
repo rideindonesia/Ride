@@ -712,7 +712,7 @@ export default function OrderTowing() {
                   )}
 
                   <button
-                    onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}/confirm`, { method: "PATCH", credentials: "include" }).catch(() => {}); setMitraConfirmed(true); }}
+                    onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}/confirm`, { method: "PATCH", credentials: "include" }).catch(() => {}); setMitraConfirmed(true); setChatOpen(false); setStep(4); }}
                     disabled={mitraConfirmed}
                     style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: mitraConfirmed ? "#a5d6a7" : "linear-gradient(135deg, #2e7d32, #43a047)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                   >
@@ -746,23 +746,16 @@ export default function OrderTowing() {
           </div>
 
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 20px", background: "linear-gradient(to top, #f0f4f8 90%, transparent)", zIndex: 100 }}>
-            {orderStatus === "accepted" ? (
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  onClick={async () => {
-                    if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
-                    if (orderPollRef.current) clearInterval(orderPollRef.current);
-                    if (chatPollRef.current) clearInterval(chatPollRef.current);
-                    navigate("/dashboard/pengguna");
-                  }}
-                  style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e8a0a0", background: "#fff5f5", color: "#c0392b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-                >✕ Batalkan</button>
-                <button
-                  onClick={() => { if (mitraConfirmed) { setChatOpen(false); setStep(4); } }}
-                  disabled={!mitraConfirmed}
-                  style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: mitraConfirmed ? `linear-gradient(135deg, ${ACCENT_DARK}, ${ACCENT})` : "#c0d0dc", color: "#fff", fontWeight: 700, fontSize: 15, cursor: mitraConfirmed ? "pointer" : "not-allowed" }}
-                >Pantau Driver →</button>
-              </div>
+            {orderStatus === "accepted" && !mitraConfirmed ? (
+              <button
+                onClick={async () => {
+                  if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
+                  if (orderPollRef.current) clearInterval(orderPollRef.current);
+                  if (chatPollRef.current) clearInterval(chatPollRef.current);
+                  navigate("/dashboard/pengguna");
+                }}
+                style={{ width: "100%", padding: "15px", borderRadius: 16, border: "1.5px solid #e8a0a0", background: "#fff5f5", color: "#c0392b", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >✕ Batalkan Pesanan</button>
             ) : (
               <div style={{ height: 10 }} />
             )}
