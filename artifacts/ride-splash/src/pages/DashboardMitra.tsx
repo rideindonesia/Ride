@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
-import { BIAYA_LAYANAN, calcBiayaPanggilan } from "../utils/pricing";
+import { BIAYA_LAYANAN, calcBiayaPanggilan, calcEtaMinutes } from "../utils/pricing";
 
 function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -10,7 +10,6 @@ function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-function etaMinutes(km: number): number { return Math.max(5, Math.round(km * 2 + 5)); }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -371,7 +370,7 @@ export default function DashboardMitra() {
     if (!pLat || !pLng) {
       // Tanpa GPS user, pakai base fee (dist = 0)
       const callFee = calcBiayaPanggilan(incoming.serviceType, 0);
-      setIncomingDistInfo({ km: 0, eta: etaMinutes(0), callFee });
+      setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
       return;
     }
     navigator.geolocation?.getCurrentPosition(
@@ -379,7 +378,7 @@ export default function DashboardMitra() {
         const mLat = pos.coords.latitude;
         const mLng = pos.coords.longitude;
         const km = haversineKmMitra(mLat, mLng, pLat, pLng);
-        const eta = etaMinutes(km);
+        const eta = calcEtaMinutes(km);
         const callFee = calcBiayaPanggilan(incoming.serviceType, km);
         setIncomingDistInfo({ km: Math.round(km * 10) / 10, eta, callFee });
       },
@@ -551,7 +550,7 @@ export default function DashboardMitra() {
     let secs = 300; // default 5 menit
     if (mitraLat && mitraLng && pLat && pLng) {
       const km = haversineKm(mitraLat, mitraLng, pLat, pLng);
-      secs = Math.max(60, Math.round(km / 40 * 3600)); // 40 km/jam
+      secs = Math.max(60, calcEtaMinutes(km) * 60); // kalkulasi jam macet sesuai waktu
     }
     setEtaSecs(secs);
     setMitraPhase("menuju");

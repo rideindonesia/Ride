@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaMinutes } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -173,7 +173,7 @@ export default function OrderElektronik() {
         setOrderId(data.id); setOrderNo(data.orderNo); setOrderStatus("accepted");
         setPinLat(pLat); setPinLng(pLng); setAutoAddress(data.pickupAddress || "");
         setMerekPerangkat(data.vehicleModel || "");
-        setAcceptedMitra({ id: data.mitra.id, name: data.mitra.name, lat: data.mitra.lat, lng: data.mitra.lng, serviceType: data.mitra.serviceType || "", rating: data.mitra.rating ?? null, totalOrders: data.mitra.totalOrders ?? 0, dist, callFee: data.totalAmount ?? 0, etaMin: Math.max(1, Math.round(dist / 40 * 60)) });
+        setAcceptedMitra({ id: data.mitra.id, name: data.mitra.name, lat: data.mitra.lat, lng: data.mitra.lng, serviceType: data.mitra.serviceType || "", rating: data.mitra.rating ?? null, totalOrders: data.mitra.totalOrders ?? 0, dist, callFee: data.totalAmount ?? 0, etaMin: calcEtaMinutes(dist) });
         setMitraConfirmed(true);
         if (data.trackingPhase === "selesai") { if (data.paymentData) setPaymentData(data.paymentData); setStep(5); } else { setStep(4); }
       }).catch(() => {});
@@ -245,7 +245,7 @@ export default function OrderElektronik() {
         if (orderPollRef.current) clearInterval(orderPollRef.current);
         const mitraLat = od.mitra.lat ?? 0, mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
-        setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: mitraLat, lng: mitraLng, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: od.totalAmount ?? calcBiayaPanggilan("elektronik", dist), etaMin: Math.max(5, Math.round(dist*2+5)) });
+        setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: mitraLat, lng: mitraLng, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: od.totalAmount ?? calcBiayaPanggilan("elektronik", dist), etaMin: calcEtaMinutes(dist) });
         setOrderStatus("accepted");
       } else if (od.status === "cancelled") {
         if (orderPollRef.current) clearInterval(orderPollRef.current);
@@ -288,7 +288,7 @@ export default function OrderElektronik() {
         const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" });
         const data = await res.json();
         const mLat: number | null = data.mitra?.lat ?? null, mLng: number | null = data.mitra?.lng ?? null;
-        if (mLat && mLng) { setMitraTrackLat(mLat); setMitraTrackLng(mLng); const dist = haversineDist(mLat, mLng, pinLat, pinLng); setTrackDist(dist); setTrackEta(Math.max(1, Math.round(dist/40*60))); }
+        if (mLat && mLng) { setMitraTrackLat(mLat); setMitraTrackLng(mLng); const dist = haversineDist(mLat, mLng, pinLat, pinLng); setTrackDist(dist); setTrackEta(calcEtaMinutes(dist)); }
         if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
         if (data.paymentData) setPaymentData(data.paymentData);
         if (data.trackingPhase === "selesai") setStep(5);
