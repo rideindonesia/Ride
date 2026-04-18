@@ -1165,13 +1165,17 @@ export default function DashboardPengguna() {
                     </div>
                   </div>
                 </div>
-                {/* Cancel button — only when order hasn't started service */}
-                {activeOrder.trackingPhase !== "selesai" && activeOrder.trackingPhase !== "pengerjaan" && (
+                {/* Cancel button — only allowed while still searching for mitra (before mitra accepts) */}
+                {!activeOrder.mitraName && activeOrder.trackingPhase !== "selesai" && activeOrder.trackingPhase !== "pengerjaan" && activeOrder.trackingPhase !== "tiba" ? (
                   <button onClick={() => { setCancelReason(""); setCancelOther(""); setCancelModalOpen(true); }}
                     style={{ marginTop: 10, width: "100%", padding: "11px", borderRadius: 14, border: "1.5px solid #fca5a5", background: "rgba(254,226,226,0.7)", color: "#dc2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                     ✕ Batalkan Pesanan
                   </button>
-                )}
+                ) : activeOrder.mitraName && activeOrder.trackingPhase !== "selesai" && activeOrder.trackingPhase !== "pengerjaan" ? (
+                  <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 14, background: "#f0f9f6", border: "1.5px solid #a7f3d0", color: "#065f46", fontSize: 12, fontWeight: 600, textAlign: "center" as const }}>
+                    🔒 Pesanan tidak dapat dibatalkan — mitra sedang dalam perjalanan menuju lokasi Anda
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div style={{ textAlign: "center", padding: "56px 24px" }}>
@@ -2112,7 +2116,7 @@ export default function DashboardPengguna() {
                   {[
                     { q: "Bagaimana cara memesan layanan?", a: "Pilih layanan di tab Beranda, isi form detail kendaraan dan lokasi, lalu tunggu mitra terdekat menerima pesanan Anda." },
                     { q: "Berapa lama mitra sampai?", a: "Estimasi kedatangan mitra adalah 15–45 menit tergantung jarak dan ketersediaan mitra di area Anda." },
-                    { q: "Bagaimana cara membatalkan pesanan?", a: "Anda dapat membatalkan pesanan sebelum mitra menerima. Buka tab Pesanan dan pilih Batalkan Order." },
+                    { q: "Bagaimana cara membatalkan pesanan?", a: "Pembatalan hanya dapat dilakukan selama sistem masih mencari mitra (sebelum mitra menerima pesanan). Setelah mitra menerima dan sedang dalam perjalanan, pesanan tidak dapat dibatalkan." },
                     { q: "Bagaimana jika ada masalah dengan layanan?", a: "Hubungi kami via WhatsApp atau chat CS RIDE untuk penanganan dalam 1x24 jam." },
                   ].map((faq, i) => (
                     <div key={i} style={{ padding: "10px 0", borderTop: i === 0 ? "none" : "1px solid #f0f4f8" }}>
