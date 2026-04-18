@@ -399,7 +399,7 @@ export default function DashboardMitra() {
     };
     socket.on("order:confirmed", onPenggunaConfirmed);
 
-    // When order is cancelled (either by pengguna or by mitra themselves)
+    // When order is cancelled by pengguna — mitra's own cancellation is handled by doCancelOrderMitra directly
     const onOrderCancelled = (data: { orderId: number; canceledBy?: string; cancelReason?: string }) => {
       setActiveOrder(prev => (prev?.id === data.orderId ? null : prev));
       setMitraPhase("diterima");
@@ -409,10 +409,8 @@ export default function DashboardMitra() {
         navigator.geolocation?.clearWatch(locationWatchRef.current);
         locationWatchRef.current = null;
       }
-      if (data.canceledBy === "mitra") {
-        pushNotif({ type: "order", icon: "✅", title: "Order Dibatalkan", body: "Anda membatalkan pesanan ini." });
-        showToast({ icon: "✅", title: "Order Dibatalkan", body: "Anda membatalkan pesanan ini.", color: "red" });
-      } else {
+      // Hanya tampil notifikasi jika konsumen yang batalkan (bukan mitra sendiri)
+      if (data.canceledBy !== "mitra") {
         pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen membatalkan pesanan." });
         showToast({ icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen membatalkan pesanan.", color: "red" });
       }
@@ -654,6 +652,8 @@ export default function DashboardMitra() {
     setMCancelOther("");
     setActiveOrder(null);
     setMitraPhase("diterima");
+    // Notifikasi satu kali dari tombol — tidak dari socket agar tidak dobel
+    showToast({ icon: "✅", title: "Order Dibatalkan", body: "Pesanan berhasil dibatalkan.", color: "red" });
   };
 
   const acceptOrder = async (orderId: number) => {

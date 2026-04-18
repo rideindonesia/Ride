@@ -428,9 +428,17 @@ export default function OrderBengkel() {
     };
     socket.on("chat:message", onChat);
 
+    // Jika mitra membatalkan order saat sudah accepted
+    const onCancelledByMitra = (data: { orderId: number; canceledBy?: string; cancelReason?: string }) => {
+      if (data.orderId !== orderId) return;
+      setOrderStatus("cancelled");
+    };
+    socket.on("order:cancelled", onCancelledByMitra);
+
     return () => {
       leaveOrderRoom(orderId);
       socket.off("chat:message", onChat);
+      socket.off("order:cancelled", onCancelledByMitra);
     };
   }, [orderStatus, orderId]);
 

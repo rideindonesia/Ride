@@ -285,7 +285,12 @@ export default function OrderTowing() {
     joinOrderRoom(orderId);
     const onChat = (data: any) => { if (data.orderId !== orderId) return; setChatMessages(prev => { if (prev.some((m: any) => m.id === data.id)) return prev; const next = [...prev, data]; setTimeout(() => { const el = chatBottomRef.current?.parentElement; if (el) el.scrollTop = el.scrollHeight; }, 50); return next; }); };
     socket.on("chat:message", onChat);
-    return () => { leaveOrderRoom(orderId); socket.off("chat:message", onChat); };
+    const onCancelledByMitra = (data: { orderId: number; canceledBy?: string }) => {
+      if (data.orderId !== orderId) return;
+      setOrderStatus("cancelled");
+    };
+    socket.on("order:cancelled", onCancelledByMitra);
+    return () => { leaveOrderRoom(orderId); socket.off("chat:message", onChat); socket.off("order:cancelled", onCancelledByMitra); };
   }, [orderStatus, orderId]);
 
   // Step 4: location poll + socket for phase/payment/done
