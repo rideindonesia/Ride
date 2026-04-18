@@ -776,7 +776,15 @@ export default function OrderTowing() {
       {/* ── STEP 4 — Tracking ── */}
       {step === 4 && (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
+          {orderStatus === "cancelled" && (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", textAlign: "center" }}>
+              <span style={{ fontSize: 56 }}>😔</span>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2a3a", marginTop: 14 }}>Pesanan Dibatalkan</div>
+              <div style={{ fontSize: 13, color: "#7a8a9a", marginTop: 6 }}>Mitra membatalkan pesanan ini. Silakan pesan kembali.</div>
+              <button onClick={() => navigate("/dashboard/pengguna")} style={{ marginTop: 20, padding: "13px 36px", borderRadius: 14, border: "none", background: "#1a3a5c", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali ke Beranda</button>
+            </div>
+          )}
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px", display: orderStatus === "cancelled" ? "none" : undefined }}>
             <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 14px" }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 4 }}>📡 Tracking Driver Derek</div>
 
