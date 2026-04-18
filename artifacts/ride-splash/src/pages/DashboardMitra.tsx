@@ -399,9 +399,8 @@ export default function DashboardMitra() {
     };
     socket.on("order:confirmed", onPenggunaConfirmed);
 
-    // When pengguna cancels / picks a different mitra, clear active order immediately
-    const onOrderCancelled = (data: { orderId: number }) => {
-      // Jangan taruh setState lain di dalam functional updater — menyebabkan race condition
+    // When order is cancelled (either by pengguna or by mitra themselves)
+    const onOrderCancelled = (data: { orderId: number; canceledBy?: string; cancelReason?: string }) => {
       setActiveOrder(prev => (prev?.id === data.orderId ? null : prev));
       setMitraPhase("diterima");
       setChatMsgs([]);
@@ -410,8 +409,13 @@ export default function DashboardMitra() {
         navigator.geolocation?.clearWatch(locationWatchRef.current);
         locationWatchRef.current = null;
       }
-      pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain." });
-      showToast({ icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen memilih mitra lain", color: "red" });
+      if (data.canceledBy === "mitra") {
+        pushNotif({ type: "order", icon: "✅", title: "Order Dibatalkan", body: "Anda membatalkan pesanan ini." });
+        showToast({ icon: "✅", title: "Order Dibatalkan", body: "Anda membatalkan pesanan ini.", color: "red" });
+      } else {
+        pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen membatalkan pesanan." });
+        showToast({ icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen membatalkan pesanan.", color: "red" });
+      }
     };
     socket.on("order:cancelled", onOrderCancelled);
 
