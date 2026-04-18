@@ -333,15 +333,31 @@ export default function DashboardPengguna() {
       fetch("/api/pengguna/order-history", { credentials: "include" })
         .then(r => r.json()).then(d => { if (Array.isArray(d.orders)) setOrderHistory(d.orders); }).catch(() => {});
     };
+    const onOrderCancelled = (data: { orderId: number; canceledBy?: string; cancelReason?: string }) => {
+      // Hanya proses jika order ini milik pengguna
+      setActiveOrder(prev => {
+        if (!prev || prev.id !== data.orderId) return prev;
+        return null;
+      });
+      if (data.canceledBy === "mitra") {
+        const reasonText = data.cancelReason ? `Alasan: ${data.cancelReason}` : "Mitra membatalkan pesanan Anda.";
+        showToast({ icon: "❌", title: "Pesanan Dibatalkan Mitra", body: reasonText, color: "red", duration: 8000 });
+      }
+      // Refresh history agar status terbaru tampil
+      fetch("/api/pengguna/order-history", { credentials: "include" })
+        .then(r => r.json()).then(d => { if (Array.isArray(d.orders)) setOrderHistory(d.orders); }).catch(() => {});
+    };
     socket.on("order:accepted", onAccepted);
     socket.on("order:phase", onPhase);
     socket.on("order:payment", onPayment);
     socket.on("order:done", onDone);
+    socket.on("order:cancelled", onOrderCancelled);
     return () => {
       socket.off("order:accepted", onAccepted);
       socket.off("order:phase", onPhase);
       socket.off("order:payment", onPayment);
       socket.off("order:done", onDone);
+      socket.off("order:cancelled", onOrderCancelled);
     };
   }, [showToast]);
 
