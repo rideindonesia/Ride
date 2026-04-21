@@ -2892,9 +2892,9 @@ export default function DashboardMitra() {
                           )}
                           <div style={{ fontSize: 10, color: "#9aa5b4" }}>{fmtDate(p.createdAt)}</div>
                         </div>
-                        <a href={`${BASE}${p.proofPhotoPath}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                        <a href={`${BASE}/api${p.proofPhotoPath}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
                           <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "#f4f7fb", flexShrink: 0 }}>
-                            <img src={`${BASE}${p.proofPhotoPath}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="bukti" />
+                            <img src={`${BASE}/api${p.proofPhotoPath}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="bukti" />
                           </div>
                         </a>
                       </div>
