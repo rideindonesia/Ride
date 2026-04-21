@@ -540,7 +540,11 @@ export default function DashboardMitra() {
     );
   }, [incoming?.id, incoming?.pickupLat, incoming?.pickupLng]);
 
+  const ACTIVE_PHASES = ["accepted", "menuju", "tiba", "pengerjaan"];
+  const isBusyWithOrder = activeOrder !== null && ACTIVE_PHASES.includes(activeOrder.status ?? "");
+
   const toggleOnline = async () => {
+    if (isBusyWithOrder) return;
     setTogglingOnline(true);
     const next = !isOnline;
     setIsOnline(next);
@@ -555,11 +559,12 @@ export default function DashboardMitra() {
           );
         });
       }
-      await fetch(`${BASE}/api/mitra/toggle-online`, {
+      const res = await fetch(`${BASE}/api/mitra/toggle-online`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isOnline: next, lat, lng }),
       });
+      if (!res.ok) setIsOnline(!next);
     } catch { setIsOnline(!next); }
     finally { setTogglingOnline(false); }
   };
@@ -908,27 +913,44 @@ export default function DashboardMitra() {
             <div>
               <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>Status Order</div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: isOnline ? "#22c55e" : "#ef4444" }} />
-                <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>{isOnline ? "Online — Menerima pesanan" : "Offline"}</span>
+                {isBusyWithOrder ? (
+                  <>
+                    <div style={{ width: 8, height: 8, borderRadius: 4, background: "#f59e0b" }} />
+                    <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>Sedang dalam order — tidak bisa terima order baru</span>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ width: 8, height: 8, borderRadius: 4, background: isOnline ? "#22c55e" : "#ef4444" }} />
+                    <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>{isOnline ? "Online — Menerima pesanan" : "Offline"}</span>
+                  </>
+                )}
               </div>
             </div>
-            {/* Toggle switch */}
+            {/* Toggle switch — disabled saat busy */}
             <button
               onClick={toggleOnline}
-              disabled={togglingOnline}
+              disabled={togglingOnline || isBusyWithOrder}
+              title={isBusyWithOrder ? "Selesaikan order aktif terlebih dahulu" : undefined}
               style={{
-                width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer",
-                background: isOnline ? "#22c55e" : "rgba(255,255,255,0.2)",
+                width: 52, height: 28, borderRadius: 14, border: "none",
+                cursor: isBusyWithOrder ? "not-allowed" : "pointer",
+                background: isBusyWithOrder ? "#f59e0b" : isOnline ? "#22c55e" : "rgba(255,255,255,0.2)",
                 position: "relative", transition: "background 0.2s",
+                opacity: isBusyWithOrder ? 0.85 : 1,
               }}
             >
               <div style={{
-                position: "absolute", top: 3, left: isOnline ? 26 : 3,
+                position: "absolute", top: 3, left: isBusyWithOrder ? 26 : isOnline ? 26 : 3,
                 width: 22, height: 22, borderRadius: 11, background: "#fff",
                 transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
               }} />
             </button>
           </div>
+          {isBusyWithOrder && (
+            <div style={{ marginTop: 8, fontSize: 11, color: "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>
+              Toggle aktif kembali setelah order selesai
+            </div>
+          )}
         </div>
       </div>
 

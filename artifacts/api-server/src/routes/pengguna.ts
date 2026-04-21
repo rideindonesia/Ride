@@ -293,10 +293,27 @@ router.post("/orders", async (req, res) => {
     status: "pending",
   }).returning({ id: ordersTable.id, orderNo: ordersTable.orderNo });
 
-  // Notify all online mitra of this service type in real-time
+  // Notify only available (online + no active order) mitra of this service type
   try {
     const [pengguna] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
-    io?.to(`service:${svcType}`).emit("order:new", {
+
+    // Get all online mitra for this service type
+    const onlineMitra = await db.select({ userId: mitraLocationsTable.userId })
+      .from(mitraLocationsTable)
+      .where(and(eq(mitraLocationsTable.isOnline, true), eq(mitraLocationsTable.serviceType, svcType)));
+
+    // Filter out mitra who already have an active order
+    const busyMitra = await db.select({ mitraId: ordersTable.mitraId })
+      .from(ordersTable)
+      .where(and(
+        inArray(ordersTable.status, ["accepted", "menuju", "tiba", "pengerjaan"]),
+        inArray(ordersTable.mitraId, onlineMitra.map(m => m.userId).filter((id): id is number => id !== null))
+      ));
+    const busyIds = new Set(busyMitra.map(b => b.mitraId));
+
+    const availableMitra = onlineMitra.filter(m => m.userId !== null && !busyIds.has(m.userId));
+
+    const payload = {
       id: order.id,
       orderNo: order.orderNo,
       serviceType: svcType,
@@ -312,7 +329,12 @@ router.post("/orders", async (req, res) => {
       totalAmount: 0,
       platformFee: 0,
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    // Emit individually to each available mitra
+    for (const m of availableMitra) {
+      io?.to(`user:${m.userId}`).emit("order:new", payload);
+    }
     io?.to("room:admin").emit("admin:order_update", { type: "new", orderId: order.id });
   } catch {}
 

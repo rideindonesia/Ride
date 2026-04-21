@@ -374,6 +374,21 @@ router.patch("/toggle-online", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
   const { isOnline, lat, lng } = req.body;
 
+  // Cegah mitra toggle ON jika sedang ada order aktif
+  if (!!isOnline) {
+    const [activeOrder] = await db.select({ id: ordersTable.id })
+      .from(ordersTable)
+      .where(and(
+        eq(ordersTable.mitraId, mitraId),
+        inArray(ordersTable.status, ["accepted", "menuju", "tiba", "pengerjaan"])
+      ))
+      .limit(1);
+    if (activeOrder) {
+      res.status(409).json({ error: "Kamu sedang dalam order aktif. Selesaikan order terlebih dahulu sebelum mengubah status." });
+      return;
+    }
+  }
+
   const existing = await db.select({ id: mitraLocationsTable.id, lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
     .from(mitraLocationsTable)
     .where(eq(mitraLocationsTable.userId, mitraId))
