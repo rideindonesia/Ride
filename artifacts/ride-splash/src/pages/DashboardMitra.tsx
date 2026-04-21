@@ -311,7 +311,7 @@ export default function DashboardMitra() {
   };
 
   const submitFeePayment = async () => {
-    if (!payProof || !payAmount || parseInt(payAmount) <= 0) return;
+    if (!payProof || !payAmount || parseInt(payAmount.replace(/\D/g, "")) <= 0) return;
     setPaySubmitting(true);
     try {
       const fd = new FormData();
@@ -2820,10 +2820,15 @@ export default function DashboardMitra() {
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 6 }}>Jumlah yang ditransfer (Rp)</div>
                   <input
-                    type="number"
-                    placeholder={`Contoh: ${feeDetail.totalPending}`}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={feeDetail.totalPending.toLocaleString("id-ID")}
                     value={payAmount}
-                    onChange={e => setPayAmount(e.target.value)}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      if (digits === "") { setPayAmount(""); return; }
+                      setPayAmount(parseInt(digits, 10).toLocaleString("id-ID"));
+                    }}
                     style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 15, fontWeight: 600, color: "#1a2a3a", boxSizing: "border-box", outline: "none" }}
                   />
                   <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 4 }}>Sisa tagihan: {fmtRp(feeDetail.totalPending)} — boleh cicil</div>
@@ -2853,8 +2858,8 @@ export default function DashboardMitra() {
                 </div>
                 <button
                   onClick={submitFeePayment}
-                  disabled={!payProof || !payAmount || parseInt(payAmount) <= 0 || paySubmitting}
-                  style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", background: (!payProof || !payAmount || parseInt(payAmount) <= 0) ? "#d0dce8" : "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: (!payProof || !payAmount || parseInt(payAmount) <= 0) ? "not-allowed" : "pointer" }}
+                  disabled={!payProof || !payAmount || parseInt(payAmount.replace(/\D/g, "")) <= 0 || paySubmitting}
+                  style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", background: (!payProof || !payAmount || parseInt(payAmount.replace(/\D/g, "")) <= 0) ? "#d0dce8" : "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: (!payProof || !payAmount || parseInt(payAmount.replace(/\D/g, "")) <= 0) ? "not-allowed" : "pointer" }}
                 >
                   {paySubmitting ? "Mengirim..." : "Kirim Bukti Pembayaran"}
                 </button>
