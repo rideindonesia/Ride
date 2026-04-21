@@ -8,7 +8,6 @@ export default function RegisterPengguna() {
   const [, navigate] = useLocation();
   const [step, setStep] = useState<Step>("form");
   const [phone, setPhone] = useState("");
-  const [otpFromServer, setOtpFromServer] = useState("");
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#0d2137", overflow: "hidden" }}>
@@ -16,15 +15,14 @@ export default function RegisterPengguna() {
       <div style={{ flex: 1, background: "#f0f4f8", borderRadius: "28px 28px 0 0", overflow: "auto" }}>
         {step === "form" && (
           <FormStep
-            onSuccess={(p, otp) => { setPhone(p); setOtpFromServer(otp); setStep("otp"); }}
+            onSuccess={(p) => { setPhone(p); setStep("otp"); }}
           />
         )}
         {step === "otp" && (
           <OtpStep
             phone={phone}
-            otpFromServer={otpFromServer}
             onSuccess={() => setStep("success")}
-            onResend={(otp) => setOtpFromServer(otp)}
+            onResend={() => {}}
           />
         )}
         {step === "success" && (
@@ -56,7 +54,7 @@ function Header({ onBack }: { onBack?: () => void }) {
   );
 }
 
-function FormStep({ onSuccess }: { onSuccess: (phone: string, otp: string) => void }) {
+function FormStep({ onSuccess }: { onSuccess: (phone: string) => void }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -68,7 +66,7 @@ function FormStep({ onSuccess }: { onSuccess: (phone: string, otp: string) => vo
   const mutation = useRegisterPengguna({
     mutation: {
       onSuccess: (data) => {
-        onSuccess(data.phone, data.otpCode ?? "");
+        onSuccess(data.phone);
       },
       onError: (err: unknown) => {
         const e = err as { response?: { data?: { error?: string } } };
@@ -130,7 +128,7 @@ function FormStep({ onSuccess }: { onSuccess: (phone: string, otp: string) => vo
   );
 }
 
-function OtpStep({ phone, otpFromServer, onSuccess, onResend }: { phone: string; otpFromServer: string; onSuccess: () => void; onResend: (otp: string) => void }) {
+function OtpStep({ phone, onSuccess, onResend }: { phone: string; onSuccess: () => void; onResend: () => void }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
   const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
@@ -147,8 +145,8 @@ function OtpStep({ phone, otpFromServer, onSuccess, onResend }: { phone: string;
 
   const resendMutation = useResendOtpPengguna({
     mutation: {
-      onSuccess: (data) => {
-        onResend(data.otpCode ?? "");
+      onSuccess: () => {
+        onResend();
         setDigits(["", "", "", "", "", ""]);
         setError(null);
         refs[0].current?.focus();
@@ -185,12 +183,7 @@ function OtpStep({ phone, otpFromServer, onSuccess, onResend }: { phone: string;
     <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
       <div style={{ fontSize: 72, fontWeight: 800, color: "#1a2a3a", fontFamily: "'Inter', sans-serif", letterSpacing: "-2px", lineHeight: 1 }}>OTP</div>
       <div style={{ marginTop: 20, fontWeight: 700, fontSize: 18, color: "#1a2a3a", fontFamily: "'Inter', sans-serif" }}>Verifikasi OTP</div>
-      <div style={{ marginTop: 8, fontSize: 14, color: "#7a8a9a", textAlign: "center", fontFamily: "'Inter', sans-serif" }}>Kode 6 digit telah dikirim ke nomor HP Anda</div>
-      {otpFromServer && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "#1a7a6a", fontFamily: "'Inter', sans-serif", background: "rgba(26,122,106,0.08)", borderRadius: 8, padding: "4px 12px" }}>
-          Kode OTP (dev): <strong>{otpFromServer}</strong>
-        </div>
-      )}
+      <div style={{ marginTop: 8, fontSize: 14, color: "#7a8a9a", textAlign: "center", fontFamily: "'Inter', sans-serif" }}>Kode 6 digit telah dikirim ke WhatsApp Anda</div>
       <div style={{ marginTop: 28, display: "flex", gap: 10 }}>
         {digits.map((d, i) => (
           <input

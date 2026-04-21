@@ -9,6 +9,24 @@ import fs from "fs";
 import { io } from "../socket";
 import { sendPushToUsers } from "./push";
 
+async function sendFonnteOtp(phone: string, otpCode: string): Promise<void> {
+  const token = process.env.FONNTE_TOKEN;
+  if (!token) { console.warn("FONNTE_TOKEN tidak tersedia, OTP tidak dikirim"); return; }
+  const normalized = phone.replace(/\D/g, "").replace(/^0/, "62");
+  const message = `Kode OTP RIDE Anda: *${otpCode}*\n\nBerlaku 5 menit. Jangan bagikan kode ini kepada siapapun.`;
+  try {
+    const res = await fetch("https://api.fonnte.com/send", {
+      method: "POST",
+      headers: { "Authorization": token, "Content-Type": "application/json" },
+      body: JSON.stringify({ target: normalized, message }),
+    });
+    const result = await res.json() as { status?: boolean; reason?: string };
+    if (!result.status) console.error("Fonnte error:", result.reason);
+  } catch (err) {
+    console.error("Gagal kirim OTP via Fonnte:", err);
+  }
+}
+
 // Profile photo upload setup
 const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
 if (!fs.existsSync(profileUploadDir)) fs.mkdirSync(profileUploadDir, { recursive: true });
@@ -117,10 +135,11 @@ router.post("/register", async (req, res) => {
     used: false,
   });
 
+  await sendFonnteOtp(phone, otpCode);
+
   res.json({
-    message: "Kode OTP telah dikirim ke nomor HP Anda",
+    message: "Kode OTP telah dikirim ke WhatsApp Anda",
     phone,
-    otpCode,
   });
 });
 
@@ -217,10 +236,11 @@ router.post("/resend-otp", async (req, res) => {
     used: false,
   });
 
+  await sendFonnteOtp(phone, otpCode);
+
   res.json({
-    message: "Kode OTP baru telah dikirim",
+    message: "Kode OTP baru telah dikirim ke WhatsApp Anda",
     phone,
-    otpCode,
   });
 });
 
