@@ -380,17 +380,24 @@ router.get("/orders/:id", async (req, res) => {
   res.json({
     id: order.id,
     orderNo: order.orderNo,
+    serviceType: order.serviceType,
     status: order.status,
     trackingPhase: order.trackingPhase ?? "menuju",
     paymentData: order.paymentData ?? null,
+    penggunaConfirmed: order.penggunaConfirmed ?? false,
     pickupLat: order.pickupLat,
     pickupLng: order.pickupLng,
     pickupAddress: order.pickupAddress,
+    vehicleType: order.vehicleType,
     vehicleModel: order.vehicleModel,
     vehicleYear: order.vehicleYear,
     damageCategories: order.damageCategories,
+    description: order.description,
     totalAmount: order.totalAmount,
     platformFee: order.platformFee,
+    rating: order.rating ?? null,
+    reviewComment: order.reviewComment ?? null,
+    createdAt: order.createdAt,
     mitra: mitraInfo,
   });
 });
@@ -426,15 +433,38 @@ router.get("/active-order", async (req, res) => {
     mitraName = mitraUser?.name ?? null;
   }
 
+  let mitraLoc = null;
+  if (order.mitraId) {
+    const [ml] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng, speedKmh: mitraLocationsTable.speedKmh })
+      .from(mitraLocationsTable).where(eq(mitraLocationsTable.userId, order.mitraId));
+    mitraLoc = ml ?? null;
+  }
+
   res.json({
     order: {
       id: order.id,
       orderNo: order.orderNo,
+      serviceType: order.serviceType,
       status: order.status,
       trackingPhase: order.trackingPhase ?? "menuju",
+      paymentData: order.paymentData ?? null,
+      penggunaConfirmed: order.penggunaConfirmed ?? false,
+      vehicleType: order.vehicleType,
       vehicleModel: order.vehicleModel,
+      vehicleYear: order.vehicleYear,
       damageCategories: order.damageCategories,
+      description: order.description,
+      pickupAddress: order.pickupAddress,
+      pickupLat: order.pickupLat,
+      pickupLng: order.pickupLng,
+      totalAmount: order.totalAmount,
+      platformFee: order.platformFee,
+      mitraId: order.mitraId,
       mitraName,
+      mitraLat: mitraLoc?.lat ?? null,
+      mitraLng: mitraLoc?.lng ?? null,
+      mitraSpeedKmh: mitraLoc?.speedKmh ?? 0,
+      createdAt: order.createdAt,
     }
   });
 });
@@ -546,11 +576,24 @@ router.post("/orders/:id/confirm-payment", async (req, res) => {
     });
   }
 
-  // Simpan metode pembayaran + waktu konfirmasi ke order
+  // Simpan metode pembayaran + waktu konfirmasi ke order, dan set penggunaConfirmed
   const updatedPaymentData = { ...(order.paymentData as any), paymentMethod, discount, finalTotal };
-  await db.update(ordersTable)
-    .set({ paymentData: updatedPaymentData, paymentConfirmedAt: new Date(), updatedAt: new Date() })
-    .where(eq(ordersTable.id, orderId));
+  const [updated] = await db.update(ordersTable)
+    .set({ paymentData: updatedPaymentData, paymentConfirmedAt: new Date(), penggunaConfirmed: true, updatedAt: new Date() })
+    .where(eq(ordersTable.id, orderId))
+    .returning({ mitraId: ordersTable.mitraId });
+
+  // Notifikasi mitra bahwa pembayaran sudah dikonfirmasi
+  if (updated?.mitraId) {
+    io?.to(`user:${updated.mitraId}`).emit("order:payment_confirmed", {
+      orderId, discount, finalTotal, paymentMethod,
+    });
+    sendPushToUsers([updated.mitraId], {
+      title: "✅ Pembayaran Dikonfirmasi!",
+      body: `Konsumen telah mengkonfirmasi pembayaran ${paymentMethod === "cash" ? "tunai" : paymentMethod}. Silakan selesaikan order.`,
+      url: "/",
+    });
+  }
 
   res.json({ ok: true, discount, finalTotal });
 });
@@ -567,12 +610,26 @@ router.post("/orders/:id/review", async (req, res) => {
     res.status(400).json({ error: "Rating harus antara 1-5" }); return;
   }
 
-  const [updated] = await db.update(ordersTable)
-    .set({ rating, reviewComment: comment?.trim() || null, updatedAt: new Date() })
+  // Cek apakah order ada dan milik pengguna ini
+  const [existing] = await db.select({ id: ordersTable.id, status: ordersTable.status, rating: ordersTable.rating })
+    .from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.penggunaId, penggunaId)))
-    .returning({ id: ordersTable.id });
+    .limit(1);
 
-  if (!updated) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+  if (!existing) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+  if (existing.status !== "done") { res.status(400).json({ error: "Hanya bisa memberi rating untuk order yang sudah selesai" }); return; }
+  if (existing.rating !== null) { res.status(409).json({ error: "Rating sudah pernah diberikan untuk order ini" }); return; }
+
+  await db.update(ordersTable)
+    .set({ rating, reviewComment: comment?.trim() || null, updatedAt: new Date() })
+    .where(eq(ordersTable.id, orderId));
+
+  // Notify mitra bahwa ada rating baru
+  const [order] = await db.select({ mitraId: ordersTable.mitraId }).from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+  if (order?.mitraId) {
+    io?.to(`user:${order.mitraId}`).emit("order:rated", { orderId, rating, comment: comment?.trim() || null });
+  }
+
   res.json({ ok: true });
 });
 

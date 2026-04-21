@@ -401,6 +401,16 @@ export default function DashboardMitra() {
     };
     socket.on("order:confirmed", onPenggunaConfirmed);
 
+    // Konsumen konfirmasi pembayaran
+    const onPaymentConfirmed = (data: { orderId: number; paymentMethod: string; finalTotal: number }) => {
+      setPenggunaConfirmed(true);
+      fetchActiveOrder();
+      const method = data.paymentMethod === "cash" ? "Tunai" : data.paymentMethod === "transfer" ? "Transfer" : data.paymentMethod === "qris" ? "QRIS" : data.paymentMethod;
+      pushNotif({ type: "order", icon: "💰", title: "Pembayaran Dikonfirmasi", body: `Konsumen sudah konfirmasi bayar via ${method}.` });
+      showToast({ icon: "💰", title: "Pembayaran Dikonfirmasi!", body: `Konsumen sudah bayar via ${method}. Klik Selesai untuk menutup order.`, color: "green" });
+    };
+    socket.on("order:payment_confirmed", onPaymentConfirmed);
+
     // When order is cancelled by pengguna — mitra's own cancellation is handled by doCancelOrderMitra directly
     const onOrderCancelled = (data: { orderId: number; canceledBy?: string; cancelReason?: string }) => {
       setActiveOrder(prev => (prev?.id === data.orderId ? null : prev));
@@ -424,6 +434,7 @@ export default function DashboardMitra() {
       if (locationWatchRef.current != null) navigator.geolocation?.clearWatch(locationWatchRef.current);
       socket.off("order:new", onNewOrder);
       socket.off("order:confirmed", onPenggunaConfirmed);
+      socket.off("order:payment_confirmed", onPaymentConfirmed);
       socket.off("order:cancelled", onOrderCancelled);
       socket.disconnect();
     };

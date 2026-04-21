@@ -353,11 +353,11 @@ router.patch("/location", requireMitra, async (req, res) => {
 
   // Emit real-time lokasi ke pengguna yang sedang order aktif dengan mitra ini
   const [activeOrder] = await db
-    .select({ penggunaId: ordersTable.penggunaId })
+    .select({ penggunaId: ordersTable.penggunaId, orderId: ordersTable.id })
     .from(ordersTable)
     .where(and(
       eq(ordersTable.mitraId, mitraId),
-      or(eq(ordersTable.status, "accepted"), eq(ordersTable.status, "in_progress"))
+      inArray(ordersTable.status, ["accepted", "menuju", "tiba", "pengerjaan"])
     ))
     .limit(1);
   if (activeOrder?.penggunaId) {
@@ -424,6 +424,16 @@ router.patch("/toggle-online", requireMitra, async (req, res) => {
 // GET /api/mitra/incoming-orders
 router.get("/incoming-orders", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
+
+  // Jika mitra sedang ada order aktif, tidak perlu tampilkan order baru
+  const [busyOrder] = await db.select({ id: ordersTable.id })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      inArray(ordersTable.status, ["accepted", "menuju", "tiba", "pengerjaan"])
+    ))
+    .limit(1);
+  if (busyOrder) { res.json({ incoming: null }); return; }
 
   const [locRow] = await db.select({ serviceType: mitraLocationsTable.serviceType })
     .from(mitraLocationsTable)
@@ -510,6 +520,19 @@ router.get("/active-order", requireMitra, async (req, res) => {
 router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
   const orderId = parseInt(req.params.id);
+
+  // Cegah double order: blokir jika mitra sudah punya order aktif
+  const [existingActive] = await db.select({ id: ordersTable.id })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.mitraId, mitraId),
+      inArray(ordersTable.status, ["accepted", "menuju", "tiba", "pengerjaan"])
+    ))
+    .limit(1);
+  if (existingActive) {
+    res.status(409).json({ error: "Kamu masih punya order aktif. Selesaikan terlebih dahulu sebelum menerima order baru." });
+    return;
+  }
 
   // Assign mitraId + set accepted
   const [updated] = await db.update(ordersTable)
