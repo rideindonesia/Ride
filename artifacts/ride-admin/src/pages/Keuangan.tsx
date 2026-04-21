@@ -362,7 +362,7 @@ export default function Keuangan() {
               <div key={p.id} className={cn("px-5 py-4 flex gap-4 items-start", isPending && "bg-amber-50/40")}>
                 {/* Proof photo thumbnail */}
                 <button onClick={() => setPreviewPhoto(p.proofPhotoPath)} className="shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 hover:opacity-80 transition-opacity">
-                  <img src={p.proofPhotoPath} alt="bukti" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <img src={`/api${p.proofPhotoPath}`} alt="bukti" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 </button>
                 {/* Info */}
                 <div className="flex-1 min-w-0">
@@ -429,7 +429,7 @@ export default function Keuangan() {
             </div>
             {/* Proof photo */}
             <div className="mb-4 rounded-xl overflow-hidden border border-gray-200 max-h-40">
-              <img src={verifyPayment.proofPhotoPath} alt="bukti" className="w-full object-cover" />
+              <img src={`/api${verifyPayment.proofPhotoPath}`} alt="bukti" className="w-full object-cover" />
             </div>
             <div className="mb-3">
               <label className="text-xs text-gray-500 block mb-1.5">Jumlah yang diverifikasi (Rp)</label>
@@ -489,7 +489,7 @@ export default function Keuangan() {
       {previewPhoto && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setPreviewPhoto(null)}>
           <div className="relative max-w-lg w-full">
-            <img src={previewPhoto} alt="bukti pembayaran" className="w-full rounded-2xl shadow-2xl" />
+            <img src={`/api${previewPhoto}`} alt="bukti pembayaran" className="w-full rounded-2xl shadow-2xl" />
             <button onClick={() => setPreviewPhoto(null)} className="absolute top-3 right-3 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center">
               <X size={16} />
             </button>
