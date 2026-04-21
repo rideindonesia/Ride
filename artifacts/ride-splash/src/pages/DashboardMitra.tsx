@@ -445,7 +445,6 @@ export default function DashboardMitra() {
       setIncoming(data);
       setIncomingTimer(30);
       playOrderBeep();
-      showToast({ icon: getSvcCfg(data.serviceType).emoji, title: "Pesanan Masuk!", body: `${data.penggunaName} — ${data.vehicleModel}`, color: "green" });
       pushNotif({
         type: "order",
         icon: getSvcCfg(data.serviceType).emoji,
@@ -459,7 +458,6 @@ export default function DashboardMitra() {
     const onPenggunaConfirmed = () => {
       setPenggunaConfirmed(true);
       fetchActiveOrder();
-      showToast({ icon: "🚀", title: "Konsumen Siap!", body: "Segera menuju lokasi konsumen", color: "green" });
     };
     socket.on("order:confirmed", onPenggunaConfirmed);
 
@@ -471,7 +469,6 @@ export default function DashboardMitra() {
       fetchActiveOrder();
       const method = data.paymentMethod === "cash" ? "Tunai" : data.paymentMethod === "transfer" ? "Transfer" : data.paymentMethod === "qris" ? "QRIS" : data.paymentMethod;
       pushNotif({ type: "order", icon: "💰", title: "Konsumen Sudah Bayar!", body: `Konfirmasi penerimaan pembayaran via ${method}.` });
-      showToast({ icon: "💰", title: "Konsumen Sudah Bayar!", body: `Bayar via ${method}. Klik tombol konfirmasi untuk selesaikan order.`, color: "green" });
     };
     socket.on("order:payment_confirmed", onPaymentConfirmed);
 
@@ -490,7 +487,6 @@ export default function DashboardMitra() {
       // Hanya tampil notifikasi jika konsumen yang batalkan (bukan mitra sendiri)
       if (data.canceledBy !== "mitra") {
         pushNotif({ type: "order", icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen membatalkan pesanan." });
-        showToast({ icon: "❌", title: "Pesanan Dibatalkan", body: "Konsumen membatalkan pesanan.", color: "red" });
       }
     };
     socket.on("order:cancelled", onOrderCancelled);
@@ -504,7 +500,7 @@ export default function DashboardMitra() {
       socket.off("order:cancelled", onOrderCancelled);
       socket.disconnect();
     };
-  }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif, showToast]);
+  }, [fetchDashboard, fetchIncoming, fetchActiveOrder, pushNotif]);
 
   // Load tarif dinamis dari DB
   useEffect(() => {
