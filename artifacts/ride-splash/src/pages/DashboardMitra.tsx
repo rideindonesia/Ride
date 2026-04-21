@@ -1742,12 +1742,12 @@ export default function DashboardMitra() {
                     <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>Omset: {fmtRp(Number(f.omset))} · Fee: {fmtRp(Number(f.fee))}</div>
                   </div>
                   {f.isPaid ? (
-                    <div style={{ padding: "4px 12px", borderRadius: 8, background: "rgba(26,122,106,0.1)", border: "1px solid rgba(26,122,106,0.25)" }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "#1a7a6a" }}>✅ Lunas</span>
+                    <div style={{ padding: "4px 12px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>📅 Selesai</span>
                     </div>
                   ) : (
-                    <div style={{ padding: "4px 12px", borderRadius: 8, background: "rgba(234,88,12,0.1)", border: "1px solid rgba(234,88,12,0.25)" }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "#ea580c" }}>⏳ Proses</span>
+                    <div style={{ padding: "4px 12px", borderRadius: 8, background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.25)" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6" }}>🗓 Minggu Ini</span>
                     </div>
                   )}
                 </div>
