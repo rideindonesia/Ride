@@ -210,13 +210,15 @@ router.get("/mitra/:email", requireAdmin, async (req, res) => {
   const [user] = await db.select({ id: usersTable.id, isSuspended: usersTable.isSuspended, walletBalance: usersTable.walletBalance }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
   let orders: any[] = [];
   let platformFeeTotal = 0;
+  let totalOrders = 0;
   if (user) {
     orders = await db.select({ id: ordersTable.id, orderNo: ordersTable.orderNo, serviceType: ordersTable.serviceType, status: ordersTable.status, totalAmount: ordersTable.totalAmount, platformFee: ordersTable.platformFee, createdAt: ordersTable.createdAt })
       .from(ordersTable).where(eq(ordersTable.mitraId, user.id)).orderBy(desc(ordersTable.createdAt)).limit(20);
-    const [feeRow] = await db.select({ total: sum(ordersTable.platformFee) }).from(ordersTable).where(and(eq(ordersTable.mitraId, user.id), eq(ordersTable.status, "done")));
+    const [feeRow] = await db.select({ total: sum(ordersTable.platformFee), cnt: count() }).from(ordersTable).where(and(eq(ordersTable.mitraId, user.id), eq(ordersTable.status, "done")));
     platformFeeTotal = Number(feeRow.total ?? 0);
+    totalOrders = Number(feeRow.cnt ?? 0);
   }
-  res.json({ ...app, userId: user?.id, isSuspended: user?.isSuspended ?? false, orders, platformFeeTotal });
+  res.json({ ...app, userId: user?.id, isSuspended: user?.isSuspended ?? false, orders, platformFeeTotal, totalOrders });
 });
 
 // PATCH /api/admin/mitra/:email/status
@@ -231,9 +233,16 @@ router.patch("/mitra/:email/status", requireAdmin, async (req, res) => {
 // PATCH /api/admin/mitra/:email/suspend
 router.patch("/mitra/:email/suspend", requireAdmin, async (req, res) => {
   const email = decodeURIComponent(req.params.email);
-  const { suspended } = req.body;
+  const suspended = req.body?.suspended;
+  if (suspended === undefined) {
+    const [user] = await db.select({ isSuspended: usersTable.isSuspended }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    if (!user) { res.status(404).json({ error: "Mitra tidak ditemukan" }); return; }
+    await db.update(usersTable).set({ isSuspended: !user.isSuspended }).where(eq(usersTable.email, email));
+    res.json({ ok: true, isSuspended: !user.isSuspended });
+    return;
+  }
   await db.update(usersTable).set({ isSuspended: !!suspended }).where(eq(usersTable.email, email));
-  res.json({ ok: true });
+  res.json({ ok: true, isSuspended: !!suspended });
 });
 
 // ── Pengguna Management ───────────────────────────────────────────────────────
@@ -279,12 +288,83 @@ router.get("/pengguna/:id", requireAdmin, async (req, res) => {
 // PATCH /api/admin/pengguna/:id/suspend
 router.patch("/pengguna/:id/suspend", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
-  const { suspended } = req.body;
+  const suspended = req.body?.suspended;
+  if (suspended === undefined) {
+    const [user] = await db.select({ isSuspended: usersTable.isSuspended }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!user) { res.status(404).json({ error: "Pengguna tidak ditemukan" }); return; }
+    await db.update(usersTable).set({ isSuspended: !user.isSuspended }).where(eq(usersTable.id, id));
+    res.json({ ok: true, isSuspended: !user.isSuspended });
+    return;
+  }
   await db.update(usersTable).set({ isSuspended: !!suspended }).where(eq(usersTable.id, id));
-  res.json({ ok: true });
+  res.json({ ok: true, isSuspended: !!suspended });
 });
 
 // ── Orders Monitoring ─────────────────────────────────────────────────────────
+
+// GET /api/admin/orders/live — HARUS sebelum /orders/:id agar tidak ditangkap params
+router.get("/orders/live", requireAdmin, async (_req, res) => {
+  const rows = await db.select({
+    id: ordersTable.id,
+    orderNo: ordersTable.orderNo,
+    serviceType: ordersTable.serviceType,
+    status: ordersTable.status,
+    totalAmount: ordersTable.totalAmount,
+    createdAt: ordersTable.createdAt,
+    updatedAt: ordersTable.updatedAt,
+    penggunaId: ordersTable.penggunaId,
+    mitraId: ordersTable.mitraId,
+    pickupAddress: ordersTable.pickupAddress,
+  }).from(ordersTable)
+    .where(inArray(ordersTable.status, ["pending", "accepted"] as [string, ...string[]]))
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(50);
+
+  const penggunaIds = [...new Set(rows.map(r => r.penggunaId).filter(Boolean))];
+  const mitraIds = [...new Set(rows.map(r => r.mitraId).filter(Boolean))] as number[];
+
+  const [penggunaList, mitraList] = await Promise.all([
+    penggunaIds.length > 0 ? db.select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone }).from(usersTable).where(inArray(usersTable.id, penggunaIds as number[])) : [],
+    mitraIds.length > 0 ? db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, mitraIds)) : [],
+  ]);
+
+  const penggunaMap = Object.fromEntries(penggunaList.map(u => [u.id, u]));
+  const mitraMap = Object.fromEntries(mitraList.map(u => [u.id, u]));
+
+  res.json(rows.map(r => ({
+    ...r,
+    pengguna: r.penggunaId ? penggunaMap[r.penggunaId] ?? null : null,
+    mitra: r.mitraId ? mitraMap[r.mitraId] ?? null : null,
+  })));
+});
+
+// GET /api/admin/orders/export — HARUS sebelum /orders/:id agar tidak ditangkap params
+router.get("/orders/export", requireAdmin, async (req, res) => {
+  const { status = "all", serviceType = "all", from, to } = req.query as Record<string, string>;
+  const conditions: any[] = [];
+  if (status !== "all") conditions.push(eq(ordersTable.status, status));
+  if (serviceType !== "all") conditions.push(eq(ordersTable.serviceType, serviceType));
+  if (from) conditions.push(gte(ordersTable.createdAt, new Date(from)));
+  if (to) conditions.push(lte(ordersTable.createdAt, new Date(to)));
+
+  const rows = await db
+    .select({
+      id: ordersTable.id, orderNo: ordersTable.orderNo,
+      serviceType: ordersTable.serviceType, status: ordersTable.status,
+      totalAmount: ordersTable.totalAmount, platformFee: ordersTable.platformFee,
+      isPlatformFeePaid: ordersTable.isPlatformFeePaid,
+      pickupAddress: ordersTable.pickupAddress,
+      penggunaName: usersTable.name,
+      createdAt: ordersTable.createdAt, updatedAt: ordersTable.updatedAt,
+    })
+    .from(ordersTable)
+    .leftJoin(usersTable, eq(ordersTable.penggunaId, usersTable.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(5000);
+
+  res.json(rows);
+});
 
 // GET /api/admin/orders?status=&serviceType=&search=&page=&limit=
 router.get("/orders", requireAdmin, async (req, res) => {
@@ -474,44 +554,6 @@ router.patch("/keuangan/mark-paid/:mitraId", requireAdmin, async (req, res) => {
   res.json({ ok: true, paidAt: now });
 });
 
-// ── Orders Live ───────────────────────────────────────────────────────────────
-
-// GET /api/admin/orders/live — order yang sedang aktif (pending/accepted)
-router.get("/orders/live", requireAdmin, async (_req, res) => {
-  const rows = await db.select({
-    id: ordersTable.id,
-    orderNo: ordersTable.orderNo,
-    serviceType: ordersTable.serviceType,
-    status: ordersTable.status,
-    totalAmount: ordersTable.totalAmount,
-    createdAt: ordersTable.createdAt,
-    updatedAt: ordersTable.updatedAt,
-    penggunaId: ordersTable.penggunaId,
-    mitraId: ordersTable.mitraId,
-    pickupAddress: ordersTable.pickupAddress,
-  }).from(ordersTable)
-    .where(inArray(ordersTable.status, ["pending", "accepted"] as [string, ...string[]]))
-    .orderBy(desc(ordersTable.createdAt))
-    .limit(50);
-
-  const penggunaIds = [...new Set(rows.map(r => r.penggunaId).filter(Boolean))];
-  const mitraIds = [...new Set(rows.map(r => r.mitraId).filter(Boolean))] as number[];
-
-  const [penggunaList, mitraList] = await Promise.all([
-    penggunaIds.length > 0 ? db.select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone }).from(usersTable).where(inArray(usersTable.id, penggunaIds as number[])) : [],
-    mitraIds.length > 0 ? db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, mitraIds)) : [],
-  ]);
-
-  const penggunaMap = Object.fromEntries(penggunaList.map(u => [u.id, u]));
-  const mitraMap = Object.fromEntries(mitraList.map(u => [u.id, u]));
-
-  res.json(rows.map(r => ({
-    ...r,
-    pengguna: r.penggunaId ? penggunaMap[r.penggunaId] ?? null : null,
-    mitra: r.mitraId ? mitraMap[r.mitraId] ?? null : null,
-  })));
-});
-
 // ── Tiket / Laporan Pengguna ───────────────────────────────────────────────────
 
 // GET /api/admin/reports — semua laporan dari pengguna
@@ -693,33 +735,6 @@ router.patch("/accounts/:id/password", requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/admin/orders/export — export semua order sebagai JSON untuk CSV di client
-router.get("/orders/export", requireAdmin, async (req, res) => {
-  const { status = "all", serviceType = "all", from, to } = req.query as Record<string, string>;
-  const conditions: any[] = [];
-  if (status !== "all") conditions.push(eq(ordersTable.status, status));
-  if (serviceType !== "all") conditions.push(eq(ordersTable.serviceType, serviceType));
-  if (from) conditions.push(gte(ordersTable.createdAt, new Date(from)));
-  if (to) conditions.push(lte(ordersTable.createdAt, new Date(to)));
-
-  const rows = await db
-    .select({
-      id: ordersTable.id, orderNo: ordersTable.orderNo,
-      serviceType: ordersTable.serviceType, status: ordersTable.status,
-      totalAmount: ordersTable.totalAmount, platformFee: ordersTable.platformFee,
-      isPlatformFeePaid: ordersTable.isPlatformFeePaid,
-      pickupAddress: ordersTable.pickupAddress,
-      penggunaName: usersTable.name,
-      createdAt: ordersTable.createdAt, updatedAt: ordersTable.updatedAt,
-    })
-    .from(ordersTable)
-    .leftJoin(usersTable, eq(ordersTable.penggunaId, usersTable.id))
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(ordersTable.createdAt))
-    .limit(5000);
-
-  res.json(rows);
-});
 
 // POST /api/admin/broadcast — kirim push notification ke semua user/mitra/pengguna
 router.post("/broadcast", requireAdmin, async (req, res) => {
