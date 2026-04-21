@@ -17,8 +17,8 @@ pnpm workspace monorepo using TypeScript. Aplikasi **RIDE — Super App Jasa Pan
 - **Tarif Dinamis**: `loadTarif(BASE)` di `pricing.ts` fetch `/api/pengguna/tarif` (dari system_settings DB) dan update `CALL_FEE_CONFIG` + `BIAYA_LAYANAN` saat runtime. Dipanggil di kedua dashboard ✅
 - **Push Notifications**: `usePushNotification(true)` hook di kedua dashboard, sw.js handles push+notificationclick, VAPID web-push di backend push.ts ✅
 - **Backend Pengguna**: GET+PUT /api/pengguna/profile, PUT /api/pengguna/change-password, POST /api/pengguna/request-profile-otp, POST /api/pengguna/verify-profile-otp, POST /api/pengguna/upload-photo (multer→/uploads/profile/), GET /api/pengguna/wallet, POST /api/pengguna/wallet/topup, POST /api/pengguna/wallet/withdraw, GET /api/pengguna/order-history (incl. cancelled), GET /api/pengguna/tarif, POST /api/pengguna/reports (with orderId/orderNo) ✅
-- **Backend Mitra**: GET /api/mitra/profile-detail (docs status), PUT /api/mitra/change-password, GET /api/mitra/order-history (incl. cancelled), POST /api/mitra/reports (with orderId/orderNo) ✅
-- **DB Schema**: profilePhotoPath + walletBalance di usersTable; walletTransactionsTable (topup/withdraw) ✅
+- **Backend Mitra**: GET /api/mitra/profile-detail (docs status), PUT /api/mitra/change-password, GET /api/mitra/order-history (incl. cancelled), POST /api/mitra/reports (with orderId/orderNo), GET /api/mitra/platform-fee/detail (weekly breakdown + payment history + deadline), POST /api/mitra/platform-fee/pay (upload bukti transfer) ✅
+- **DB Schema**: profilePhotoPath + walletBalance di usersTable; walletTransactionsTable (topup/withdraw); platformFeePaymentsTable (id, mitraId, amountClaimed, amountVerified, proofPhotoPath, status[pending/verified/rejected], notes, createdAt, verifiedAt, verifiedById) ✅
 - **Static uploads**: /uploads/* served dari api-server ✅
 - **Socket.io (real-time)**: Singleton socket.ts (frontend), HTTP+Socket.io server (backend index.ts), identifySocket/joinOrderRoom/leaveOrderRoom utilities. Events: `order:new` (mitra broadcast), `order:accepted/phase/payment/done` (pengguna user room), `chat:message` (order room). DashboardPengguna, DashboardMitra, dan semua 6 Order pages (Bengkel/Cuci/Barber/Elektronik/Inspeksi/Towing) sudah socket-integrated. Polling direduksi ke 30s backup. ✅
 - **Chat Auth (cross-role fix)**: `chat.ts` menggunakan `getAllUserIds()` yang mengumpulkan semua identitas (session + `ride-p-uid` cookie + `ride-m-uid` cookie) ke dalam Set, lalu memeriksa apakah ANY ID cocok dengan `penggunaId` atau `mitraId` order. Ini mengatasi bug di mana testing pada device yang sama (multiple account login) menyebabkan session dari pengguna lain mem-override autentikasi mitra dan memunculkan 403. ✅
@@ -52,7 +52,8 @@ Semua di `/api/admin/*`, semua protected `requireAdmin` (session.adminId).
 - `GET/PATCH /admin/mitra` + status/suspend endpoints
 - `GET/PATCH /admin/pengguna` + suspend endpoint
 - `GET /admin/orders` + cancel endpoint
-- `GET /admin/keuangan/summary` + fee-per-mitra
+- `GET /admin/keuangan/summary` + fee-per-mitra + fee-payments (pending/all)
+- `PATCH /admin/keuangan/fee-payments/:id/verify` + reject (dengan amountVerified + notes)
 - `GET /admin/vouchers` + POST/PATCH/DELETE
 - `GET /admin/laporan/by-service` + by-city + top-mitra
 - `GET/PATCH /admin/settings`

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable, platformFeePaymentsTable } from "@workspace/db";
 import { eq, and, or, desc, asc, sql, count, sum, ilike, gte, lte, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
@@ -552,6 +552,74 @@ router.patch("/keuangan/mark-paid/:mitraId", requireAdmin, async (req, res) => {
       eq(ordersTable.mitraId, mitraId),
     ));
   res.json({ ok: true, paidAt: now });
+});
+
+// GET /api/admin/keuangan/fee-payments — daftar kiriman bukti pembayaran mitra
+router.get("/keuangan/fee-payments", requireAdmin, async (req, res) => {
+  const { status = "all" } = req.query as { status: string };
+  const conds: any[] = [];
+  if (status !== "all") conds.push(eq(platformFeePaymentsTable.status, status));
+
+  const payments = await db.select({
+    id: platformFeePaymentsTable.id,
+    mitraId: platformFeePaymentsTable.mitraId,
+    amountClaimed: platformFeePaymentsTable.amountClaimed,
+    amountVerified: platformFeePaymentsTable.amountVerified,
+    proofPhotoPath: platformFeePaymentsTable.proofPhotoPath,
+    status: platformFeePaymentsTable.status,
+    notes: platformFeePaymentsTable.notes,
+    createdAt: platformFeePaymentsTable.createdAt,
+    verifiedAt: platformFeePaymentsTable.verifiedAt,
+    mitraName: usersTable.name,
+    mitraEmail: usersTable.email,
+  }).from(platformFeePaymentsTable)
+    .innerJoin(usersTable, eq(usersTable.id, platformFeePaymentsTable.mitraId))
+    .where(conds.length > 0 ? and(...conds) : undefined)
+    .orderBy(desc(platformFeePaymentsTable.createdAt))
+    .limit(100);
+
+  res.json(payments);
+});
+
+// PATCH /api/admin/keuangan/fee-payments/:id/verify — verifikasi bukti pembayaran
+router.patch("/keuangan/fee-payments/:id/verify", requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const adminId = getAdminId(req);
+  const { amountVerified, notes } = req.body;
+  const amt = parseInt(amountVerified);
+  if (isNaN(amt) || amt <= 0) {
+    res.status(400).json({ error: "Jumlah verifikasi harus lebih dari 0" }); return;
+  }
+  await db.update(platformFeePaymentsTable)
+    .set({ status: "verified", amountVerified: amt, notes: notes ?? null, verifiedAt: new Date(), verifiedById: adminId ?? undefined })
+    .where(eq(platformFeePaymentsTable.id, id));
+
+  // Cek apakah mitra sudah lunas → unsuspend
+  const [payment] = await db.select().from(platformFeePaymentsTable).where(eq(platformFeePaymentsTable.id, id));
+  if (payment) {
+    const [[allFeeRow], verifiedRows] = await Promise.all([
+      db.select({ fee: sum(ordersTable.platformFee) }).from(ordersTable)
+        .where(and(eq(ordersTable.mitraId, payment.mitraId), eq(ordersTable.status, "done"))),
+      db.select({ total: sum(platformFeePaymentsTable.amountVerified) }).from(platformFeePaymentsTable)
+        .where(and(eq(platformFeePaymentsTable.mitraId, payment.mitraId), eq(platformFeePaymentsTable.status, "verified"))),
+    ]);
+    const pending = Math.max(0, Number(allFeeRow?.fee ?? 0) - Number(verifiedRows[0]?.total ?? 0));
+    if (pending === 0) {
+      await db.update(usersTable).set({ isSuspended: false }).where(eq(usersTable.id, payment.mitraId));
+    }
+  }
+
+  res.json({ ok: true });
+});
+
+// PATCH /api/admin/keuangan/fee-payments/:id/reject — tolak bukti pembayaran
+router.patch("/keuangan/fee-payments/:id/reject", requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { notes } = req.body;
+  await db.update(platformFeePaymentsTable)
+    .set({ status: "rejected", notes: notes ?? null })
+    .where(eq(platformFeePaymentsTable.id, id));
+  res.json({ ok: true });
 });
 
 // ── Tiket / Laporan Pengguna ───────────────────────────────────────────────────

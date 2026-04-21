@@ -66,6 +66,7 @@ interface DashData {
   rating: number;
   platformFeeStatus: string;
   platformFeePending: number;
+  daysUntilSuspend: number | null;
   weeklyChart: ChartBar[];
   weeklyTotal: number;
   weeklyBest: number;
@@ -214,6 +215,21 @@ export default function DashboardMitra() {
   const [riwayatLoading, setRiwayatLoading] = useState(false);
   const RIWAYAT_LIMIT = 15;
 
+  // Platform Fee Modal
+  const [feeModalOpen, setFeeModalOpen] = useState(false);
+  const [feeDetail, setFeeDetail] = useState<{
+    totalAllFees: number; totalVerified: number; totalPending: number;
+    weeks: { weekStart: string; weekEnd: string; fee: number; omset: number; orderCount: number; deadline: string }[];
+    payments: { id: number; amountClaimed: number; amountVerified: number | null; status: string; notes: string | null; proofPhotoPath: string; createdAt: string; verifiedAt: string | null }[];
+    suspendDeadline: string | null; daysUntilSuspend: number | null;
+  } | null>(null);
+  const [feeDetailLoading, setFeeDetailLoading] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
+  const [payProof, setPayProof] = useState<File | null>(null);
+  const [payProofPreview, setPayProofPreview] = useState<string | null>(null);
+  const [paySubmitting, setPaySubmitting] = useState(false);
+  const [paySuccess, setPaySuccess] = useState(false);
+
   // Reviews & Rating
   const [reviewsData, setReviewsData] = useState<{ rows: any[]; total: number; avgRating: number | null; totalReviews: number } | null>(null);
   const [reviewsPage, setReviewsPage] = useState(1);
@@ -279,6 +295,42 @@ export default function DashboardMitra() {
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [navigate]);
+
+  const openFeeModal = async () => {
+    setFeeModalOpen(true);
+    setPaySuccess(false);
+    setPayAmount("");
+    setPayProof(null);
+    setPayProofPreview(null);
+    setFeeDetailLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/mitra/platform-fee/detail`, { credentials: "include" });
+      if (res.ok) setFeeDetail(await res.json());
+    } catch {}
+    finally { setFeeDetailLoading(false); }
+  };
+
+  const submitFeePayment = async () => {
+    if (!payProof || !payAmount || parseInt(payAmount) <= 0) return;
+    setPaySubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("foto", payProof);
+      fd.append("amountClaimed", payAmount.replace(/\D/g, ""));
+      const res = await fetch(`${BASE}/api/mitra/platform-fee/pay`, { method: "POST", credentials: "include", body: fd });
+      if (res.ok) {
+        setPaySuccess(true);
+        setPayAmount("");
+        setPayProof(null);
+        setPayProofPreview(null);
+        // Refresh detail
+        const d2 = await fetch(`${BASE}/api/mitra/platform-fee/detail`, { credentials: "include" });
+        if (d2.ok) setFeeDetail(await d2.json());
+        fetchDashboard();
+      }
+    } catch {}
+    finally { setPaySubmitting(false); }
+  };
 
   // Restore active order dari DB (untuk kasus reload halaman)
   const fetchActiveOrder = useCallback(async () => {
@@ -1610,19 +1662,26 @@ export default function DashboardMitra() {
         {/* ══ BERANDA: stats / grafik / platform fee ══ */}
         {activeTab === "beranda" && <>
 
+        {/* Suspension warning */}
+        {data?.platformFeeStatus === "belum_lunas" && data?.daysUntilSuspend !== null && data.daysUntilSuspend <= 3 && (
+          <div onClick={openFeeModal} style={{ background: data.daysUntilSuspend < 0 ? "#fef2f2" : "#fff7ed", border: `1px solid ${data.daysUntilSuspend < 0 ? "#fca5a5" : "#fdba74"}`, borderRadius: 16, padding: "14px 16px", marginBottom: 14, cursor: "pointer" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: data.daysUntilSuspend < 0 ? "#dc2626" : "#ea580c", marginBottom: 4 }}>
+              {data.daysUntilSuspend < 0 ? "⛔ Akun Terancam Suspended" : `⚠️ Batas Waktu ${data.daysUntilSuspend} Hari Lagi`}
+            </div>
+            <div style={{ fontSize: 12, color: data.daysUntilSuspend < 0 ? "#b91c1c" : "#c2410c" }}>
+              {data.daysUntilSuspend < 0
+                ? "Platform fee belum dibayar melewati batas 7 hari. Segera bayar untuk menghindari suspend."
+                : "Segera lunasi platform fee sebelum batas waktu. Tap untuk bayar sekarang."}
+            </div>
+          </div>
+        )}
+
         {/* Stats 2x2 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
           {[
-            { icon: "💰", label: "Pendapatan Hari Ini", value: fmtRp(data?.todayIncome ?? 0), color: "#1a7a6a" },
-            { icon: "📋", label: "Order Hari Ini", value: `${data?.todayOrders ?? 0} Order`, color: "#1a7a6a" },
-            { icon: "⭐", label: "Rating Saya", value: data?.rating != null ? `${data.rating} / 5.0` : "Belum ada", color: "#f5a623" },
-            {
-              icon: "🏷️", label: "Platform Fee",
-              value: data?.platformFeeStatus === "lunas"
-                ? "Lunas ✓"
-                : `Tagihan ${fmtRp(data?.platformFeePending ?? 0)}`,
-              color: data?.platformFeeStatus === "lunas" ? "#1a7a6a" : "#ea580c",
-            },
+            { icon: "💰", label: "Pendapatan Hari Ini", value: fmtRp(data?.todayIncome ?? 0), color: "#1a7a6a", onClick: undefined as (() => void) | undefined },
+            { icon: "📋", label: "Order Hari Ini", value: `${data?.todayOrders ?? 0} Order`, color: "#1a7a6a", onClick: undefined },
+            { icon: "⭐", label: "Rating Saya", value: data?.rating != null ? `${data.rating} / 5.0` : "Belum ada", color: "#f5a623", onClick: undefined },
           ].map(s => (
             <div key={s.label} style={{ background: "#fff", borderRadius: 18, padding: "16px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
               <div style={{ fontSize: 26, marginBottom: 8 }}>{s.icon}</div>
@@ -1630,6 +1689,23 @@ export default function DashboardMitra() {
               <div style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</div>
             </div>
           ))}
+          {/* Platform Fee Card — clickable */}
+          <div
+            onClick={openFeeModal}
+            style={{ background: data?.platformFeeStatus === "lunas" ? "#fff" : "linear-gradient(135deg, #fff7ed, #fff)", borderRadius: 18, padding: "16px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", cursor: "pointer", border: data?.platformFeeStatus === "lunas" ? "none" : "1.5px solid rgba(234,88,12,0.2)", position: "relative", overflow: "hidden" }}
+          >
+            {data?.platformFeeStatus !== "lunas" && (
+              <div style={{ position: "absolute", top: 8, right: 10, fontSize: 9, color: "#ea580c", fontWeight: 600, opacity: 0.7 }}>Tap ›</div>
+            )}
+            <div style={{ fontSize: 26, marginBottom: 8 }}>🏷️</div>
+            <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 4 }}>Platform Fee</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: data?.platformFeeStatus === "lunas" ? "#1a7a6a" : "#ea580c" }}>
+              {data?.platformFeeStatus === "lunas" ? "Lunas ✓" : fmtRp(data?.platformFeePending ?? 0)}
+            </div>
+            {data?.platformFeeStatus !== "lunas" && (
+              <div style={{ fontSize: 10, color: "#ea580c", marginTop: 2, opacity: 0.8 }}>Tap untuk bayar</div>
+            )}
+          </div>
         </div>
 
         {/* Grafik Pendapatan */}
@@ -2662,6 +2738,199 @@ export default function DashboardMitra() {
           </button>
         ))}
       </div>
+
+    {/* ═══ MODAL PLATFORM FEE ═══ */}
+    {feeModalOpen && (
+      <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "flex-end" }} onClick={() => setFeeModalOpen(false)}>
+        <div onClick={e => e.stopPropagation()} style={{ background: "#f4f7fb", borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "92vh", overflowY: "auto", paddingBottom: 32 }}>
+          {/* Header */}
+          <div style={{ background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", padding: "20px 20px 18px", borderRadius: "24px 24px 0 0", color: "#fff" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>🏷️ Platform Fee</div>
+              <button onClick={() => setFeeModalOpen(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 10, color: "#fff", width: 32, height: 32, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            </div>
+            {feeDetailLoading ? (
+              <div style={{ textAlign: "center", padding: "12px 0", opacity: 0.7, fontSize: 14 }}>Memuat...</div>
+            ) : feeDetail ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "10px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: 10, opacity: 0.8, marginBottom: 4 }}>Total Tagihan</div>
+                  <div style={{ fontSize: 14, fontWeight: 800 }}>{fmtRp(feeDetail.totalAllFees)}</div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "10px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: 10, opacity: 0.8, marginBottom: 4 }}>Sudah Diverif</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#86efac" }}>{fmtRp(feeDetail.totalVerified)}</div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "10px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: 10, opacity: 0.8, marginBottom: 4 }}>Sisa Tagihan</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: feeDetail.totalPending > 0 ? "#fca5a5" : "#86efac" }}>{fmtRp(feeDetail.totalPending)}</div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div style={{ padding: "16px 16px 0" }}>
+            {/* Deadline warning */}
+            {feeDetail && feeDetail.totalPending > 0 && feeDetail.suspendDeadline && (
+              <div style={{ background: (feeDetail.daysUntilSuspend ?? 99) < 0 ? "#fef2f2" : "#fff7ed", border: `1px solid ${(feeDetail.daysUntilSuspend ?? 99) < 0 ? "#fca5a5" : "#fdba74"}`, borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: (feeDetail.daysUntilSuspend ?? 99) < 0 ? "#dc2626" : "#ea580c", marginBottom: 2 }}>
+                  {(feeDetail.daysUntilSuspend ?? 99) < 0 ? "⛔ Batas Waktu Terlewat!" : `⚠️ Deadline: ${feeDetail.suspendDeadline}`}
+                </div>
+                <div style={{ fontSize: 12, color: (feeDetail.daysUntilSuspend ?? 99) < 0 ? "#b91c1c" : "#c2410c" }}>
+                  {(feeDetail.daysUntilSuspend ?? 99) < 0
+                    ? "Segera lunasi untuk menghindari suspend akun."
+                    : `Sisa ${feeDetail.daysUntilSuspend} hari untuk melunasi tagihan.`}
+                </div>
+              </div>
+            )}
+
+            {/* Bank account info */}
+            {feeDetail && feeDetail.totalPending > 0 && (
+              <div style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 12 }}>🏦 Transfer ke Rekening RIDE</div>
+                <div style={{ background: "#f4f7fb", borderRadius: 12, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 2 }}>Nama Rekening</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a", marginBottom: 10 }}>PT ALVI UTAMA KARYA</div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 1 }}>Bank</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a3a5c" }}>BNI</div>
+                    </div>
+                    <div style={{ width: 1, height: 32, background: "#e0e8f0" }} />
+                    <div>
+                      <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 1 }}>No. Rekening</div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: "#1a3a5c", letterSpacing: 1 }}>1788471839</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Upload bukti pembayaran */}
+            {feeDetail && feeDetail.totalPending > 0 && (
+              <div style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 12 }}>📤 Kirim Bukti Pembayaran</div>
+                {paySuccess && (
+                  <div style={{ background: "rgba(26,122,106,0.1)", border: "1px solid rgba(26,122,106,0.25)", borderRadius: 12, padding: "12px 14px", marginBottom: 12, textAlign: "center" }}>
+                    <div style={{ fontSize: 22, marginBottom: 4 }}>✅</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1a7a6a" }}>Bukti berhasil dikirim!</div>
+                    <div style={{ fontSize: 11, color: "#7a8a9a", marginTop: 2 }}>Admin akan memverifikasi dalam 1x24 jam.</div>
+                  </div>
+                )}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 6 }}>Jumlah yang ditransfer (Rp)</div>
+                  <input
+                    type="number"
+                    placeholder={`Contoh: ${feeDetail.totalPending}`}
+                    value={payAmount}
+                    onChange={e => setPayAmount(e.target.value)}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e0e8f0", fontSize: 15, fontWeight: 600, color: "#1a2a3a", boxSizing: "border-box", outline: "none" }}
+                  />
+                  <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 4 }}>Sisa tagihan: {fmtRp(feeDetail.totalPending)} — boleh cicil</div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 6 }}>Foto bukti transfer</div>
+                  {payProofPreview ? (
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: 12, overflow: "hidden", background: "#f4f7fb" }}>
+                      <img src={payProofPreview} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="bukti" />
+                      <button onClick={() => { setPayProof(null); setPayProofPreview(null); }} style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", border: "none", borderRadius: 8, color: "#fff", width: 28, height: 28, fontSize: 14, cursor: "pointer" }}>✕</button>
+                    </div>
+                  ) : (
+                    <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", padding: "20px", borderRadius: 12, border: "2px dashed #d0dce8", background: "#f9fafb", cursor: "pointer", gap: 6 }}>
+                      <span style={{ fontSize: 28 }}>📷</span>
+                      <span style={{ fontSize: 12, color: "#9aa5b4" }}>Tap untuk pilih foto bukti transfer</span>
+                      <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setPayProof(f);
+                          const reader = new FileReader();
+                          reader.onload = ev => setPayProofPreview(ev.target?.result as string);
+                          reader.readAsDataURL(f);
+                        }
+                      }} />
+                    </label>
+                  )}
+                </div>
+                <button
+                  onClick={submitFeePayment}
+                  disabled={!payProof || !payAmount || parseInt(payAmount) <= 0 || paySubmitting}
+                  style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", background: (!payProof || !payAmount || parseInt(payAmount) <= 0) ? "#d0dce8" : "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: (!payProof || !payAmount || parseInt(payAmount) <= 0) ? "not-allowed" : "pointer" }}
+                >
+                  {paySubmitting ? "Mengirim..." : "Kirim Bukti Pembayaran"}
+                </button>
+              </div>
+            )}
+
+            {/* Riwayat pembayaran */}
+            {feeDetail && feeDetail.payments.length > 0 && (
+              <div style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 12 }}>📋 Riwayat Pengajuan</div>
+                {feeDetail.payments.map((p, i) => {
+                  const statusColor = p.status === "verified" ? "#1a7a6a" : p.status === "rejected" ? "#dc2626" : "#f59e0b";
+                  const statusBg = p.status === "verified" ? "rgba(26,122,106,0.08)" : p.status === "rejected" ? "rgba(220,38,38,0.08)" : "rgba(245,158,11,0.08)";
+                  const statusIcon = p.status === "verified" ? "✅" : p.status === "rejected" ? "❌" : "⏳";
+                  const statusLabel = p.status === "verified" ? "Diverifikasi" : p.status === "rejected" ? "Ditolak" : "Menunggu";
+                  return (
+                    <div key={p.id}>
+                      {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "10px 0" }} />}
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a" }}>{fmtRp(p.amountClaimed)}</span>
+                            <span style={{ fontSize: 10, background: statusBg, color: statusColor, borderRadius: 6, padding: "2px 8px", fontWeight: 700 }}>{statusIcon} {statusLabel}</span>
+                          </div>
+                          {p.amountVerified != null && p.status === "verified" && (
+                            <div style={{ fontSize: 11, color: "#1a7a6a", marginBottom: 2 }}>Diverif: {fmtRp(p.amountVerified)}</div>
+                          )}
+                          {p.notes && (
+                            <div style={{ fontSize: 11, color: "#7a8a9a", marginBottom: 2 }}>Catatan: {p.notes}</div>
+                          )}
+                          <div style={{ fontSize: 10, color: "#9aa5b4" }}>{fmtDate(p.createdAt)}</div>
+                        </div>
+                        <a href={`${BASE}${p.proofPhotoPath}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                          <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "#f4f7fb", flexShrink: 0 }}>
+                            <img src={`${BASE}${p.proofPhotoPath}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="bukti" />
+                          </div>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Rincian per minggu */}
+            {feeDetail && feeDetail.weeks.length > 0 && (
+              <div style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 12 }}>📅 Rincian per Minggu</div>
+                {feeDetail.weeks.map((w, i) => (
+                  <div key={i}>
+                    {i > 0 && <div style={{ height: 1, background: "#f0f4f8", margin: "8px 0" }} />}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2a3a" }}>{w.weekStart} – {w.weekEnd}</div>
+                        <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 1 }}>Omset: {fmtRp(w.omset)} · {w.orderCount} order</div>
+                        <div style={{ fontSize: 10, color: "#c2410c", marginTop: 1 }}>Deadline: {w.deadline}</div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(w.fee)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Lunas state */}
+            {feeDetail && feeDetail.totalPending === 0 && (
+              <div style={{ textAlign: "center", padding: "28px 16px" }}>
+                <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 4 }}>Platform Fee Lunas!</div>
+                <div style={{ fontSize: 13, color: "#7a8a9a" }}>Terima kasih sudah menjaga kepercayaan RIDE.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
 
     </div>
   );

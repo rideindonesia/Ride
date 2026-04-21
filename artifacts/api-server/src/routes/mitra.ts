@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable, systemSettingsTable } from "@workspace/db";
+import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable, systemSettingsTable, platformFeePaymentsTable } from "@workspace/db";
 import { eq, and, or, gt, gte, desc, sql, avg, count, sum, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
@@ -51,6 +51,20 @@ const proofPhotoStorage = multer.diskStorage({
   },
 });
 const uploadProofPhoto = multer({ storage: proofPhotoStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
+}});
+
+// Bukti transfer platform fee
+const feeProofDir = path.resolve(process.cwd(), "uploads", "fee-proofs");
+if (!fs.existsSync(feeProofDir)) fs.mkdirSync(feeProofDir, { recursive: true });
+const feeProofStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, feeProofDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `fee-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const uploadFeeProof = multer({ storage: feeProofStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
   if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
 }});
 
@@ -317,17 +331,34 @@ router.get("/dashboard", requireMitra, async (req, res) => {
     value: monthlyMap[m] ?? 0,
   }));
 
-  // Platform fee status — computed: unpaid if current week has fees not yet settled
-  const [currentWeekFee] = await db.select({ fee: sum(ordersTable.platformFee) })
-    .from(ordersTable)
-    .where(and(
-      eq(ordersTable.mitraId, mitraId),
-      eq(ordersTable.status, "done"),
-      gte(ordersTable.createdAt, currentWeekStart),
-    ));
-  const pendingFeeAmount = Number(currentWeekFee?.fee) || 0;
-  const platformFeeStatus = pendingFeeAmount > 0 ? "belum_lunas" : "lunas";
-  const platformFeePending = pendingFeeAmount;
+  // Platform fee — total dari semua orders done dikurangi total verified payments
+  const [[allFeeRow], [verifiedRow], oldestWeekRows] = await Promise.all([
+    db.select({ fee: sum(ordersTable.platformFee) })
+      .from(ordersTable)
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"))),
+    db.select({ total: sum(platformFeePaymentsTable.amountVerified) })
+      .from(platformFeePaymentsTable)
+      .where(and(eq(platformFeePaymentsTable.mitraId, mitraId), eq(platformFeePaymentsTable.status, "verified"))),
+    db.select({
+      weekEndEpoch: sql<string>`extract(epoch from date_trunc('week', min(${ordersTable.createdAt})) + interval '6 days')`,
+    }).from(ordersTable).where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"))),
+  ]);
+
+  const totalAllFees = Number(allFeeRow?.fee ?? 0);
+  const totalVerified = Number(verifiedRow?.total ?? 0);
+  const platformFeePending = Math.max(0, totalAllFees - totalVerified);
+  const platformFeeStatus = platformFeePending > 0 ? "belum_lunas" : "lunas";
+
+  // Hitung deadline & auto-suspend
+  let daysUntilSuspend: number | null = null;
+  const oldestEpoch = Number(oldestWeekRows[0]?.weekEndEpoch ?? 0);
+  if (oldestEpoch > 0 && platformFeePending > 0) {
+    const deadlineMs = oldestEpoch * 1000 + 7 * 24 * 60 * 60 * 1000;
+    daysUntilSuspend = Math.ceil((deadlineMs - Date.now()) / (24 * 60 * 60 * 1000));
+    if (daysUntilSuspend < 0 && !userRow?.isSuspended) {
+      await db.update(usersTable).set({ isSuspended: true }).where(eq(usersTable.id, mitraId));
+    }
+  }
 
   const ratingValue = ratingRow?.rating != null ? parseFloat(Number(ratingRow.rating).toFixed(1)) : null;
 
@@ -341,6 +372,7 @@ router.get("/dashboard", requireMitra, async (req, res) => {
     rating: ratingValue,
     platformFeeStatus,
     platformFeePending,
+    daysUntilSuspend,
     weeklyChart,
     weeklyTotal: weeklyChart.reduce((s, d) => s + d.value, 0),
     weeklyBest: Math.max(...weeklyChart.map(d => d.value), 0),
@@ -918,6 +950,95 @@ router.post("/upload-photo", (req, res, next) => {
   const relativePath = `/uploads/profile/${req.file.filename}`;
   await db.update(usersTable).set({ profilePhotoPath: relativePath }).where(eq(usersTable.id, mitraId as number));
   res.json({ ok: true, photoUrl: relativePath });
+});
+
+// GET /api/mitra/platform-fee/detail — detail fee, riwayat bayar, dan mingguan
+router.get("/platform-fee/detail", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+
+  const [weeklyRaw, allFeeRow, payments] = await Promise.all([
+    db.select({
+      weekStart: sql<string>`to_char(date_trunc('week', ${ordersTable.createdAt}), 'DD Mon YYYY')`,
+      weekEnd: sql<string>`to_char(date_trunc('week', ${ordersTable.createdAt}) + interval '6 days', 'DD Mon YYYY')`,
+      weekEndEpoch: sql<string>`extract(epoch from date_trunc('week', ${ordersTable.createdAt}) + interval '6 days')`,
+      omset: sum(ordersTable.totalAmount),
+      fee: sum(ordersTable.platformFee),
+      orderCount: count(),
+    }).from(ordersTable)
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done")))
+      .groupBy(sql`date_trunc('week', ${ordersTable.createdAt})`)
+      .orderBy(desc(sql`date_trunc('week', ${ordersTable.createdAt})`))
+      .limit(16),
+    db.select({ fee: sum(ordersTable.platformFee) })
+      .from(ordersTable)
+      .where(and(eq(ordersTable.mitraId, mitraId), eq(ordersTable.status, "done"))),
+    db.select().from(platformFeePaymentsTable)
+      .where(eq(platformFeePaymentsTable.mitraId, mitraId))
+      .orderBy(desc(platformFeePaymentsTable.createdAt))
+      .limit(30),
+  ]);
+
+  const totalAllFees = Number(allFeeRow[0]?.fee ?? 0);
+  const totalVerified = payments.filter(p => p.status === "verified").reduce((s, p) => s + (p.amountVerified ?? 0), 0);
+  const totalPending = Math.max(0, totalAllFees - totalVerified);
+
+  let daysUntilSuspend: number | null = null;
+  let suspendDeadline: string | null = null;
+  if (weeklyRaw.length > 0 && totalPending > 0) {
+    const oldest = weeklyRaw[weeklyRaw.length - 1];
+    const deadlineMs = Number(oldest.weekEndEpoch) * 1000 + 7 * 24 * 60 * 60 * 1000;
+    daysUntilSuspend = Math.ceil((deadlineMs - Date.now()) / (24 * 60 * 60 * 1000));
+    suspendDeadline = new Date(deadlineMs).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  }
+
+  const weeks = weeklyRaw.map(f => ({
+    weekStart: f.weekStart,
+    weekEnd: f.weekEnd,
+    fee: Number(f.fee ?? 0),
+    omset: Number(f.omset ?? 0),
+    orderCount: Number(f.orderCount ?? 0),
+    deadline: new Date(Number(f.weekEndEpoch) * 1000 + 7 * 24 * 60 * 60 * 1000)
+      .toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }),
+  }));
+
+  res.json({
+    totalAllFees,
+    totalVerified,
+    totalPending,
+    weeks,
+    payments: payments.map(p => ({
+      id: p.id,
+      amountClaimed: p.amountClaimed,
+      amountVerified: p.amountVerified,
+      status: p.status,
+      notes: p.notes,
+      proofPhotoPath: p.proofPhotoPath,
+      createdAt: p.createdAt,
+      verifiedAt: p.verifiedAt,
+    })),
+    suspendDeadline,
+    daysUntilSuspend,
+  });
+});
+
+// POST /api/mitra/platform-fee/pay — kirim bukti pembayaran platform fee
+router.post("/platform-fee/pay", (req, res, next) => {
+  uploadFeeProof.single("foto")(req, res, (err) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    next();
+  });
+}, requireMitra, async (req: any, res) => {
+  const mitraId = getMitraId(req) as number;
+  const amountClaimed = parseInt(req.body.amountClaimed);
+  if (!req.file || isNaN(amountClaimed) || amountClaimed <= 0) {
+    res.status(400).json({ error: "Foto bukti dan jumlah pembayaran diperlukan" });
+    return;
+  }
+  const proofPhotoPath = `/uploads/fee-proofs/${req.file.filename}`;
+  const [payment] = await db.insert(platformFeePaymentsTable)
+    .values({ mitraId, amountClaimed, proofPhotoPath, status: "pending" })
+    .returning();
+  res.json({ ok: true, payment });
 });
 
 // POST /api/mitra/reports — kirim laporan dari mitra
