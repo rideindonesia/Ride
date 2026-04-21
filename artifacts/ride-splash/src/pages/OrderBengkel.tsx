@@ -109,7 +109,6 @@ export default function OrderBengkel() {
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
   const [chatOpen, setChatOpen] = useState(false);
   const [mitraConfirmed, setMitraConfirmed] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -1147,44 +1146,16 @@ export default function OrderBengkel() {
           </div>
 
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 20px", background: "linear-gradient(to top, #f0f4f8 90%, transparent)", zIndex: 100 }}>
-            {confirmCancel ? (
-              <div style={{ background: "#fff5f5", border: "1.5px solid #fca5a5", borderRadius: 16, padding: "14px 16px" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#b91c1c", marginBottom: 10, textAlign: "center" }}>Yakin ingin membatalkan pesanan?</div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => setConfirmCancel(false)}
-                    style={{ flex: 1, padding: "13px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#4a5568", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                  >← Tidak</button>
-                  <button
-                    onClick={async () => {
-                      setConfirmCancel(false);
-                      if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
-                      if (orderPollRef.current) clearInterval(orderPollRef.current);
-                      if (chatPollRef.current) clearInterval(chatPollRef.current);
-                      navigate("/dashboard/pengguna");
-                    }}
-                    style={{ flex: 1, padding: "13px", borderRadius: 14, border: "none", background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                  >Ya, Batalkan</button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  onClick={() => navigate("/dashboard/pengguna")}
-                  style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                >← Kembali</button>
-                {trackingPhase === "menuju" && orderStatus === "accepted" && (
-                  <button
-                    onClick={() => setConfirmCancel(true)}
-                    style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #fca5a5", background: "#fff5f5", color: "#b91c1c", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-                  >✕ Batalkan</button>
-                )}
-                <button
-                  disabled
-                  style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: "#d0d8e0", color: "#a0aab4", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}
-                >Lanjut →</button>
-              </div>
-            )}
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => navigate("/dashboard/pengguna")}
+                style={{ flex: 1, padding: "15px", borderRadius: 16, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >← Kembali</button>
+              <button
+                disabled
+                style={{ flex: 2, padding: "15px", borderRadius: 16, border: "none", background: "#d0d8e0", color: "#a0aab4", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}
+              >Lanjut →</button>
+            </div>
           </div>
         </>
       )}
