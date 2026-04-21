@@ -109,7 +109,7 @@ function LiveOrdersWidget() {
 interface Stats {
   ordersToday: number; ordersWeek: number; ordersMonth: number; totalOrders: number;
   totalPlatformFee: number; weekPlatformFee: number; pendingMitra: number;
-  totalMitra: number; totalPengguna: number; newPenggunaWeek: number; activeOrders: number;
+  totalMitra: number; onlineMitra: number; totalPengguna: number; newPenggunaWeek: number; activeOrders: number;
 }
 
 export default function Dashboard() {
@@ -134,7 +134,8 @@ export default function Dashboard() {
         <StatCard title="Order Minggu Ini" value={stats?.ordersWeek ?? "–"} subtitle="7 hari terakhir" icon={ShoppingBag} color="#1a3a5c" />
         <StatCard title="Pendapatan Bulan Ini" value={stats ? rupiahFormat(stats.weekPlatformFee) : "–"} subtitle="Platform fee minggu ini" icon={Wallet} color="#f59e0b" />
         <StatCard title="Total Platform Fee" value={stats ? rupiahFormat(stats.totalPlatformFee) : "–"} subtitle={`Dari ${stats?.totalOrders ?? 0} order selesai`} icon={Wallet} color="#8b5cf6" />
-        <StatCard title="Mitra Aktif" value={stats?.totalMitra ?? "–"} subtitle={`${stats?.pendingMitra ?? 0} menunggu verifikasi`} icon={Wrench} color="#1a7a6a" />
+        <StatCard title="Total Mitra Terdaftar" value={stats?.totalMitra ?? "–"} subtitle={`${stats?.pendingMitra ?? 0} menunggu verifikasi`} icon={Wrench} color="#1a7a6a" />
+        <StatCard title="Mitra Sedang Online" value={stats?.onlineMitra ?? "–"} subtitle="Aktif menerima pesanan" icon={Activity} color="#22c55e" />
         <StatCard title="Pengguna Terdaftar" value={stats?.totalPengguna ?? "–"} subtitle={`+${stats?.newPenggunaWeek ?? 0} minggu ini`} icon={Users} color="#1a3a5c" />
         <StatCard title="Order Aktif" value={stats?.activeOrders ?? "–"} subtitle="Pending + Diterima" icon={Activity} color="#ec4899" />
         <StatCard title="Antrian Mitra" value={stats?.pendingMitra ?? "–"} subtitle="Perlu diverifikasi" icon={AlertCircle} color="#ef4444" />

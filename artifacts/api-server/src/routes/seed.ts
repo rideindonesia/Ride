@@ -69,12 +69,12 @@ router.post("/demo", async (_req, res) => {
           userId,
           lat: mitraData.lat,
           lng: mitraData.lng,
-          isOnline: true,
+          isOnline: false,
           serviceType: mitraData.service,
         });
       } else {
         await db.update(mitraLocationsTable)
-          .set({ lat: mitraData.lat, lng: mitraData.lng, isOnline: true, serviceType: mitraData.service })
+          .set({ lat: mitraData.lat, lng: mitraData.lng, serviceType: mitraData.service })
           .where(eq(mitraLocationsTable.userId, userId));
       }
 

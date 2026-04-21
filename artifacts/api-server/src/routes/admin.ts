@@ -64,7 +64,7 @@ router.get("/dashboard/stats", requireAdmin, async (_req, res) => {
 
   const [[ordersToday], [ordersWeek], [ordersMonth], [totalOrders],
          [totalPlatformFee], [weekFee], [pendingMitra], [totalMitra],
-         [totalPengguna], [newPenggunaWeek], [activeOrders]] = await Promise.all([
+         [totalPengguna], [newPenggunaWeek], [activeOrders], [onlineMitra]] = await Promise.all([
     db.select({ c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, todayStart))),
     db.select({ c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, weekStart))),
     db.select({ c: count() }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, monthStart))),
@@ -72,10 +72,11 @@ router.get("/dashboard/stats", requireAdmin, async (_req, res) => {
     db.select({ total: sum(ordersTable.platformFee) }).from(ordersTable).where(eq(ordersTable.status, "done")),
     db.select({ total: sum(ordersTable.platformFee) }).from(ordersTable).where(and(eq(ordersTable.status, "done"), gte(ordersTable.createdAt, weekStart))),
     db.select({ c: count() }).from(mitraApplicationsTable).where(eq(mitraApplicationsTable.status, "pending")),
-    db.select({ c: count() }).from(mitraApplicationsTable).where(or(eq(mitraApplicationsTable.status, "approved"), eq(mitraApplicationsTable.status, "pending"))),
+    db.select({ c: count() }).from(mitraApplicationsTable).where(eq(mitraApplicationsTable.status, "approved")),
     db.select({ c: count() }).from(usersTable).where(and(eq(usersTable.role, "pengguna"), eq(usersTable.isAdmin, false))),
     db.select({ c: count() }).from(usersTable).where(and(eq(usersTable.role, "pengguna"), gte(usersTable.createdAt, weekStart))),
     db.select({ c: count() }).from(ordersTable).where(inArray(ordersTable.status, ["pending", "accepted"])),
+    db.select({ c: count() }).from(mitraLocationsTable).where(eq(mitraLocationsTable.isOnline, true)),
   ]);
 
   res.json({
@@ -87,6 +88,7 @@ router.get("/dashboard/stats", requireAdmin, async (_req, res) => {
     weekPlatformFee: Number(weekFee.total ?? 0),
     pendingMitra: Number(pendingMitra.c),
     totalMitra: Number(totalMitra.c),
+    onlineMitra: Number(onlineMitra.c),
     totalPengguna: Number(totalPengguna.c),
     newPenggunaWeek: Number(newPenggunaWeek.c),
     activeOrders: Number(activeOrders.c),

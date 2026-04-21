@@ -642,6 +642,17 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   const { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod } = req.body;
   const paymentData = { biayaJasa, biayaSparepart, biayaPanggilan, biayaLayanan, total, paymentMethod };
 
+  // Cek apakah rincian sudah pernah dikirim — jika sudah, tolak edit ulang
+  const [existing] = await db.select({ paymentData: ordersTable.paymentData, status: ordersTable.status })
+    .from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+  if (existing.paymentData != null) {
+    res.status(409).json({ error: "Rincian biaya sudah dikirim ke konsumen dan tidak dapat diubah lagi" });
+    return;
+  }
+
   // Hitung platform fee: baca pct dari DB (default 15%)
   const callFee = Number(biayaPanggilan) || 0;
   const layanan = Number(biayaLayanan) || 0;

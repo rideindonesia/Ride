@@ -1349,10 +1349,10 @@ export default function DashboardMitra() {
                           <div key={label}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a", marginBottom: 2 }}>{label}</div>
                             <div style={{ fontSize: 10, color: "#9aa5b4", marginBottom: 6 }}>{sub}</div>
-                            <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                            <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 10, overflow: "hidden", background: rincianSent ? "#f8fafc" : "#fff", opacity: rincianSent ? 0.7 : 1 }}>
                               <span style={{ padding: "0 8px", fontSize: 12, color: "#9aa5b4", background: "#f8fafc", borderRight: "1px solid #e0e8f0", alignSelf: "stretch", display: "flex", alignItems: "center" }}>Rp</span>
-                              <input type="text" inputMode="numeric" value={val === "" ? "" : Number(val).toLocaleString("id-ID")} onChange={e => { const raw = e.target.value.replace(/\D/g, ""); set(raw); setRincianSent(false); }}
-                                style={{ flex: 1, padding: "10px 8px", border: "none", outline: "none", fontSize: 14, fontWeight: 700, color: "#1a2a3a", width: 0 }} />
+                              <input type="text" inputMode="numeric" value={val === "" ? "" : Number(val).toLocaleString("id-ID")} disabled={rincianSent} onChange={e => { if (rincianSent) return; const raw = e.target.value.replace(/\D/g, ""); set(raw); }}
+                                style={{ flex: 1, padding: "10px 8px", border: "none", outline: "none", fontSize: 14, fontWeight: 700, color: "#1a2a3a", width: 0, cursor: rincianSent ? "not-allowed" : "text", background: "transparent" }} />
                             </div>
                           </div>
                         ))}
@@ -1382,8 +1382,9 @@ export default function DashboardMitra() {
                         <div style={{ fontSize: 13, color: "#7a8a9a", marginBottom: 8 }}>Metode Bayar Konsumen</div>
                         <div style={{ display: "flex", gap: 8 }}>
                           {(["cash", "transfer", "qris"] as const).map(m => (
-                            <button key={m} onClick={() => setPaymentMethod(m)}
-                              style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: paymentMethod === m ? "2px solid #ea580c" : "1.5px solid #e0e8f0", background: paymentMethod === m ? "#fff5f0" : "#fff", color: paymentMethod === m ? "#ea580c" : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                            <button key={m} onClick={() => { if (!rincianSent) setPaymentMethod(m); }}
+                              disabled={rincianSent}
+                              style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: paymentMethod === m ? "2px solid #ea580c" : "1.5px solid #e0e8f0", background: paymentMethod === m ? "#fff5f0" : "#fff", color: paymentMethod === m ? "#ea580c" : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: rincianSent ? "not-allowed" : "pointer", opacity: rincianSent ? 0.7 : 1 }}>
                               {m === "cash" ? "Cash" : m === "transfer" ? "Transfer" : "QRIS"}
                             </button>
                           ))}
