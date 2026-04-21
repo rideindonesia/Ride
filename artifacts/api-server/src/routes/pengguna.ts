@@ -358,7 +358,7 @@ router.get("/orders/:id", async (req, res) => {
   // If accepted, fetch mitra info
   let mitraInfo = null;
   if (order.mitraId) {
-    const [mitraUser] = await db.select({ name: usersTable.name })
+    const [mitraUser] = await db.select({ name: usersTable.name, profilePhotoPath: usersTable.profilePhotoPath })
       .from(usersTable).where(eq(usersTable.id, order.mitraId));
     const [mitraLoc] = await db.select({ lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng, speedKmh: mitraLocationsTable.speedKmh, serviceType: mitraLocationsTable.serviceType })
       .from(mitraLocationsTable).where(eq(mitraLocationsTable.userId, order.mitraId));
@@ -368,6 +368,7 @@ router.get("/orders/:id", async (req, res) => {
     mitraInfo = {
       id: order.mitraId,
       name: mitraUser?.name ?? "",
+      profilePhotoPath: mitraUser?.profilePhotoPath ?? null,
       lat: mitraLoc?.lat ?? 0,
       lng: mitraLoc?.lng ?? 0,
       speedKmh: mitraLoc?.speedKmh ?? 0,

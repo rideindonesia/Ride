@@ -194,7 +194,7 @@ router.get("/dashboard", requireMitra, async (req, res) => {
     .limit(1);
 
   // User info
-  const [userRow] = await db.select({ name: usersTable.name, email: usersTable.email })
+  const [userRow] = await db.select({ name: usersTable.name, email: usersTable.email, profilePhotoPath: usersTable.profilePhotoPath })
     .from(usersTable).where(eq(usersTable.id, mitraId));
 
   // Get serviceType from mitra_applications if not in location row
@@ -319,6 +319,7 @@ router.get("/dashboard", requireMitra, async (req, res) => {
 
   res.json({
     name: userRow?.name ?? "",
+    profilePhotoPath: userRow?.profilePhotoPath ?? null,
     serviceType,
     isOnline: locRow?.isOnline ?? false,
     todayIncome: Number(todayStats?.income) || 0,
@@ -500,6 +501,7 @@ router.get("/active-order", requireMitra, async (req, res) => {
     paymentConfirmedAt: ordersTable.paymentConfirmedAt,
     paymentData: ordersTable.paymentData,
     penggunaName: usersTable.name,
+    penggunaPhotoPath: usersTable.profilePhotoPath,
     createdAt: ordersTable.createdAt,
   }).from(ordersTable)
     .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))

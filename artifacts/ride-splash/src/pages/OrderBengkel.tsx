@@ -95,6 +95,7 @@ export default function OrderBengkel() {
   type AcceptedMitra = {
     id: number; name: string; lat: number; lng: number; serviceType: string;
     rating: number | null; totalOrders: number; dist: number; callFee: number; etaMin: number;
+    photo: string | null;
   };
   const [orderId, setOrderId] = useState<number | null>(null);
   const [orderNo, setOrderNo] = useState("");
@@ -204,6 +205,7 @@ export default function OrderBengkel() {
           dist,
           callFee: data.totalAmount ?? 0,
           etaMin,
+          photo: data.mitra.profilePhotoPath ?? null,
         });
         setMitraConfirmed(true);
         if (data.trackingPhase === "selesai") {
@@ -362,6 +364,7 @@ export default function OrderBengkel() {
           dist,
           callFee,
           etaMin,
+          photo: od.mitra.profilePhotoPath ?? null,
         });
         setOrderStatus("accepted");
       } else if (od.status === "cancelled") {
@@ -842,7 +845,11 @@ export default function OrderBengkel() {
                   <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 18, padding: "18px 16px", background: "#fff" }}>
                     {/* Avatar + name row */}
                     <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
-                      <div style={{ width: 56, height: 56, borderRadius: 14, background: "#e8f4f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>🧑‍🔧</div>
+                      <div style={{ width: 56, height: 56, borderRadius: 14, background: "#e8f4f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0, overflow: "hidden" }}>
+                        {acceptedMitra.photo
+                          ? <img src={acceptedMitra.photo} alt="foto mitra" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          : "🧑‍🔧"}
+                      </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2a3a", marginBottom: 3 }}>{acceptedMitra.name}</div>
                         <div style={{ fontSize: 13, color: "#f5a623", fontWeight: 700, marginBottom: 3 }}>
@@ -1047,7 +1054,11 @@ export default function OrderBengkel() {
 
               {/* Mitra card */}
               <div style={{ border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center", marginBottom: 16, background: "#fff" }}>
-                <div style={{ width: 48, height: 48, borderRadius: 24, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🧑‍🔧</div>
+                <div style={{ width: 48, height: 48, borderRadius: 24, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0, overflow: "hidden" }}>
+                  {acceptedMitra.photo
+                    ? <img src={acceptedMitra.photo} alt="foto mitra" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : "🧑‍🔧"}
+                </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a" }}>{acceptedMitra.name}</div>
                   <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>

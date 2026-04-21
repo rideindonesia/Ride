@@ -58,6 +58,7 @@ function BarChart({ data, activeIndex }: { data: ChartBar[]; activeIndex: number
 
 interface DashData {
   name: string;
+  profilePhotoPath: string | null;
   serviceType: string;
   isOnline: boolean;
   todayIncome: number;
@@ -907,8 +908,10 @@ export default function DashboardMitra() {
             </button>
           )}
           {/* Avatar */}
-          <div style={{ width: 48, height: 48, borderRadius: 16, background: "rgba(255,255,255,0.15)", border: "2px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
-            {(data?.name ?? "M").charAt(0).toUpperCase()}
+          <div style={{ width: 48, height: 48, borderRadius: 16, background: "rgba(255,255,255,0.15)", border: "2px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
+            {data?.profilePhotoPath
+              ? <img src={data.profilePhotoPath} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : (data?.name ?? "M").charAt(0).toUpperCase()}
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: 500 }}>Dashboard Mitra</div>
@@ -1120,11 +1123,16 @@ export default function DashboardMitra() {
               </div>
 
               {/* Customer + vehicle */}
-              <div style={{ padding: "0 10px 8px", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 18 }}>📍</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>
-                  {activeOrder.penggunaName} · {activeOrder.vehicleModel} {activeOrder.vehicleYear}
-                </span>
+              <div style={{ padding: "0 10px 8px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 12, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
+                  {(activeOrder as any).penggunaPhotoPath
+                    ? <img src={(activeOrder as any).penggunaPhotoPath} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : (activeOrder.penggunaName ?? "U").charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2a3a" }}>{activeOrder.penggunaName}</div>
+                  <div style={{ fontSize: 12, color: "#7a8a9a" }}>📍 {activeOrder.vehicleModel} {activeOrder.vehicleYear}</div>
+                </div>
               </div>
               {/* Kategori & deskripsi kerusakan */}
               {(Array.isArray((activeOrder as any).damageCategories) || (activeOrder as any).description) && (
@@ -2023,7 +2031,7 @@ export default function DashboardMitra() {
           const monthlyFee = (data?.recentOrders ?? []).reduce((s: number, o: any) => s + (o.platformFee ?? 0), 0);
           const monthlyNet = monthlyRevenue - monthlyFee;
           const avgPerOrder = totalOrders > 0 ? Math.round(monthlyNet / totalOrders) : 0;
-          const photoUrl = mPhotoPreview ?? null;
+          const photoUrl = mPhotoPreview ?? data?.profilePhotoPath ?? null;
           const svcEmoji: Record<string,string> = { bengkel:"🔧", elektronik:"💡", cuci:"🚿", barber:"✂️", inspeksi:"🔍", towing:"🚛" };
 
           return (
@@ -2054,8 +2062,13 @@ export default function DashboardMitra() {
                     const fd = new FormData(); fd.append("photo", mPhotoFile);
                     const r = await fetch(`${BASE}/api/mitra/upload-photo`, { method:"POST", credentials:"include", body:fd }).catch(() => null);
                     setMPhotoUploading(false);
-                    if (r?.ok) { setMPhotoFile(null); setMPhotoMsg({ type:"ok", text:"Foto berhasil diperbarui!" }); }
-                    else setMPhotoMsg({ type:"err", text:"Gagal upload foto" });
+                    if (r?.ok) {
+                      const d = await r.json().catch(() => null);
+                      setMPhotoFile(null);
+                      setMPhotoPreview(null);
+                      if (d?.photoUrl) setData((prev: any) => prev ? { ...prev, profilePhotoPath: d.photoUrl } : prev);
+                      setMPhotoMsg({ type:"ok", text:"Foto berhasil diperbarui!" });
+                    } else setMPhotoMsg({ type:"err", text:"Gagal upload foto" });
                   }} style={{ flex:1, background:"#fff", border:"none", borderRadius:10, padding:"8px 0", fontSize:12, fontWeight:800, color:"#1a7a6a", cursor:"pointer" }}>
                     {mPhotoUploading ? "Mengupload..." : "Upload Foto"}
                   </button>
