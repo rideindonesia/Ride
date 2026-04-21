@@ -58,6 +58,7 @@ app.use(
 );
 
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
+app.use("/api/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api", router);
 
 export default app;
