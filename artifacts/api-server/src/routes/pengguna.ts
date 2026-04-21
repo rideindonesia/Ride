@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, walletTransactionsTable, vouchersTable, reportsTable } from "@workspace/db";
+import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, vouchersTable, reportsTable } from "@workspace/db";
 import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt, inArray, SQL } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
@@ -555,27 +555,6 @@ router.post("/orders/:id/confirm-payment", async (req, res) => {
 
   const finalTotal = Math.max(0, total - discount);
 
-  // Jika bayar via wallet, deduct saldo
-  if (paymentMethod === "wallet") {
-    const [user] = await db.select({ walletBalance: usersTable.walletBalance })
-      .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
-    const balance = user?.walletBalance ?? 0;
-    if (balance < finalTotal) {
-      res.status(400).json({ error: "Saldo wallet tidak cukup", balance, required: finalTotal }); return;
-    }
-    await db.transaction(async (tx) => {
-      await tx.update(usersTable)
-        .set({ walletBalance: sql`${usersTable.walletBalance} - ${finalTotal}` })
-        .where(eq(usersTable.id, penggunaId));
-      await tx.insert(walletTransactionsTable).values({
-        userId: penggunaId,
-        type: "debit" as const,
-        amount: finalTotal,
-        description: `Pembayaran order #${orderId}`,
-      });
-    });
-  }
-
   // Simpan metode pembayaran + waktu konfirmasi ke order, dan set penggunaConfirmed
   const updatedPaymentData = { ...(order.paymentData as any), paymentMethod, discount, finalTotal };
   const [updated] = await db.update(ordersTable)
@@ -838,65 +817,6 @@ router.post("/verify-profile-otp", async (req, res) => {
   await db.update(usersTable).set(update as any).where(eq(usersTable.id, penggunaId));
   delete (req.session as any).profileOtp;
   res.json({ ok: true, field: pending.field, value: pending.value });
-});
-
-// GET /api/pengguna/wallet — saldo dan riwayat transaksi
-router.get("/wallet", async (req, res) => {
-  const penggunaId = getPenggunaId(req);
-  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
-  const [user] = await db.select({ walletBalance: usersTable.walletBalance })
-    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
-  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
-  const transactions = await db.select().from(walletTransactionsTable)
-    .where(eq(walletTransactionsTable.userId, penggunaId))
-    .orderBy(desc(walletTransactionsTable.createdAt))
-    .limit(30);
-  res.json({ balance: user.walletBalance, transactions });
-});
-
-// POST /api/pengguna/wallet/topup — isi saldo (demo)
-router.post("/wallet/topup", async (req, res) => {
-  const penggunaId = getPenggunaId(req);
-  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
-  const { amount, method } = req.body as { amount: number; method: string };
-  if (!amount || amount < 10000) { res.status(400).json({ error: "Minimal top-up Rp 10.000" }); return; }
-  if (amount > 10000000) { res.status(400).json({ error: "Maksimal top-up Rp 10.000.000" }); return; }
-  await db.transaction(async (tx) => {
-    await tx.update(usersTable)
-      .set({ walletBalance: sql`${usersTable.walletBalance} + ${amount}` })
-      .where(eq(usersTable.id, penggunaId));
-    await tx.insert(walletTransactionsTable).values({
-      userId: penggunaId, type: "topup", amount,
-      description: `Top-up via ${method ?? "Transfer Bank"}`,
-    });
-  });
-  const [updated] = await db.select({ walletBalance: usersTable.walletBalance })
-    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
-  res.json({ ok: true, newBalance: updated?.walletBalance ?? 0 });
-});
-
-// POST /api/pengguna/wallet/withdraw — tarik saldo (demo)
-router.post("/wallet/withdraw", async (req, res) => {
-  const penggunaId = getPenggunaId(req);
-  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
-  const { amount, destination } = req.body as { amount: number; destination: string };
-  if (!amount || amount < 10000) { res.status(400).json({ error: "Minimal tarik Rp 10.000" }); return; }
-  const [user] = await db.select({ walletBalance: usersTable.walletBalance })
-    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
-  if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
-  if ((user.walletBalance ?? 0) < amount) { res.status(400).json({ error: "Saldo tidak cukup" }); return; }
-  await db.transaction(async (tx) => {
-    await tx.update(usersTable)
-      .set({ walletBalance: sql`${usersTable.walletBalance} - ${amount}` })
-      .where(eq(usersTable.id, penggunaId));
-    await tx.insert(walletTransactionsTable).values({
-      userId: penggunaId, type: "withdraw", amount,
-      description: `Tarik saldo ke ${destination ?? "rekening bank"}`,
-    });
-  });
-  const [updated] = await db.select({ walletBalance: usersTable.walletBalance })
-    .from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
-  res.json({ ok: true, newBalance: updated?.walletBalance ?? 0 });
 });
 
 // GET /api/pengguna/vouchers/active — ambil voucher yang masih aktif & belum habis
