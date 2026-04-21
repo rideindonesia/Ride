@@ -312,22 +312,23 @@ export default function OrderBengkel() {
     const lat = pinLat ?? userLat ?? 0;
     const lng = pinLng ?? userLng ?? 0;
 
+    const formData = new FormData();
+    formData.append("vehicleType", jenisKendaraan);
+    formData.append("vehicleModel", merekModel);
+    formData.append("vehicleYear", tahun);
+    formData.append("damageCategories", JSON.stringify(kategori));
+    if (deskripsi) formData.append("description", deskripsi);
+    formData.append("pickupAddress", address);
+    if (detailAlamat) formData.append("detailAlamat", detailAlamat);
+    formData.append("pickupLat", String(lat));
+    formData.append("pickupLng", String(lng));
+    formData.append("serviceType", "bengkel");
+    if (foto) formData.append("foto", foto);
+
     fetch("/api/pengguna/orders", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({
-        vehicleType: jenisKendaraan,
-        vehicleModel: merekModel,
-        vehicleYear: tahun,
-        damageCategories: kategori,
-        description: deskripsi,
-        pickupAddress: address,
-        detailAlamat,
-        pickupLat: lat,
-        pickupLng: lng,
-        serviceType: "bengkel",
-      }),
+      body: formData,
     })
       .then(r => r.json())
       .then(d => {

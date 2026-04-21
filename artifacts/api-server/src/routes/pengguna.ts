@@ -24,6 +24,20 @@ const uploadPhoto = multer({ storage: profileStorage, limits: { fileSize: 5 * 10
   if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
 }});
 
+// Order photo (foto kendaraan pengguna) upload setup
+const orderPhotoDir = path.resolve(process.cwd(), "uploads", "order-photos");
+if (!fs.existsSync(orderPhotoDir)) fs.mkdirSync(orderPhotoDir, { recursive: true });
+const orderPhotoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, orderPhotoDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `ord-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const uploadOrderPhoto = multer({ storage: orderPhotoStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
+}});
+
 const router = Router();
 
 /** Read pengguna userId from signed role-cookie (survives cross-role login) or fall back to session */
@@ -262,8 +276,13 @@ router.get("/mitra-online", async (req, res) => {
   res.json({ mitra });
 });
 
-// POST /api/pengguna/orders — buat order baru
-router.post("/orders", async (req, res) => {
+// POST /api/pengguna/orders — buat order baru (multipart/form-data, foto opsional)
+router.post("/orders", (req, res, next) => {
+  uploadOrderPhoto.single("foto")(req, res, (err) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    next();
+  });
+}, async (req: any, res) => {
   const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
@@ -277,6 +296,14 @@ router.post("/orders", async (req, res) => {
   const orderNo = `ORD${Date.now().toString().slice(-8)}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 
   const svcType = serviceType ?? "bengkel";
+  // Foto kendaraan pengguna (opsional)
+  const penggunaPhotoPath = req.file ? `/uploads/order-photos/${req.file.filename}` : null;
+
+  // damageCategories bisa string (FormData) atau array (JSON)
+  let dmgCats: string[] = [];
+  if (Array.isArray(damageCategories)) dmgCats = damageCategories;
+  else if (typeof damageCategories === "string") { try { dmgCats = JSON.parse(damageCategories); } catch { dmgCats = []; } }
+
   const [order] = await db.insert(ordersTable).values({
     orderNo,
     penggunaId,
@@ -284,13 +311,14 @@ router.post("/orders", async (req, res) => {
     vehicleType,
     vehicleModel,
     vehicleYear,
-    damageCategories: Array.isArray(damageCategories) ? damageCategories : [],
+    damageCategories: dmgCats,
     description,
     pickupAddress,
     detailAlamat,
-    pickupLat: typeof pickupLat === "number" ? pickupLat : null,
-    pickupLng: typeof pickupLng === "number" ? pickupLng : null,
+    pickupLat: typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null),
+    pickupLng: typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null),
     status: "pending",
+    penggunaPhotoPath,
   }).returning({ id: ordersTable.id, orderNo: ordersTable.orderNo });
 
   // Notify only available (online + no active order) mitra of this service type
@@ -320,12 +348,13 @@ router.post("/orders", async (req, res) => {
       vehicleType,
       vehicleModel,
       vehicleYear,
-      damageCategories: Array.isArray(damageCategories) ? damageCategories : [],
+      damageCategories: dmgCats,
       description: description ?? null,
       pickupAddress,
-      pickupLat: typeof pickupLat === "number" ? pickupLat : null,
-      pickupLng: typeof pickupLng === "number" ? pickupLng : null,
+      pickupLat: typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null),
+      pickupLng: typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null),
       penggunaName: pengguna?.name ?? "",
+      penggunaPhotoPath,
       totalAmount: 0,
       platformFee: 0,
       createdAt: new Date().toISOString(),

@@ -29,6 +29,8 @@ export const ordersTable = pgTable("orders", {
   cancelReason: text("cancel_reason"),
   canceledBy: varchar("canceled_by", { length: 20 }),
   paymentConfirmedAt: timestamp("payment_confirmed_at"),
+  penggunaPhotoPath: text("pengguna_photo_path"),
+  mitraProofPhotoPath: text("mitra_proof_photo_path"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -87,7 +87,7 @@ interface IncomingOrder {
   description: string | null;
   pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
   totalAmount: number; platformFee: number;
-  penggunaName: string; createdAt: string;
+  penggunaName: string; penggunaPhotoPath?: string | null; createdAt: string;
 }
 
 interface Notif {
@@ -1125,8 +1125,8 @@ export default function DashboardMitra() {
               {/* Customer + vehicle */}
               <div style={{ padding: "0 10px 8px", display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 38, height: 38, borderRadius: 12, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
-                  {(activeOrder as any).penggunaPhotoPath
-                    ? <img src={(activeOrder as any).penggunaPhotoPath} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  {(activeOrder as any).penggunaProfilePhoto
+                    ? <img src={(activeOrder as any).penggunaProfilePhoto} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     : (activeOrder.penggunaName ?? "U").charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -1134,6 +1134,14 @@ export default function DashboardMitra() {
                   <div style={{ fontSize: 12, color: "#7a8a9a" }}>📍 {activeOrder.vehicleModel} {activeOrder.vehicleYear}</div>
                 </div>
               </div>
+              {/* Foto kendaraan dari pengguna */}
+              {(activeOrder as any).penggunaPhotoPath && (
+                <div style={{ padding: "0 10px 10px" }}>
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 6, fontWeight: 600 }}>📸 Foto Kendaraan</div>
+                  <img src={(activeOrder as any).penggunaPhotoPath} alt="foto kendaraan" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 12, border: "1px solid #e0e8f0" }} />
+                </div>
+              )}
+
               {/* Kategori & deskripsi kerusakan */}
               {(Array.isArray((activeOrder as any).damageCategories) || (activeOrder as any).description) && (
                 <div style={{ padding: "0 10px 12px" }}>
@@ -1331,6 +1339,13 @@ export default function DashboardMitra() {
                   const kirimRincian = async () => {
                     if (!activeOrder || !canSend) return;
                     try {
+                      // Upload foto bukti dulu jika ada (disimpan di DB untuk admin)
+                      if (proofPhoto) {
+                        const fd = new FormData(); fd.append("photo", proofPhoto);
+                        await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/proof-photo`, {
+                          method: "PATCH", credentials: "include", body: fd,
+                        }).catch(() => null);
+                      }
                       // Simpan paymentData ke DB agar pengguna bisa lihat breakdown
                       const r = await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/payment-data`, {
                         method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -1511,7 +1526,14 @@ export default function DashboardMitra() {
             {/* Order detail */}
             <div style={{ padding: "14px 16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                <div>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  {/* Avatar pengguna */}
+                  <div style={{ width: 44, height: 44, borderRadius: 14, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
+                    {(incoming as any).penggunaPhotoPath
+                      ? <img src={(incoming as any).penggunaPhotoPath} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : (incoming.penggunaName ?? "U").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
                   <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a" }}>{incoming.penggunaName}</div>
                   <div style={{ fontSize: 13, color: "#4a5568", marginTop: 2 }}>{incoming.vehicleModel} {incoming.vehicleYear}</div>
                   <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>
@@ -1522,6 +1544,7 @@ export default function DashboardMitra() {
                       "{incoming.description}"
                     </div>
                   )}
+                  </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 17, fontWeight: 900, color: "#ea580c" }}>
@@ -1540,6 +1563,13 @@ export default function DashboardMitra() {
                 <span style={{ fontSize: 13 }}>📍</span>
                 <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.pickupAddress ?? "-"}</span>
               </div>
+              {/* Foto kendaraan dari pengguna */}
+              {incoming.penggunaPhotoPath && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: "#7a8a9a", marginBottom: 4, fontWeight: 600 }}>📸 Foto Kendaraan</div>
+                  <img src={incoming.penggunaPhotoPath} alt="foto kendaraan" style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 10, border: "1px solid #e0e8f0" }} />
+                </div>
+              )}
               {incomingDistInfo && (
                 <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                   {incomingDistInfo.km > 0 && (

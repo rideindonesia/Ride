@@ -40,6 +40,20 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
 if (!fs.existsSync(profileUploadDir)) fs.mkdirSync(profileUploadDir, { recursive: true });
 
+// Foto bukti kerja mitra
+const proofPhotoDir = path.resolve(process.cwd(), "uploads", "proof-photos");
+if (!fs.existsSync(proofPhotoDir)) fs.mkdirSync(proofPhotoDir, { recursive: true });
+const proofPhotoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, proofPhotoDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `proof-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const uploadProofPhoto = multer({ storage: proofPhotoStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
+}});
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
@@ -469,6 +483,7 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
     totalAmount: ordersTable.totalAmount,
     platformFee: ordersTable.platformFee,
     penggunaName: usersTable.name,
+    penggunaPhotoPath: ordersTable.penggunaPhotoPath,
     createdAt: ordersTable.createdAt,
   }).from(ordersTable)
     .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
@@ -501,7 +516,8 @@ router.get("/active-order", requireMitra, async (req, res) => {
     paymentConfirmedAt: ordersTable.paymentConfirmedAt,
     paymentData: ordersTable.paymentData,
     penggunaName: usersTable.name,
-    penggunaPhotoPath: usersTable.profilePhotoPath,
+    penggunaProfilePhoto: usersTable.profilePhotoPath,
+    penggunaPhotoPath: ordersTable.penggunaPhotoPath,
     createdAt: ordersTable.createdAt,
   }).from(ordersTable)
     .innerJoin(usersTable, eq(usersTable.id, ordersTable.penggunaId))
@@ -715,6 +731,27 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   } catch {}
 
   res.json({ ok: true });
+});
+
+// PATCH /api/mitra/orders/:id/proof-photo — upload foto bukti kerja mitra (hanya untuk admin)
+router.patch("/orders/:id/proof-photo", requireMitra, (req, res, next) => {
+  uploadProofPhoto.single("photo")(req, res, (err) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    next();
+  });
+}, async (req: any, res) => {
+  const mitraId = getMitraId(req) as number;
+  const orderId = parseInt(req.params.id);
+  if (!req.file) { res.status(400).json({ error: "Tidak ada file" }); return; }
+
+  const relativePath = `/uploads/proof-photos/${req.file.filename}`;
+  const [updated] = await db.update(ordersTable)
+    .set({ mitraProofPhotoPath: relativePath, updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
+    .returning({ id: ordersTable.id });
+
+  if (!updated) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
+  res.json({ ok: true, photoUrl: relativePath });
 });
 
 // PATCH /api/mitra/orders/:id/done — mitra marks order complete
