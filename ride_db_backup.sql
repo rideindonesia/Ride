@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict tP5fwHUvsg08dIgf5N95JhxYfHHxznkBL3gYDPbBXdmj3WoMyKIIKnKqGODKh0D
+\restrict CKwDfZmrjz1AtIEMreJYzAfgP5E4xjdVeAP25YwKhjJOpSmmZ7QY0a2bEJdIuud
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -666,7 +666,6 @@ COPY public.reports (id, user_id, order_id, order_no, type, title, message, stat
 --
 
 COPY public.session (sid, sess, expire) FROM stdin;
-kkEWsvqI1LuJd4JVxyIl3BWE9AtUYywt	{"cookie":{"originalMaxAge":604800000,"expires":"2026-04-28T13:21:35.216Z","secure":false,"httpOnly":true,"path":"/"},"adminId":10,"adminName":"Admin RIDE"}	2026-04-28 13:21:43
 \.
 
 
@@ -765,7 +764,7 @@ SELECT pg_catalog.setval('public.platform_fee_payments_id_seq', 1, true);
 -- Name: push_subscriptions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.push_subscriptions_id_seq', 28, true);
+SELECT pg_catalog.setval('public.push_subscriptions_id_seq', 29, true);
 
 
 --
@@ -984,5 +983,5 @@ ALTER TABLE ONLY public.platform_fee_payments
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tP5fwHUvsg08dIgf5N95JhxYfHHxznkBL3gYDPbBXdmj3WoMyKIIKnKqGODKh0D
+\unrestrict CKwDfZmrjz1AtIEMreJYzAfgP5E4xjdVeAP25YwKhjJOpSmmZ7QY0a2bEJdIuud
 
