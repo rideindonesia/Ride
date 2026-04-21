@@ -462,6 +462,7 @@ export default function OrderBengkel() {
         if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
         if (data.paymentData) setPaymentData(data.paymentData);
         if (data.trackingPhase === "selesai") setStep(5);
+        if (data.paymentConfirmedAt) setPaymentConfirmed(true);
         if (data.status === "done") { setOrderStatus("done"); setOrderTotal(data.totalAmount); }
       } catch { /* ignore */ }
     };
@@ -518,6 +519,7 @@ export default function OrderBengkel() {
         if (!res.ok) return;
         const data = await res.json();
         if (data.paymentData) setPaymentData(data.paymentData);
+        if (data.paymentConfirmedAt) setPaymentConfirmed(true);
         if (data.status === "done") { setOrderStatus("done"); setOrderTotal(data.totalAmount); }
       } catch { /* ignore */ }
     };
@@ -1256,8 +1258,17 @@ export default function OrderBengkel() {
                   </>
                 )}
 
-                {/* State: Pembayaran Berhasil */}
-                {paymentConfirmed && (
+                {/* State: Menunggu mitra konfirmasi */}
+                {paymentConfirmed && orderStatus !== "done" && (
+                  <div style={{ background: "#fffbeb", border: "1.5px solid #fde68a", borderRadius: 16, padding: "20px 16px", textAlign: "center" as const, marginBottom: 16 }}>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: "#92400e", marginBottom: 6 }}>Menunggu Konfirmasi Mitra</div>
+                    <div style={{ fontSize: 12, color: "#b45309" }}>Pembayaran kamu sudah tercatat. Mitra akan segera mengkonfirmasi penerimaan pembayaran.</div>
+                  </div>
+                )}
+
+                {/* State: Pembayaran Berhasil (setelah mitra konfirmasi / order:done) */}
+                {orderStatus === "done" && paymentConfirmed && (
                   <div style={{ background: "#f0faf7", border: "1.5px solid #b6e6d7", borderRadius: 16, padding: "24px 16px", textAlign: "center" as const, marginBottom: 16 }}>
                     <div style={{ fontSize: 40, marginBottom: 10 }}>🎉</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: "#1a7a6a", marginBottom: 6 }}>Pembayaran Berhasil!</div>
@@ -1378,11 +1389,17 @@ export default function OrderBengkel() {
                   ✅ Konfirmasi Pembayaran
                 </button>
               )}
-              {paymentConfirmed && (
+              {paymentConfirmed && orderStatus !== "done" && (
+                <button disabled
+                  style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#fef3c7", color: "#92400e", fontWeight: 700, fontSize: 14, cursor: "default" }}>
+                  ⏳ Pembayaran terkirim, menunggu konfirmasi mitra...
+                </button>
+              )}
+              {orderStatus === "done" && (
                 <button
                   onClick={() => navigate("/dashboard/pengguna")}
                   style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#f0f4f8", color: "#4a5a6a", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-                  ← Kembali
+                  ← Kembali ke Dashboard
                 </button>
               )}
             </div>

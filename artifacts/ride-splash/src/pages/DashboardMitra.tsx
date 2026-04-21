@@ -186,6 +186,8 @@ export default function DashboardMitra() {
   type MitraPhase = "diterima" | "chat" | "menuju" | "tiba" | "pengerjaan" | "selesai";
   const [mitraPhase, setMitraPhase] = useState<MitraPhase>("diterima");
   const [penggunaConfirmed, setPenggunaConfirmed] = useState(false);
+  const [paymentConfirmedByUser, setPaymentConfirmedByUser] = useState(false);
+  const [paymentInfoFromUser, setPaymentInfoFromUser] = useState<{ method: string; finalTotal: number } | null>(null);
   const [etaSecs, setEtaSecs] = useState(0);
   const etaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationWatchRef = useRef<number | null>(null); // watchPosition ID saat menuju
@@ -304,6 +306,13 @@ export default function DashboardMitra() {
       // Restore penggunaConfirmed dari DB
       const confirmed = !!o.penggunaConfirmed;
       if (confirmed) setPenggunaConfirmed(true);
+      // Restore paymentConfirmedByUser dari paymentConfirmedAt
+      if (o.paymentConfirmedAt) {
+        setPaymentConfirmedByUser(true);
+        if (o.paymentData) {
+          setPaymentInfoFromUser({ method: o.paymentData.paymentMethod ?? "cash", finalTotal: o.paymentData.finalTotal ?? o.paymentData.total ?? 0 });
+        }
+      }
       // Restore phase dari DB
       // PENTING: jangan restore fase "menuju" dst jika user belum konfirmasi
       // Ini mencegah mitra masuk fase menuju tanpa persetujuan pengguna
@@ -404,10 +413,12 @@ export default function DashboardMitra() {
     // Konsumen konfirmasi pembayaran
     const onPaymentConfirmed = (data: { orderId: number; paymentMethod: string; finalTotal: number }) => {
       setPenggunaConfirmed(true);
+      setPaymentConfirmedByUser(true);
+      setPaymentInfoFromUser({ method: data.paymentMethod, finalTotal: data.finalTotal });
       fetchActiveOrder();
       const method = data.paymentMethod === "cash" ? "Tunai" : data.paymentMethod === "transfer" ? "Transfer" : data.paymentMethod === "qris" ? "QRIS" : data.paymentMethod;
-      pushNotif({ type: "order", icon: "💰", title: "Pembayaran Dikonfirmasi", body: `Konsumen sudah konfirmasi bayar via ${method}.` });
-      showToast({ icon: "💰", title: "Pembayaran Dikonfirmasi!", body: `Konsumen sudah bayar via ${method}. Klik Selesai untuk menutup order.`, color: "green" });
+      pushNotif({ type: "order", icon: "💰", title: "Konsumen Sudah Bayar!", body: `Konfirmasi penerimaan pembayaran via ${method}.` });
+      showToast({ icon: "💰", title: "Konsumen Sudah Bayar!", body: `Bayar via ${method}. Klik tombol konfirmasi untuk selesaikan order.`, color: "green" });
     };
     socket.on("order:payment_confirmed", onPaymentConfirmed);
 
@@ -417,6 +428,8 @@ export default function DashboardMitra() {
       setMitraPhase("diterima");
       setChatMsgs([]);
       setPenggunaConfirmed(false);
+      setPaymentConfirmedByUser(false);
+      setPaymentInfoFromUser(null);
       if (locationWatchRef.current != null) {
         navigator.geolocation?.clearWatch(locationWatchRef.current);
         locationWatchRef.current = null;
@@ -1341,6 +1354,7 @@ export default function DashboardMitra() {
                     if (etaTimerRef.current) clearInterval(etaTimerRef.current);
                     setActiveOrder(null); setChatMsgs([]); setMitraPhase("diterima"); setEtaSecs(0);
                     setPenggunaConfirmed(false);
+                    setPaymentConfirmedByUser(false); setPaymentInfoFromUser(null);
                     setBiayaJasa(""); setBiayaSparepart("0"); setPaymentMethod("cash");
                     setProofPhoto(null); setProofPreview(null); setRincianSent(false);
                     pushNotif({ type: "system", icon: "🎉", title: "Pembayaran Selesai", body: `Total: ${fmtIdr(total)}` });
@@ -1430,14 +1444,20 @@ export default function DashboardMitra() {
                           style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: canSend ? "linear-gradient(135deg, #1a3a5c, #1a7a6a)" : "#e0e8f0", color: canSend ? "#fff" : "#9aa5b4", fontWeight: 700, fontSize: 15, cursor: canSend ? "pointer" : "default" }}>
                           🧾 Kirim Rincian Biaya ke Konsumen
                         </button>
+                      ) : !paymentConfirmedByUser ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ background: "#fef3c7", borderRadius: 12, padding: "12px 14px", fontSize: 12, color: "#92400e", fontWeight: 600, textAlign: "center" as const }}>
+                            ⏳ Rincian terkirim — menunggu konsumen konfirmasi pembayaran...
+                          </div>
+                        </div>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           <div style={{ background: "#f0faf7", borderRadius: 12, padding: "10px 14px", fontSize: 12, color: "#1a7a6a", fontWeight: 600, textAlign: "center" as const }}>
-                            ✅ Rincian sudah dikirim — tunggu konsumen bayar
+                            ✅ Konsumen sudah bayar via {paymentInfoFromUser?.method === "cash" ? "Tunai" : paymentInfoFromUser?.method === "transfer" ? "Transfer Bank" : paymentInfoFromUser?.method === "qris" ? "QRIS" : (paymentInfoFromUser?.method ?? "-")} — Klik konfirmasi untuk selesaikan order
                           </div>
                           <button onClick={konfirmasiSelesai}
                             style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-                            ✅ Konfirmasi Pembayaran Selesai
+                            ✅ Konfirmasi Terima Pembayaran
                           </button>
                         </div>
                       )}

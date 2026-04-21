@@ -385,6 +385,7 @@ router.get("/orders/:id", async (req, res) => {
     trackingPhase: order.trackingPhase ?? "menuju",
     paymentData: order.paymentData ?? null,
     penggunaConfirmed: order.penggunaConfirmed ?? false,
+    paymentConfirmedAt: order.paymentConfirmedAt ?? null,
     pickupLat: order.pickupLat,
     pickupLng: order.pickupLng,
     pickupAddress: order.pickupAddress,
@@ -555,37 +556,29 @@ router.post("/orders/:id/confirm-payment", async (req, res) => {
 
   const finalTotal = Math.max(0, total - discount);
 
-  // Simpan metode pembayaran + waktu konfirmasi ke order, set penggunaConfirmed, dan langsung done
+  // Simpan metode pembayaran + waktu konfirmasi + penggunaConfirmed (status TETAP accepted, tunggu mitra konfirmasi)
   const updatedPaymentData = { ...(order.paymentData as any), paymentMethod, discount, finalTotal };
   const [updated] = await db.update(ordersTable)
     .set({
       paymentData: updatedPaymentData,
       paymentConfirmedAt: new Date(),
       penggunaConfirmed: true,
-      status: "done",
       updatedAt: new Date(),
     })
     .where(eq(ordersTable.id, orderId))
     .returning({ mitraId: ordersTable.mitraId, penggunaId: ordersTable.penggunaId });
 
-  // Notifikasi mitra bahwa pembayaran sudah dikonfirmasi + order selesai
+  // Notifikasi mitra: konsumen sudah konfirmasi bayar — mitra yang klik selesai
   if (updated?.mitraId) {
     io?.to(`user:${updated.mitraId}`).emit("order:payment_confirmed", {
       orderId, discount, finalTotal, paymentMethod,
     });
-    io?.to(`user:${updated.mitraId}`).emit("order:done", { orderId, totalAmount: finalTotal });
     sendPushToUsers([updated.mitraId], {
-      title: "✅ Pembayaran Dikonfirmasi!",
-      body: `Konsumen telah mengkonfirmasi pembayaran ${paymentMethod === "cash" ? "tunai" : paymentMethod}. Order selesai.`,
+      title: "💰 Konsumen Konfirmasi Bayar!",
+      body: `Konsumen sudah konfirmasi bayar via ${paymentMethod === "cash" ? "tunai" : paymentMethod}. Harap konfirmasi terima pembayaran.`,
       url: "/",
     });
   }
-  // Notifikasi pengguna sendiri agar dashboard langsung update (order hilang dari aktif)
-  if (updated?.penggunaId) {
-    io?.to(`user:${updated.penggunaId}`).emit("order:done", { orderId, totalAmount: finalTotal });
-  }
-  // Notifikasi admin
-  io?.to("room:admin").emit("admin:order_update", { type: "done", orderId });
 
   res.json({ ok: true, discount, finalTotal });
 });
