@@ -234,15 +234,20 @@ router.patch("/mitra/:email/status", requireAdmin, async (req, res) => {
 router.patch("/mitra/:email/suspend", requireAdmin, async (req, res) => {
   const email = decodeURIComponent(req.params.email);
   const suspended = req.body?.suspended;
-  if (suspended === undefined) {
-    const [user] = await db.select({ isSuspended: usersTable.isSuspended }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
-    if (!user) { res.status(404).json({ error: "Mitra tidak ditemukan" }); return; }
-    await db.update(usersTable).set({ isSuspended: !user.isSuspended }).where(eq(usersTable.email, email));
-    res.json({ ok: true, isSuspended: !user.isSuspended });
-    return;
-  }
-  await db.update(usersTable).set({ isSuspended: !!suspended }).where(eq(usersTable.email, email));
-  res.json({ ok: true, isSuspended: !!suspended });
+
+  const [user] = await db.select({ id: usersTable.id, isSuspended: usersTable.isSuspended })
+    .from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  if (!user) { res.status(404).json({ error: "Mitra tidak ditemukan" }); return; }
+
+  const newState = suspended === undefined ? !user.isSuspended : !!suspended;
+  await db.update(usersTable).set({ isSuspended: newState }).where(eq(usersTable.id, user.id));
+
+  sendPushToUsers([user.id], newState
+    ? { title: "🔒 Akun Disuspend", body: "Akun Anda telah disuspend oleh admin. Hubungi RIDE untuk info lebih lanjut.", url: "/" }
+    : { title: "✅ Akun Aktif Kembali", body: "Akun Anda telah diaktifkan kembali oleh admin. Selamat bekerja!", url: "/" }
+  );
+
+  res.json({ ok: true, isSuspended: newState });
 });
 
 // ── Pengguna Management ───────────────────────────────────────────────────────

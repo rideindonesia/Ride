@@ -653,6 +653,12 @@ router.post("/orders/:id/review", async (req, res) => {
   const [order] = await db.select({ mitraId: ordersTable.mitraId }).from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
   if (order?.mitraId) {
     io?.to(`user:${order.mitraId}`).emit("order:rated", { orderId, rating, comment: comment?.trim() || null });
+    const stars = "⭐".repeat(Math.min(rating, 5));
+    sendPushToUsers([order.mitraId], {
+      title: `${stars} Ulasan Baru dari Konsumen`,
+      body: comment?.trim() ? `"${comment.trim().slice(0, 70)}"` : `Konsumen memberi rating ${rating} bintang.`,
+      url: "/",
+    });
   }
 
   res.json({ ok: true });
