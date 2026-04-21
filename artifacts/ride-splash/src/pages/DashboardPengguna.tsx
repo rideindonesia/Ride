@@ -362,14 +362,14 @@ export default function DashboardPengguna() {
         body: JSON.stringify({ rating: reviewStars, comment: reviewComment.trim() || undefined }),
       });
       if (r.ok) {
-        showToast({ type: "success", title: "Ulasan terkirim!", message: `Rating ${reviewStars}⭐ berhasil disimpan.` });
+        showToast({ icon: "⭐", title: "Ulasan terkirim!", body: `Rating ${reviewStars}⭐ berhasil disimpan.`, color: "green" });
         setReviewModal({ open: false, orderId: null, orderNo: "" });
         setReviewStars(0); setReviewComment("");
         refreshHistory();
       } else {
-        showToast({ type: "error", title: "Gagal", message: "Ulasan gagal dikirim." });
+        showToast({ icon: "❌", title: "Gagal", body: "Ulasan gagal dikirim.", color: "red" });
       }
-    } catch { showToast({ type: "error", title: "Gagal", message: "Terjadi kesalahan." }); }
+    } catch { showToast({ icon: "❌", title: "Gagal", body: "Terjadi kesalahan.", color: "red" }); }
     setReviewSubmitting(false);
   };
 
@@ -390,13 +390,13 @@ export default function DashboardPengguna() {
         }),
       });
       if (r.ok) {
-        showToast({ type: "success", title: "Laporan terkirim!", message: "Tim RIDE akan memproses laporan Anda segera." });
+        showToast({ icon: "📋", title: "Laporan terkirim!", body: "Tim RIDE akan memproses laporan Anda segera.", color: "green" });
         setLaporModal({ open: false, orderId: null, orderNo: "" });
         setLaporMessage(""); setLaporType("order");
       } else {
-        showToast({ type: "error", title: "Gagal", message: "Laporan gagal dikirim." });
+        showToast({ icon: "❌", title: "Gagal", body: "Laporan gagal dikirim.", color: "red" });
       }
-    } catch { showToast({ type: "error", title: "Gagal", message: "Terjadi kesalahan." }); }
+    } catch { showToast({ icon: "❌", title: "Gagal", body: "Terjadi kesalahan.", color: "red" }); }
     setLaporSubmitting(false);
   };
 
