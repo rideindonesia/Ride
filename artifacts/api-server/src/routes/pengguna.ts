@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, walletTransactionsTable, vouchersTable, reportsTable } from "@workspace/db";
-import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt, inArray } from "drizzle-orm";
+import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt, inArray, SQL } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import multer from "multer";
@@ -210,10 +210,11 @@ router.post("/resend-otp", async (req, res) => {
   });
 });
 
-// GET /api/pengguna/mitra-online?lat=X&lng=Y
+// GET /api/pengguna/mitra-online?lat=X&lng=Y&serviceType=bengkel
 router.get("/mitra-online", async (req, res) => {
   const lat = parseFloat(req.query.lat as string);
   const lng = parseFloat(req.query.lng as string);
+  const serviceType = (req.query.serviceType as string) || null;
 
   const base = {
     id: mitraLocationsTable.id,
@@ -224,19 +225,22 @@ router.get("/mitra-online", async (req, res) => {
     serviceType: mitraLocationsTable.serviceType,
   };
 
+  const conditions: SQL[] = [eq(mitraLocationsTable.isOnline, true)];
+  if (serviceType) conditions.push(eq(mitraLocationsTable.serviceType, serviceType));
+
   let rows;
   if (isNaN(lat) || isNaN(lng)) {
     rows = await db.select(base)
       .from(mitraLocationsTable)
       .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
-      .where(eq(mitraLocationsTable.isOnline, true));
+      .where(and(...conditions));
   } else {
     const latDelta = 0.18, lngDelta = 0.22;
     rows = await db.select(base)
       .from(mitraLocationsTable)
       .innerJoin(usersTable, eq(usersTable.id, mitraLocationsTable.userId))
       .where(and(
-        eq(mitraLocationsTable.isOnline, true),
+        ...conditions,
         sql`${mitraLocationsTable.lat} BETWEEN ${lat - latDelta} AND ${lat + latDelta}`,
         sql`${mitraLocationsTable.lng} BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}`,
       ));

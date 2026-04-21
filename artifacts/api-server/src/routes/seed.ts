@@ -98,6 +98,24 @@ router.post("/demo", async (_req, res) => {
     }
   }
 
+  // Buat admin user jika belum ada
+  const adminEmail = "admin@ride.app";
+  const existingAdmin = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, adminEmail)).limit(1);
+  if (existingAdmin.length === 0) {
+    await db.insert(usersTable).values({
+      name: "Admin RIDE",
+      email: adminEmail,
+      phone: "+6281000000000",
+      passwordHash: hashPassword("admin1234"),
+      role: "pengguna",
+      isAdmin: true,
+      walletBalance: 0,
+    });
+    results.push({ name: "Admin RIDE", email: adminEmail, status: "dibuat" });
+  } else {
+    results.push({ name: "Admin RIDE", email: adminEmail, status: "sudah ada" });
+  }
+
   res.json({ message: "Seeding selesai", results });
 });
 

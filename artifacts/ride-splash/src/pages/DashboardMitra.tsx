@@ -396,6 +396,7 @@ export default function DashboardMitra() {
 
     const onPenggunaConfirmed = () => {
       setPenggunaConfirmed(true);
+      fetchActiveOrder();
       showToast({ icon: "🚀", title: "Konsumen Siap!", body: "Segera menuju lokasi konsumen", color: "green" });
     };
     socket.on("order:confirmed", onPenggunaConfirmed);

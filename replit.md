@@ -32,7 +32,7 @@ URL: `/admin/` — Dibangun terpisah sebagai artifact react-vite di `artifacts/r
 |-------|----------|
 | admin@ride.app | admin1234 |
 
-> Akun admin dibuat dengan `isAdmin=true`, role='pengguna'. Seed via `POST /api/seed/admin`.
+> Akun admin dibuat dengan `isAdmin=true`, role='pengguna'. Seed via `POST /api/seed/demo` (admin dibuat bersama demo users).
 > Login lewat `/api/admin/login`, protected oleh session `adminId`.
 
 ### Halaman Admin Panel
