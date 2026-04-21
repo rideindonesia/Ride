@@ -158,6 +158,7 @@ export default function DashboardMitra() {
   const [incoming, setIncoming] = useState<IncomingOrder | null>(null);
   const [incomingTimer, setIncomingTimer] = useState(30);
   const [incomingDistInfo, setIncomingDistInfo] = useState<{ km: number; eta: number; callFee: number } | null>(null);
+  const [confirmReject, setConfirmReject] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const seenOrderIds = useRef<Set<number>>(new Set());
@@ -576,7 +577,7 @@ export default function DashboardMitra() {
     if (!incoming) return;
     timerRef.current = setInterval(() => {
       setIncomingTimer(t => {
-        if (t <= 1) { setIncoming(null); return 30; }
+        if (t <= 1) { setIncoming(null); setConfirmReject(false); return 30; }
         return t - 1;
       });
     }, 1000);
@@ -1637,20 +1638,36 @@ export default function DashboardMitra() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  onClick={() => rejectOrder(incoming.id)}
-                  style={{ flex: 1, padding: "13px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                >
-                  ✕ Tolak
-                </button>
-                <button
-                  onClick={() => acceptOrder(incoming.id)}
-                  style={{ flex: 2, padding: "13px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-                >
-                  ✓ Terima Pesanan
-                </button>
-              </div>
+              {confirmReject ? (
+                <div style={{ background: "#fff5f5", border: "1.5px solid #fca5a5", borderRadius: 14, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#b91c1c", marginBottom: 10, textAlign: "center" }}>Yakin ingin menolak pesanan ini?</div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button
+                      onClick={() => setConfirmReject(false)}
+                      style={{ flex: 1, padding: "11px", borderRadius: 12, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#4a5568", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                    >← Kembali</button>
+                    <button
+                      onClick={() => { setConfirmReject(false); rejectOrder(incoming.id); }}
+                      style={{ flex: 1, padding: "11px", borderRadius: 12, border: "none", background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                    >Ya, Tolak</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => setConfirmReject(true)}
+                    style={{ flex: 1, padding: "13px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    ✕ Tolak
+                  </button>
+                  <button
+                    onClick={() => { setConfirmReject(false); acceptOrder(incoming.id); }}
+                    style={{ flex: 2, padding: "13px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    ✓ Terima Pesanan
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
