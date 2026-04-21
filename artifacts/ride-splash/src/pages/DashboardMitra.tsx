@@ -280,7 +280,7 @@ export default function DashboardMitra() {
   // Restore active order dari DB (untuk kasus reload halaman)
   const fetchActiveOrder = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/mitra/active-order`, { credentials: "include" });
+      const res = await fetch(`${BASE}/api/mitra/active-order`, { credentials: "include", cache: "no-store" });
       if (!res.ok) return;
       const d = await res.json();
       if (!d.order) {
@@ -369,10 +369,11 @@ export default function DashboardMitra() {
     fetchDashboard();
     fetchIncoming();
     fetchActiveOrder();
-    // Backup polling — refresh incoming koordinat & dashboard
+    // Backup polling — refresh incoming koordinat, dashboard, dan active order
     pollRef.current = setInterval(() => {
       fetchDashboard();
       fetchIncoming();
+      fetchActiveOrder();
     }, 10000);
 
     // Socket: real-time incoming order notification for mitra
