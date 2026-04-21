@@ -649,9 +649,21 @@ router.patch("/orders/:id/reject", requireMitra, async (req, res) => {
   const orderId = parseInt(req.params.id);
 
   // Just set cancelled — the order goes back to pool or stays cancelled
-  await db.update(ordersTable)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")));
+  const [rejected] = await db.update(ordersTable)
+    .set({ status: "cancelled", canceledBy: "mitra", updatedAt: new Date() })
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")))
+    .returning({ penggunaId: ordersTable.penggunaId });
+
+  if (rejected) {
+    try {
+      io?.to(`user:${rejected.penggunaId}`).emit("order:cancelled", { orderId, canceledBy: "mitra" });
+      sendPushToUsers([rejected.penggunaId], {
+        title: "⚠️ Mitra Tidak Tersedia",
+        body: "Mitra menolak pesanan Anda. Pesanan akan dicari ke mitra lain.",
+        url: "/",
+      });
+    } catch {}
+  }
 
   res.json({ ok: true });
 });
