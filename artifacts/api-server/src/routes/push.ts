@@ -19,15 +19,18 @@ router.get("/vapid-public-key", (_req, res) => {
 // POST /api/push/subscribe
 router.post("/subscribe", async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "Unauthorized" });
+  const pCookieId = (req as any).signedCookies?.["ride-p-uid"] ? parseInt((req as any).signedCookies["ride-p-uid"]) : undefined;
+  const mCookieId = (req as any).signedCookies?.["ride-m-uid"] ? parseInt((req as any).signedCookies["ride-m-uid"]) : undefined;
+  const userId = session?.userId || mCookieId || pCookieId;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
   const { endpoint, keys } = req.body;
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
     return res.status(400).json({ error: "Invalid subscription" });
   }
   try {
     await db.insert(pushSubscriptionsTable)
-      .values({ userId: session.userId, endpoint, p256dh: keys.p256dh, auth: keys.auth })
-      .onConflictDoUpdate({ target: pushSubscriptionsTable.endpoint, set: { userId: session.userId, p256dh: keys.p256dh, auth: keys.auth } });
+      .values({ userId, endpoint, p256dh: keys.p256dh, auth: keys.auth })
+      .onConflictDoUpdate({ target: pushSubscriptionsTable.endpoint, set: { userId, p256dh: keys.p256dh, auth: keys.auth } });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to save subscription" });

@@ -88,25 +88,31 @@ router.post("/:orderId", requireAuth, async (req, res) => {
     res.status(403).json({ error: "Akses ditolak" }); return;
   }
 
-  // Determine senderRole using active SESSION first (most reliable),
-  // then fall back to signed cookies for cases without an active session.
-  const sessionUserId = (req.session as Record<string, unknown>).userId as number | undefined;
+  // Determine senderRole: prefer session, fall back to signed cookies.
+  const sessionUserId = Number((req.session as Record<string, unknown>).userId ?? 0) || undefined;
   const sessionRole   = (req.session as Record<string, unknown>).userRole as string | undefined;
+
+  const pCookieId = req.signedCookies?.["ride-p-uid"] ? parseInt(req.signedCookies["ride-p-uid"]) : undefined;
+  const mCookieId = req.signedCookies?.["ride-m-uid"] ? parseInt(req.signedCookies["ride-m-uid"]) : undefined;
 
   let senderId: number;
   let senderRole: "pengguna" | "mitra";
 
-  // Session is the ONLY reliable source for senderRole.
-  // Cookies cannot be trusted alone (same device may have both ride-p-uid and
-  // ride-m-uid cookies when testing multiple accounts, causing cross-role confusion).
-  if (sessionRole === "mitra" && sessionUserId === order.mitraId) {
+  if (sessionRole === "mitra" && sessionUserId && Number(sessionUserId) === Number(order.mitraId)) {
     senderId   = sessionUserId;
     senderRole = "mitra";
-  } else if (sessionRole === "pengguna" && sessionUserId === order.penggunaId) {
+  } else if (sessionRole === "pengguna" && sessionUserId && Number(sessionUserId) === Number(order.penggunaId)) {
     senderId   = sessionUserId;
     senderRole = "pengguna";
+  } else if (mCookieId && Number(mCookieId) === Number(order.mitraId)) {
+    // Fallback: signed cookie identifies this device as the mitra for this order
+    senderId   = mCookieId;
+    senderRole = "mitra";
+  } else if (pCookieId && Number(pCookieId) === Number(order.penggunaId)) {
+    // Fallback: signed cookie identifies this device as the pengguna for this order
+    senderId   = pCookieId;
+    senderRole = "pengguna";
   } else {
-    // No valid session — user must re-login (in-memory sessions clear on restart).
     res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
   }
 
