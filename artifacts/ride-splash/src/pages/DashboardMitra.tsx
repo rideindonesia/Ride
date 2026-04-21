@@ -2145,8 +2145,12 @@ export default function DashboardMitra() {
             {/* ── Hero Profil Mitra ── */}
             <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #1a7a6a 100%)", borderRadius: 22, padding: "24px 18px 20px", marginBottom: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div onClick={() => mPhotoInputRef.current?.click()} style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.18)", border: "2.5px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, color: "#fff", flexShrink: 0, cursor: "pointer", overflow: "hidden" }}>
-                  {photoUrl ? <img src={photoUrl} alt="foto" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (data?.name ?? "M").charAt(0).toUpperCase()}
+                <div onClick={() => mPhotoInputRef.current?.click()} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, cursor: "pointer" }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.18)", border: "2.5px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, color: "#fff", overflow: "hidden", position: "relative" }}>
+                    {photoUrl ? <img src={photoUrl} alt="foto" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (data?.name ?? "M").charAt(0).toUpperCase()}
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.38)", fontSize: 8, color: "#fff", textAlign: "center", padding: "3px 0", fontWeight: 600, letterSpacing: 0 }}>📷</div>
+                  </div>
+                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", fontWeight: 600, textAlign: "center", lineHeight: 1.2 }}>Ganti<br/>foto</div>
                 </div>
                 <input ref={mPhotoInputRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e => {
                   const f = e.target.files?.[0]; if (f) { setMPhotoFile(f); const rd = new FileReader(); rd.onload = ev => setMPhotoPreview(ev.target?.result as string); rd.readAsDataURL(f); }
