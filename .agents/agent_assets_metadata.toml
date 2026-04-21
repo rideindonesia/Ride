@@ -6,3 +6,9 @@ id = "BD8dt9UQdQuXrfoP5Oqmu"
 uri = "file://RIDE_backup_20260421.tar.gz"
 type = "unspecified"
 title = "RIDE Backup - 21 April 2026"
+
+[[outputs]]
+id = "n8PIsASpx1mZbfQOhabS5"
+uri = "file://RIDE_backup_20260421_v2.tar.gz"
+type = "unspecified"
+title = "RIDE Backup v2 — 21 April 2026"
