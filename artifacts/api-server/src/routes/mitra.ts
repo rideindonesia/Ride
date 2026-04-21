@@ -759,6 +759,11 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   try {
     if (updated) {
       io?.to(`user:${updated.penggunaId}`).emit("order:payment", { orderId, paymentData });
+      sendPushToUsers([updated.penggunaId], {
+        title: "💳 Rincian Biaya Dikirim",
+        body: "Mitra mengirim rincian biaya layanan. Cek dan konfirmasi pembayaran.",
+        url: "/",
+      });
     }
   } catch {}
 
@@ -802,6 +807,11 @@ router.patch("/orders/:id/done", requireMitra, async (req, res) => {
     if (updated) {
       io?.to(`user:${updated.penggunaId}`).emit("order:done", { orderId, totalAmount });
       io?.to("room:admin").emit("admin:order_update", { type: "done", orderId });
+      sendPushToUsers([updated.penggunaId], {
+        title: "✅ Pekerjaan Selesai!",
+        body: "Mitra telah menyelesaikan pekerjaan. Berikan ulasan Anda!",
+        url: "/",
+      });
     }
   } catch {}
 

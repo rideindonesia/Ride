@@ -365,6 +365,16 @@ router.post("/orders", (req, res, next) => {
       io?.to(`user:${m.userId}`).emit("order:new", payload);
     }
     io?.to("room:admin").emit("admin:order_update", { type: "new", orderId: order.id });
+
+    // Push notification ke semua mitra yang tersedia (walau browser ditutup)
+    const mitraIds = availableMitra.map(m => m.userId).filter((id): id is number => id !== null);
+    if (mitraIds.length > 0) {
+      sendPushToUsers(mitraIds, {
+        title: "🔔 Pesanan Masuk!",
+        body: `${pengguna?.name ?? "Konsumen"} membutuhkan layanan ${svcType}. Cek sekarang!`,
+        url: "/",
+      });
+    }
   } catch {}
 
   res.json({ orderId: order.id, orderNo: order.orderNo });

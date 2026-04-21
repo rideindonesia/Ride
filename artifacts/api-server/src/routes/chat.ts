@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, chatMessagesTable, ordersTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
 import { io } from "../socket";
+import { sendPushToUsers } from "./push";
 
 const router = Router();
 
@@ -132,6 +133,22 @@ router.post("/:orderId", requireAuth, async (req, res) => {
       message: message.trim(),
       createdAt: msg.createdAt,
     });
+
+    // Push notification ke pihak lawan bicara
+    const shortMsg = message.trim().slice(0, 80);
+    if (senderRole === "mitra" && order.penggunaId) {
+      sendPushToUsers([order.penggunaId], {
+        title: "💬 Pesan dari Mitra",
+        body: shortMsg,
+        url: "/",
+      });
+    } else if (senderRole === "pengguna" && order.mitraId) {
+      sendPushToUsers([order.mitraId], {
+        title: "💬 Pesan dari Konsumen",
+        body: shortMsg,
+        url: "/",
+      });
+    }
   } catch {}
 
   res.json({ ok: true, messageId: msg.id, senderRole });
