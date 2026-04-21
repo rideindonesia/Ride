@@ -89,6 +89,7 @@ export default function OrderBarber() {
   const [orderStatus, setOrderStatus] = useState<"creating"|"pending"|"accepted"|"done"|"cancelled">("creating");
   const [acceptedMitra, setAcceptedMitra] = useState<AcceptedMitra | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [foto, setFoto] = useState<File | null>(null);
   const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
   const [chatOpen, setChatOpen] = useState(false);
@@ -179,7 +180,7 @@ export default function OrderBarber() {
   useEffect(() => {
     if (step !== 3 || orderId) return;
     setOrderStatus("creating"); setAcceptedMitra(null); setCreateError(null);
-    fetch("/api/pengguna/orders", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ vehicleType: untukSiapa, vehicleModel: layanan, vehicleYear: "", damageCategories: [layanan], description: "", pickupAddress: autoAddress || "Lokasi yang dipilih", detailAlamat, pickupLat: pinLat ?? userLat ?? 0, pickupLng: pinLng ?? userLng ?? 0, serviceType: "barber" }) })
+    (() => { const fd = new FormData(); fd.append("vehicleType", untukSiapa); fd.append("vehicleModel", layanan); fd.append("vehicleYear", ""); fd.append("damageCategories", JSON.stringify([layanan])); fd.append("description", ""); fd.append("pickupAddress", autoAddress || "Lokasi yang dipilih"); fd.append("detailAlamat", detailAlamat); fd.append("pickupLat", String(pinLat ?? userLat ?? 0)); fd.append("pickupLng", String(pinLng ?? userLng ?? 0)); fd.append("serviceType", "barber"); if (foto) fd.append("foto", foto); return fetch("/api/pengguna/orders", { method: "POST", credentials: "include", body: fd }); })()
       .then(r => r.json()).then(d => { if (!d.orderId) { setCreateError("Gagal membuat pesanan."); return; } setOrderId(d.orderId); setOrderNo(d.orderNo); setOrderStatus("pending"); }).catch(() => setCreateError("Koneksi gagal."));
   }, [step, orderId]);
 
@@ -312,6 +313,13 @@ export default function OrderBarber() {
                   ))}
                 </div>
                 <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 10, fontStyle: "italic" }}>*Biaya jasa akan didiskusikan via chat dengan barberman</div>
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 8 }}>Foto <span style={{ color: "#9aa5b4", fontWeight: 400 }}>(opsional)</span></label>
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "18px 12px", borderRadius: 14, border: foto ? "2px solid #1a7a6a" : "1.5px dashed #b0c4d8", background: foto ? "rgba(26,122,106,0.05)" : "#f8fafc", cursor: "pointer" }}>
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setFoto(e.target.files?.[0] ?? null)} />
+                  {foto ? (<><span style={{ fontSize: 28 }}>✅</span><span style={{ fontSize: 13, color: "#1a7a6a", fontWeight: 600 }}>{foto.name}</span><span style={{ fontSize: 11, color: "#9aa5b4" }}>Tap untuk ganti</span></>) : (<><span style={{ fontSize: 28 }}>📸</span><span style={{ fontSize: 13, color: "#7a8a9a" }}>Tap untuk upload foto</span></>)}
+                </label>
               </div>
             </div>
           </div>
