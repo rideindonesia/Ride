@@ -606,6 +606,17 @@ router.patch("/keuangan/fee-payments/:id/verify", requireAdmin, async (req, res)
     const pending = Math.max(0, Number(allFeeRow?.fee ?? 0) - Number(verifiedRows[0]?.total ?? 0));
     if (pending === 0) {
       await db.update(usersTable).set({ isSuspended: false }).where(eq(usersTable.id, payment.mitraId));
+      sendPushToUsers([payment.mitraId], {
+        title: "✅ Pembayaran Fee Diterima",
+        body: "Pembayaran platform fee Anda telah diverifikasi. Akun aktif kembali.",
+        url: "/",
+      });
+    } else {
+      sendPushToUsers([payment.mitraId], {
+        title: "✅ Bukti Pembayaran Diterima",
+        body: `Pembayaran fee Anda telah diverifikasi. Sisa tagihan: Rp ${pending.toLocaleString("id-ID")}.`,
+        url: "/",
+      });
     }
   }
 
@@ -616,9 +627,17 @@ router.patch("/keuangan/fee-payments/:id/verify", requireAdmin, async (req, res)
 router.patch("/keuangan/fee-payments/:id/reject", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const { notes } = req.body;
-  await db.update(platformFeePaymentsTable)
+  const [updated] = await db.update(platformFeePaymentsTable)
     .set({ status: "rejected", notes: notes ?? null })
-    .where(eq(platformFeePaymentsTable.id, id));
+    .where(eq(platformFeePaymentsTable.id, id))
+    .returning({ mitraId: platformFeePaymentsTable.mitraId });
+  if (updated?.mitraId) {
+    sendPushToUsers([updated.mitraId], {
+      title: "❌ Bukti Pembayaran Ditolak",
+      body: notes ? `Alasan: ${notes}` : "Bukti pembayaran fee Anda ditolak admin. Silakan kirim ulang.",
+      url: "/",
+    });
+  }
   res.json({ ok: true });
 });
 

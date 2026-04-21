@@ -754,6 +754,11 @@ router.delete("/orders/:id", async (req, res) => {
       io?.to(`order:${cancelled.id}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
       if (cancelled.mitraId) {
         io?.to(`mitra:${cancelled.mitraId}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
+        sendPushToUsers([cancelled.mitraId], {
+          title: "❌ Pesanan Dibatalkan",
+          body: cancelReason ? `Konsumen membatalkan. Alasan: ${cancelReason}` : "Konsumen membatalkan pesanan.",
+          url: "/",
+        });
       }
       io?.to("room:admin").emit("admin:order_update", { type: "cancelled", orderId: cancelled.id });
     } catch { /* ignore */ }
