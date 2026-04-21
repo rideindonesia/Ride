@@ -1811,6 +1811,33 @@ export default function DashboardMitra() {
                           );
                         })()}
 
+                        {/* RATING KONSUMEN */}
+                        {o.status === "done" && (
+                          <div style={{ padding: "14px 16px", borderTop: "1px solid #f0f4f8", background: o.rating != null ? "#fffdf5" : "#f8fafc" }}>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 10 }}>RATING KONSUMEN</div>
+                            {o.rating != null ? (
+                              <>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: o.reviewComment ? 10 : 0 }}>
+                                  <div style={{ display: "flex", gap: 3 }}>
+                                    {[1,2,3,4,5].map(s => (
+                                      <span key={s} style={{ fontSize: 22, color: s <= o.rating ? "#f59e0b" : "#e0e8f0" }}>★</span>
+                                    ))}
+                                  </div>
+                                  <span style={{ fontSize: 15, fontWeight: 800, color: "#d97706" }}>{Number(o.rating).toFixed(1)}</span>
+                                  <span style={{ fontSize: 12, color: "#9aa5b4" }}>/ 5.0</span>
+                                </div>
+                                {o.reviewComment && (
+                                  <div style={{ background: "#fff", border: "1.5px solid #fde68a", borderRadius: 12, padding: "10px 13px", fontSize: 13, color: "#4a5a6a", fontStyle: "italic" as const }}>
+                                    "{o.reviewComment}"
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div style={{ fontSize: 13, color: "#9aa5b4", fontStyle: "italic" as const }}>Konsumen belum memberikan ulasan</div>
+                            )}
+                          </div>
+                        )}
+
                         {/* ALASAN PEMBATALAN */}
                         {o.status === "cancelled" && (o as any).cancelReason && (
                           <div style={{ margin: "12px 16px 0", background: "#fef2f2", border: "1.5px solid #fca5a5", borderRadius: 12, padding: "12px 14px" }}>
