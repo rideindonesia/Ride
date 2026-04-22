@@ -2,6 +2,8 @@
 
 # compiled output
 dist
+!artifacts/ride-splash/dist/
+!artifacts/ride-splash/dist/**
 tmp
 out-tsc
 *.tsbuildinfo

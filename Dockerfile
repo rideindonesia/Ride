@@ -8,8 +8,6 @@ COPY . .
 
 RUN pnpm install --no-frozen-lockfile
 
-RUN PORT=3000 BASE_PATH=/ pnpm --filter @workspace/ride-splash run build
-
 RUN pnpm --filter @workspace/api-server... run build
 
 RUN mkdir -p artifacts/api-server/public && \
