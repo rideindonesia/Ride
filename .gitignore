@@ -47,3 +47,10 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Sensitive files - jangan di-push ke GitHub
+ride_secrets_backup.txt
+ride_db_backup.sql
+*.tar.gz
+attached_assets/
+uploads/
