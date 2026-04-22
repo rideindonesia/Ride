@@ -22,6 +22,11 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     credentials: "include",
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401 && !path.includes("/login")) {
+    clearAdminToken();
+    window.location.href = "/admin/";
+    throw new Error("Sesi berakhir. Silakan login ulang.");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? "Terjadi kesalahan");
