@@ -92,56 +92,11 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
           </div>
         ) : (
           <>
-            {/* Demo box pengguna */}
-            {role === "pengguna" && (
-              <button
-                onClick={() => fillDemo(DEMO_PENGGUNA.hp, DEMO_PENGGUNA.password)}
-                style={{ width: "100%", textAlign: "left", padding: "14px 16px", borderRadius: 14, background: "rgba(26,122,106,0.08)", border: "1.5px solid rgba(26,122,106,0.25)", cursor: "pointer" }}
-              >
-                <div style={{ fontWeight: 700, fontSize: 13, color: "#1a7a6a", fontFamily: "'Inter', sans-serif" }}>Akun Demo Pengguna</div>
-                <div style={{ fontSize: 13, color: "#2a6a5a", fontFamily: "'Inter', sans-serif", marginTop: 4 }}>
-                  HP: <strong>{DEMO_PENGGUNA.hp}</strong> &nbsp;·&nbsp; Password: <strong>{DEMO_PENGGUNA.password}</strong>
-                </div>
-              </button>
-            )}
-
-            {/* Demo box mitra */}
-            {role === "mitra" && (
-              <div style={{ borderRadius: 14, background: "rgba(26,122,106,0.08)", border: "1.5px solid rgba(26,122,106,0.25)", overflow: "hidden" }}>
-                <button
-                  onClick={() => setMitraListOpen(o => !o)}
-                  style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", cursor: "pointer" }}
-                >
-                  <span style={{ fontWeight: 700, fontSize: 13, color: "#1a7a6a", fontFamily: "'Inter', sans-serif" }}>
-                    Daftar Akun Demo Mitra ({DEMO_MITRA.length} akun)
-                  </span>
-                  <span style={{ fontSize: 12, color: "#1a7a6a", fontFamily: "'Inter', sans-serif" }}>
-                    {mitraListOpen ? "▲ Tutup" : "▼ Buka"}
-                  </span>
-                </button>
-                {mitraListOpen && (
-                  <div style={{ borderTop: "1px solid rgba(26,122,106,0.15)", maxHeight: 240, overflowY: "auto" }}>
-                    {DEMO_MITRA.map((m, i) => (
-                      <button
-                        key={m.hp}
-                        onClick={() => fillDemo(m.hp, m.password)}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", borderTop: i > 0 ? "1px solid rgba(26,122,106,0.1)" : "none", cursor: "pointer", textAlign: "left" }}
-                      >
-                        <span style={{ fontSize: 20, flexShrink: 0 }}>{m.emoji}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: "#1a2a3a", fontFamily: "'Inter', sans-serif" }}>{m.name}</div>
-                          <div style={{ fontSize: 12, color: "#7a8a9a", fontFamily: "'Inter', sans-serif" }}>{m.service}</div>
-                        </div>
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <div style={{ fontSize: 12, color: "#1a3a5c", fontFamily: "monospace" }}>+62 {m.hp}</div>
-                          <div style={{ fontSize: 11, color: "#7a8a9a", fontFamily: "'Inter', sans-serif" }}>{m.password}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Demo box pengguna & mitra — disembunyikan dari tampilan user
+            Akun demo tetap aktif, gunakan data berikut untuk backtest:
+            Pengguna: +62 81355446677 / demo1234
+            Mitra: lihat DEMO_MITRA di atas, semua password: mitra1234
+            */}
 
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {/* Nomor HP */}
