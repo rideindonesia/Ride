@@ -39,7 +39,10 @@ router.post("/login", async (req, res) => {
   if (user.passwordHash !== hashPassword(password)) { res.status(401).json({ error: "Password salah" }); return; }
   (req.session as Record<string, unknown>).adminId = user.id;
   (req.session as Record<string, unknown>).adminName = user.name;
-  res.json({ ok: true, admin: { id: user.id, name: user.name, email: user.email } });
+  req.session.save((err) => {
+    if (err) { res.status(500).json({ error: "Gagal menyimpan sesi" }); return; }
+    res.json({ ok: true, admin: { id: user.id, name: user.name, email: user.email } });
+  });
 });
 
 // GET /api/admin/me

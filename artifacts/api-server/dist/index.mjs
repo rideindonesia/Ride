@@ -97729,7 +97729,13 @@ router8.post("/login", async (req, res) => {
   }
   req.session.adminId = user.id;
   req.session.adminName = user.name;
-  res.json({ ok: true, admin: { id: user.id, name: user.name, email: user.email } });
+  req.session.save((err) => {
+    if (err) {
+      res.status(500).json({ error: "Gagal menyimpan sesi" });
+      return;
+    }
+    res.json({ ok: true, admin: { id: user.id, name: user.name, email: user.email } });
+  });
 });
 router8.get("/me", requireAdmin, async (req, res) => {
   const adminId = getAdminId(req);
@@ -98443,6 +98449,7 @@ if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET must be set");
 }
 var app = (0, import_express10.default)();
+app.set("trust proxy", 1);
 app.use(
   (0, import_pino_http.default)({
     logger,
