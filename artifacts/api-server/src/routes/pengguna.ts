@@ -810,7 +810,6 @@ router.get("/profile", async (req, res) => {
     id: usersTable.id, name: usersTable.name, email: usersTable.email,
     phone: usersTable.phone, createdAt: usersTable.createdAt,
     profilePhotoPath: usersTable.profilePhotoPath,
-    walletBalance: usersTable.walletBalance,
   }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
   if (!user) { res.status(404).json({ error: "User tidak ditemukan" }); return; }
   res.json(user);
