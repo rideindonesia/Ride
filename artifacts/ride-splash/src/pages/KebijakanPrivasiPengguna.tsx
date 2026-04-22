@@ -1,12 +1,8 @@
-import { useLocation } from "wouter";
-
 export default function KebijakanPrivasiPengguna() {
-  const [, navigate] = useLocation();
-
   return (
-    <div style={{ minHeight: "100vh", background: "#f4f7fb", fontFamily: "'Inter', sans-serif" }}>
-      <div style={{ background: "#fff", borderBottom: "1px solid #eef2f7", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, zIndex: 10 }}>
-        <button onClick={() => navigate(-1 as any)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, padding: 0, color: "#1a2a3a" }}>←</button>
+    <div style={{ minHeight: "100vh", background: "#f4f7fb", fontFamily: "'Inter', sans-serif", overflowY: "auto" }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #eef2f7", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => window.history.back()} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, padding: 0, color: "#1a2a3a" }}>←</button>
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2a3a" }}>Kebijakan Privasi</div>
           <div style={{ fontSize: 11, color: "#9aa5b4" }}>Untuk Pengguna (Konsumen)</div>
