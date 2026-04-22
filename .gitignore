@@ -4,6 +4,8 @@
 dist
 !artifacts/ride-splash/dist/
 !artifacts/ride-splash/dist/**
+!artifacts/ride-admin/dist/
+!artifacts/ride-admin/dist/**
 tmp
 out-tsc
 *.tsbuildinfo

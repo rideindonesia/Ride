@@ -64,6 +64,13 @@ app.use("/api/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api", router);
 
 const frontendDist = path.resolve(process.cwd(), "public");
+const adminDist = path.resolve(process.cwd(), "public/admin");
+
+app.use("/admin", express.static(adminDist));
+app.get("/admin/{*path}", (_req, res) => {
+  res.sendFile(path.join(adminDist, "index.html"));
+});
+
 app.use(express.static(frontendDist));
 app.get("/{*path}", (_req, res) => {
   res.sendFile(path.join(frontendDist, "index.html"));

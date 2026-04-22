@@ -12,7 +12,9 @@ RUN pnpm install --no-frozen-lockfile
 RUN pnpm --filter @workspace/api-server... run build
 
 RUN mkdir -p artifacts/api-server/public && \
-    cp -r artifacts/ride-splash/dist/public/. artifacts/api-server/public/
+    cp -r artifacts/ride-splash/dist/public/. artifacts/api-server/public/ && \
+    mkdir -p artifacts/api-server/public/admin && \
+    cp -r artifacts/ride-admin/dist/public/. artifacts/api-server/public/admin/
 
 EXPOSE 8080
 
