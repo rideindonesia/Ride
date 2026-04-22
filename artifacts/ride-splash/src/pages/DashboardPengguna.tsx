@@ -2147,7 +2147,10 @@ export default function DashboardPengguna() {
                 )}
                 {openAkunSection === "privasi" && item.id === "privasi" && (
                   <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8", fontSize: 12, color: "#7a8a9a", lineHeight: 1.6 }}>
-                    Data pribadi Anda disimpan dengan enkripsi dan tidak dibagikan kepada pihak ketiga tanpa izin. Kami menggunakan data lokasi hanya selama sesi layanan aktif. Untuk penghapusan data, hubungi privacy@ride.app.
+                    Data pribadi Anda disimpan dengan enkripsi dan tidak dibagikan kepada pihak ketiga tanpa izin. Kami menggunakan data lokasi hanya selama sesi layanan aktif. Untuk penghapusan data, hubungi support@rideindonesia.com.
+                    <button onClick={() => navigate("/kebijakan-privasi")} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: "#2563eb", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                      Lihat kebijakan privasi lengkap →
+                    </button>
                   </div>
                 )}
               </div>

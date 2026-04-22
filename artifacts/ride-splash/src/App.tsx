@@ -14,6 +14,8 @@ import OrderBarber from "@/pages/OrderBarber";
 import OrderInspeksi from "@/pages/OrderInspeksi";
 import OrderTowing from "@/pages/OrderTowing";
 import ReviewPage from "@/pages/ReviewPage";
+import KebijakanPrivasiPengguna from "@/pages/KebijakanPrivasiPengguna";
+import KebijakanPrivasiMitra from "@/pages/KebijakanPrivasiMitra";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,8 @@ function Router() {
       <Route path="/order/inspeksi" component={OrderInspeksi} />
       <Route path="/order/towing" component={OrderTowing} />
       <Route path="/review/:orderId" component={ReviewPage} />
+      <Route path="/kebijakan-privasi" component={KebijakanPrivasiPengguna} />
+      <Route path="/kebijakan-privasi-mitra" component={KebijakanPrivasiMitra} />
     </Switch>
   );
 }

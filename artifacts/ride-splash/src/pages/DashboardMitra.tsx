@@ -2668,7 +2668,7 @@ export default function DashboardMitra() {
               {[
                 { id:"perjanjian-m", icon:"📋", label:"Perjanjian Kemitraan RIDE", sub:"Syarat & ketentuan sebagai mitra", content:`Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar ${platformFeePct}% dari biaya panggilan berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan. Perjanjian ini berlaku selama akun mitra aktif.` },
                 { id:"kebijakan-m", icon:"💼", label:"Kebijakan Platform & Komisi", sub:"Sistem komisi dan kebijakan mitra", content:`Platform fee RIDE adalah ${platformFeePct}% dari biaya panggilan per order (tidak termasuk biaya sparepart dan biaya jasa). Fee dihitung otomatis saat order selesai dan disetujui pelanggan. RIDE berhak mengubah kebijakan komisi dengan pemberitahuan 14 hari sebelumnya. Mitra dengan performa tinggi (rating ≥4.8, order ≥50) dapat mengajukan program mitra unggulan dengan fee lebih rendah.` },
-                { id:"privasi-m", icon:"🛡️", label:"Kebijakan Privasi", sub:"Data dan keamanan informasi mitra", content:"Data pribadi mitra disimpan dengan enkripsi dan tidak dibagikan kepada pihak ketiga tanpa izin. Kami menggunakan data lokasi hanya selama sesi layanan aktif. Dokumen verifikasi digunakan hanya untuk keperluan verifikasi identitas mitra. Untuk penghapusan data, hubungi mitra@ride.app." },
+                { id:"privasi-m", icon:"🛡️", label:"Kebijakan Privasi", sub:"Data dan keamanan informasi mitra", content:"Data pribadi mitra disimpan dengan enkripsi dan tidak dibagikan kepada pihak ketiga tanpa izin. Lokasi Anda dipantau hanya selama sesi layanan aktif dan ditampilkan kepada pengguna untuk koordinasi. Dokumen verifikasi (KTP) dan rekening bank hanya digunakan untuk keperluan verifikasi dan pencairan saldo. Untuk penghapusan data, hubungi mitra@rideindonesia.com." },
               ].map(item => (
                 <div key={item.id}>
                   <button onClick={() => setOpenAkunSection(openAkunSection===item.id?null:item.id)}
@@ -2683,6 +2683,11 @@ export default function DashboardMitra() {
                   {openAkunSection===item.id && (
                     <div style={{ padding:"0 14px 14px", borderTop:"1px solid #f0f4f8", fontSize:12, color:"#7a8a9a", lineHeight:1.7 }}>
                       {item.content}
+                      {item.id === "privasi-m" && (
+                        <button onClick={() => navigate("/kebijakan-privasi-mitra")} style={{ display:"block", marginTop:8, background:"none", border:"none", color:"#0ea56a", fontSize:12, fontWeight:700, cursor:"pointer", padding:0, textDecoration:"underline" }}>
+                          Lihat kebijakan privasi lengkap →
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
