@@ -13,9 +13,12 @@ function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password + salt).digest("hex");
 }
 
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari
+const TOKEN_VERSION = process.env.ADMIN_TOKEN_VERSION || "1"; // naikkan untuk invalidate semua token
+
 function generateAdminToken(adminId: number): string {
   const secret = process.env.SESSION_SECRET!;
-  const payload = `${adminId}:${Date.now()}`;
+  const payload = `${adminId}:${Date.now()}:v${TOKEN_VERSION}`;
   const hmac = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   return Buffer.from(`${payload}:${hmac}`).toString("base64url");
 }
@@ -28,16 +31,18 @@ function verifyAdminToken(token: string): number | null {
     if (lastColon === -1) return null;
     const hmac = decoded.slice(lastColon + 1);
     const payload = decoded.slice(0, lastColon);
-    const colonIdx = payload.indexOf(":");
-    if (colonIdx === -1) return null;
-    const adminId = payload.slice(0, colonIdx);
-    const ts = payload.slice(colonIdx + 1);
+    const parts = payload.split(":");
+    if (parts.length < 3) return null;
+    const adminId = parts[0];
+    const ts = parts[1];
+    const ver = parts[2];
+    if (ver !== `v${TOKEN_VERSION}`) return null;
     const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
     if (hmac.length !== expected.length) return null;
     let diff = 0;
     for (let i = 0; i < hmac.length; i++) diff |= hmac.charCodeAt(i) ^ expected.charCodeAt(i);
     if (diff !== 0) return null;
-    if (Date.now() - parseInt(ts) > 365 * 24 * 60 * 60 * 1000) return null;
+    if (Date.now() - parseInt(ts) > TOKEN_TTL_MS) return null;
     return parseInt(adminId);
   } catch { return null; }
 }
@@ -242,7 +247,7 @@ router.get("/mitra/:email", requireAdmin, async (req, res) => {
   const email = decodeURIComponent(req.params.email);
   const [app] = await db.select().from(mitraApplicationsTable).where(eq(mitraApplicationsTable.email, email)).limit(1);
   if (!app) { res.status(404).json({ error: "Mitra tidak ditemukan" }); return; }
-  const [user] = await db.select({ id: usersTable.id, isSuspended: usersTable.isSuspended, walletBalance: usersTable.walletBalance }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  const [user] = await db.select({ id: usersTable.id, isSuspended: usersTable.isSuspended }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
   let orders: any[] = [];
   let platformFeeTotal = 0;
   let totalOrders = 0;
@@ -298,7 +303,7 @@ router.get("/pengguna", requireAdmin, async (req, res) => {
   if (search) whereClause.push(or(ilike(usersTable.name, `%${search}%`), ilike(usersTable.email, `%${search}%`))! as any);
 
   const [rows, [totalRow]] = await Promise.all([
-    db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, phone: usersTable.phone, isSuspended: usersTable.isSuspended, walletBalance: usersTable.walletBalance, createdAt: usersTable.createdAt })
+    db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, phone: usersTable.phone, isSuspended: usersTable.isSuspended, createdAt: usersTable.createdAt })
       .from(usersTable).where(and(...whereClause as [any, ...any[]])).orderBy(desc(usersTable.createdAt)).limit(limit).offset(offset),
     db.select({ c: count() }).from(usersTable).where(and(...whereClause as [any, ...any[]])),
   ]);
@@ -452,7 +457,7 @@ router.get("/orders/:id", requireAdmin, async (req, res) => {
   const ids = [order.penggunaId, ...(order.mitraId ? [order.mitraId] : [])];
   const users = await db.select({
     id: usersTable.id, name: usersTable.name, email: usersTable.email,
-    phone: usersTable.phone, walletBalance: usersTable.walletBalance,
+    phone: usersTable.phone,
   }).from(usersTable).where(inArray(usersTable.id, ids as [number, ...number[]]));
   const userMap = Object.fromEntries(users.map(u => [u.id, u]));
 
