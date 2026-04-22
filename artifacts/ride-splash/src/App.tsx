@@ -16,6 +16,8 @@ import OrderTowing from "@/pages/OrderTowing";
 import ReviewPage from "@/pages/ReviewPage";
 import KebijakanPrivasiPengguna from "@/pages/KebijakanPrivasiPengguna";
 import KebijakanPrivasiMitra from "@/pages/KebijakanPrivasiMitra";
+import SyaratKetentuanPengguna from "@/pages/SyaratKetentuanPengguna";
+import SyaratKetentuanMitra from "@/pages/SyaratKetentuanMitra";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +54,8 @@ function Router() {
       <Route path="/review/:orderId" component={ReviewPage} />
       <Route path="/kebijakan-privasi" component={KebijakanPrivasiPengguna} />
       <Route path="/kebijakan-privasi-mitra" component={KebijakanPrivasiMitra} />
+      <Route path="/syarat-ketentuan" component={SyaratKetentuanPengguna} />
+      <Route path="/syarat-ketentuan-mitra" component={SyaratKetentuanMitra} />
     </Switch>
   );
 }

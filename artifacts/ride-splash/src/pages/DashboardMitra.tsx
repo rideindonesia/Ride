@@ -2666,7 +2666,7 @@ export default function DashboardMitra() {
             <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 10, overflow: "hidden" }}>
               <div style={{ padding: "10px 14px 4px", fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, textTransform: "uppercase" as const }}>Legal & Kemitraan</div>
               {[
-                { id:"perjanjian-m", icon:"📋", label:"Perjanjian Kemitraan RIDE", sub:"Syarat & ketentuan sebagai mitra", content:`Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar ${platformFeePct}% dari biaya panggilan berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan. Perjanjian ini berlaku selama akun mitra aktif.` },
+                { id:"perjanjian-m", icon:"📋", label:"Perjanjian Kemitraan RIDE", sub:"Syarat & ketentuan sebagai mitra", content:`Sebagai mitra RIDE, Anda terikat perjanjian kemitraan yang mengharuskan memberikan layanan profesional sesuai standar RIDE. Platform fee sebesar ${platformFeePct}% dari biaya panggilan berlaku untuk setiap transaksi. RIDE berhak menangguhkan akun mitra yang melanggar ketentuan layanan. Perjanjian ini berlaku selama akun mitra aktif.`, showTermsLink: true },
                 { id:"kebijakan-m", icon:"💼", label:"Kebijakan Platform & Komisi", sub:"Sistem komisi dan kebijakan mitra", content:`Platform fee RIDE adalah ${platformFeePct}% dari biaya panggilan per order (tidak termasuk biaya sparepart dan biaya jasa). Fee dihitung otomatis saat order selesai dan disetujui pelanggan. RIDE berhak mengubah kebijakan komisi dengan pemberitahuan 14 hari sebelumnya. Mitra dengan performa tinggi (rating ≥4.8, order ≥50) dapat mengajukan program mitra unggulan dengan fee lebih rendah.` },
                 { id:"privasi-m", icon:"🛡️", label:"Kebijakan Privasi", sub:"Data dan keamanan informasi mitra", content:"Data pribadi mitra disimpan dengan enkripsi dan tidak dibagikan kepada pihak ketiga tanpa izin. Lokasi Anda dipantau hanya selama sesi layanan aktif dan ditampilkan kepada pengguna untuk koordinasi. Dokumen verifikasi (KTP) dan rekening bank hanya digunakan untuk keperluan verifikasi dan pencairan saldo. Untuk penghapusan data, hubungi mitra@rideindonesia.com." },
               ].map(item => (
@@ -2686,6 +2686,11 @@ export default function DashboardMitra() {
                       {item.id === "privasi-m" && (
                         <button onClick={() => navigate("/kebijakan-privasi-mitra")} style={{ display:"block", marginTop:8, background:"none", border:"none", color:"#0ea56a", fontSize:12, fontWeight:700, cursor:"pointer", padding:0, textDecoration:"underline" }}>
                           Lihat kebijakan privasi lengkap →
+                        </button>
+                      )}
+                      {"showTermsLink" in item && item.showTermsLink && (
+                        <button onClick={() => navigate("/syarat-ketentuan-mitra")} style={{ display:"block", marginTop:8, background:"none", border:"none", color:"#0ea56a", fontSize:12, fontWeight:700, cursor:"pointer", padding:0, textDecoration:"underline" }}>
+                          Lihat syarat & ketentuan lengkap →
                         </button>
                       )}
                     </div>

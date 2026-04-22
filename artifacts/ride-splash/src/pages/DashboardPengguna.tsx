@@ -2143,6 +2143,9 @@ export default function DashboardPengguna() {
                 {openAkunSection === "syarat" && item.id === "syarat" && (
                   <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0f4f8", fontSize: 12, color: "#7a8a9a", lineHeight: 1.6 }}>
                     Dengan menggunakan layanan RIDE, Anda setuju dengan syarat dan ketentuan yang berlaku. RIDE berhak menangguhkan akun yang melanggar ketentuan layanan. Seluruh transaksi bersifat final setelah layanan selesai diberikan oleh mitra.
+                    <button onClick={() => navigate("/syarat-ketentuan")} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: "#2563eb", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                      Lihat syarat & ketentuan lengkap →
+                    </button>
                   </div>
                 )}
                 {openAkunSection === "privasi" && item.id === "privasi" && (
