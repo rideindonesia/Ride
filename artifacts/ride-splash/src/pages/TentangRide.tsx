@@ -1,4 +1,77 @@
+import { useState } from "react";
+
+const TEAM = [
+  {
+    name: "H. Safwana S.E., M.M",
+    role: "Chief Executive Officer",
+    sub: "Founder & CEO PT Ride Indonesia",
+    desc: "Memimpin visi dan inovasi platform Ride untuk menghubungkan masyarakat Indonesia dengan layanan profesional berkualitas",
+    initials: "HS",
+    color: "#2563eb",
+    bg: "#eff6ff",
+    border: "#bfdbfe",
+    photo: null,
+  },
+  {
+    name: "Dira Kurniawan",
+    role: "Chief Technology Officer",
+    sub: "CTO PT Ride Indonesia",
+    desc: "Memimpin pengembangan teknologi dan infrastruktur platform untuk memberikan pengalaman terbaik bagi pengguna",
+    initials: "DK",
+    color: "#ea580c",
+    bg: "#fff7ed",
+    border: "#fed7aa",
+    photo: null,
+  },
+  {
+    name: "Coming Soon",
+    role: "Chief Operating Officer",
+    sub: "COO PT Ride Indonesia",
+    desc: "Mengawasi operasional harian dan memastikan efisiensi layanan di seluruh platform",
+    initials: "COO",
+    color: "#0d9488",
+    bg: "#f0fdfa",
+    border: "#99f6e4",
+    photo: null,
+  },
+  {
+    name: "Coming Soon",
+    role: "Chief Marketing Officer",
+    sub: "CMO PT Ride Indonesia",
+    desc: "Memimpin strategi pemasaran dan brand awareness untuk pertumbuhan platform",
+    initials: "CMO",
+    color: "#7c3aed",
+    bg: "#f5f3ff",
+    border: "#ddd6fe",
+    photo: null,
+  },
+  {
+    name: "Coming Soon",
+    role: "Chief Financial Officer",
+    sub: "CFO PT Ride Indonesia",
+    desc: "Mengelola keuangan perusahaan dan memastikan keberlanjutan finansial platform",
+    initials: "CFO",
+    color: "#059669",
+    bg: "#ecfdf5",
+    border: "#a7f3d0",
+    photo: null,
+  },
+];
+
+const TECH = [
+  { name: "React", desc: "Frontend Framework" },
+  { name: "TypeScript", desc: "Type Safety" },
+  { name: "Node.js", desc: "Backend Runtime" },
+  { name: "PostgreSQL", desc: "Database" },
+  { name: "Socket.io", desc: "Real-time" },
+  { name: "Tailwind CSS", desc: "Styling" },
+  { name: "Railway", desc: "Cloud Hosting" },
+  { name: "Fonnte", desc: "WhatsApp OTP" },
+];
+
 export default function TentangRide() {
+  const [activeCard, setActiveCard] = useState(0);
+
   return (
     <div style={{ minHeight: "100vh", background: "#f4f7fb", fontFamily: "'Inter', sans-serif", overflowY: "auto" }}>
       <div style={{ background: "#fff", borderBottom: "1px solid #eef2f7", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -16,6 +89,79 @@ export default function TentangRide() {
           <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: -2, marginBottom: 8 }}>RIDE</div>
           <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.9 }}>Super App Jasa Panggilan</div>
           <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>Versi 1.0.0 · Balikpapan, Indonesia</div>
+        </div>
+
+        {/* Dibuat dengan cinta */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: "24px 20px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16, textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🤍</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#1a2a3a", marginBottom: 8 }}>Dibuat dengan ❤️</div>
+          <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>
+            Ride adalah platform yang dibangun untuk menghubungkan masyarakat Indonesia dengan layanan profesional yang berkualitas.
+          </div>
+        </div>
+
+        {/* Tim Pengembang */}
+        <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16, overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18 }}>👥</span>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a" }}>Tim Pengembang</div>
+          </div>
+
+          {/* Carousel */}
+          <div style={{ overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+            <div style={{ display: "flex", gap: 12, padding: "8px 20px 16px", width: "max-content" }}>
+              {TEAM.map((member, i) => (
+                <div
+                  key={i}
+                  onClick={() => setActiveCard(i)}
+                  style={{
+                    width: 200,
+                    background: member.bg,
+                    borderRadius: 16,
+                    padding: 16,
+                    border: `2px solid ${activeCard === i ? member.color : member.border}`,
+                    cursor: "pointer",
+                    transition: "border-color 0.2s",
+                    textAlign: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* Avatar */}
+                  <div style={{
+                    width: 80, height: 80, borderRadius: 16, margin: "0 auto 12px",
+                    background: member.bg, border: `2px solid ${member.border}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <div style={{ fontSize: member.initials.length > 2 ? 18 : 26, fontWeight: 900, color: member.color }}>
+                      {member.initials}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a", marginBottom: 4 }}>{member.name}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: member.color, marginBottom: 4 }}>{member.role}</div>
+                  <div style={{ fontSize: 11, color: "#9aa5b4", marginBottom: 8 }}>{member.sub}</div>
+                  <div style={{ fontSize: 11, color: "#7a8a9a", lineHeight: 1.5 }}>{member.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Dot indicators */}
+          <div style={{ display: "flex", justifyContent: "center", gap: 6, paddingBottom: 16 }}>
+            {TEAM.map((_, i) => (
+              <div
+                key={i}
+                onClick={() => setActiveCard(i)}
+                style={{
+                  width: activeCard === i ? 20 : 8,
+                  height: 8,
+                  borderRadius: 4,
+                  background: activeCard === i ? TEAM[activeCard].color : "#e2e8f0",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Layanan */}
@@ -64,24 +210,49 @@ export default function TentangRide() {
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a", marginBottom: 14, borderLeft: "3px solid #2563eb", paddingLeft: 10 }}>Visi & Misi</div>
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#2563eb", marginBottom: 6 }}>VISI</div>
-            <div style={{ fontSize: 13, color: "#2d3748", lineHeight: 1.6 }}>
-              Menjadi platform jasa panggilan terpercaya dan terdepan di Kalimantan, yang menghubungkan masyarakat dengan tenaga profesional berkualitas secara cepat, aman, dan terjangkau.
-            </div>
+            <div style={{ fontSize: 13, color: "#2d3748", lineHeight: 1.6 }}>Menjadi platform jasa panggilan terpercaya dan terdepan di Kalimantan, yang menghubungkan masyarakat dengan tenaga profesional berkualitas secara cepat, aman, dan terjangkau.</div>
           </div>
           <div>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#2563eb", marginBottom: 6 }}>MISI</div>
-            <div style={{ fontSize: 13, color: "#2d3748", lineHeight: 1.6 }}>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                <li style={{ marginBottom: 6 }}>Memudahkan akses masyarakat terhadap layanan jasa berkualitas di mana pun mereka berada</li>
-                <li style={{ marginBottom: 6 }}>Memberdayakan tenaga profesional lokal dengan memberikan platform yang adil dan transparan</li>
-                <li style={{ marginBottom: 6 }}>Menghadirkan pengalaman layanan yang aman, cepat, dan dapat diandalkan</li>
-                <li>Mendukung pertumbuhan ekonomi lokal Balikpapan melalui ekosistem layanan digital</li>
-              </ul>
-            </div>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "#2d3748", lineHeight: 1.7 }}>
+              <li style={{ marginBottom: 4 }}>Memudahkan akses masyarakat terhadap layanan jasa berkualitas di mana pun mereka berada</li>
+              <li style={{ marginBottom: 4 }}>Memberdayakan tenaga profesional lokal dengan platform yang adil dan transparan</li>
+              <li style={{ marginBottom: 4 }}>Menghadirkan pengalaman layanan yang aman, cepat, dan dapat diandalkan</li>
+              <li>Mendukung pertumbuhan ekonomi lokal Balikpapan melalui ekosistem layanan digital</li>
+            </ul>
           </div>
         </div>
 
-        {/* Perusahaan */}
+        {/* Teknologi yang Digunakan */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a", marginBottom: 14 }}>Teknologi yang Digunakan</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {TECH.map(t => (
+              <div key={t.name} style={{ background: "#f8faff", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{t.name}</div>
+                <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 2 }}>{t.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Terima Kasih */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#1a2a3a", marginBottom: 14 }}>Terima Kasih Kepada</div>
+          {[
+            "Semua mitra yang telah bergabung dengan Ride",
+            "Konsumen setia yang menggunakan layanan kami",
+            "Tim support yang selalu siap membantu",
+            "Komunitas open source yang menginspirasi",
+          ].map((item, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10, fontSize: 13, color: "#2d3748", lineHeight: 1.5 }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>✨</span>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Informasi Perusahaan */}
         <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a", marginBottom: 14, borderLeft: "3px solid #2563eb", paddingLeft: 10 }}>Informasi Perusahaan</div>
           {[
@@ -98,7 +269,7 @@ export default function TentangRide() {
         </div>
 
         {/* Kontak */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a", marginBottom: 14, borderLeft: "3px solid #2563eb", paddingLeft: 10 }}>Hubungi Kami</div>
           {[
             { icon: "📧", label: "Email", value: "support@rideindonesia.com" },
@@ -113,6 +284,14 @@ export default function TentangRide() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ textAlign: "center", padding: "16px 0", color: "#9aa5b4" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 4 }}>RIDE — Platform Layanan On-Demand</div>
+          <div style={{ fontSize: 11, marginBottom: 2 }}>© 2026 RIDE. All rights reserved.</div>
+          <div style={{ fontSize: 11, marginBottom: 2 }}>Made with ❤️ in Indonesia</div>
+          <div style={{ fontSize: 11 }}>Version 1.0.0</div>
         </div>
 
       </div>
