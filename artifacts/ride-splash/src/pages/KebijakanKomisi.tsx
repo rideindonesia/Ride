@@ -19,21 +19,22 @@ export default function KebijakanKomisi() {
           </p>
 
           <Section title="1. Apa itu Platform Fee?">
-            <p>Platform fee adalah biaya yang dipungut oleh RIDE atas setiap transaksi yang berhasil diselesaikan oleh mitra melalui platform. Platform fee merupakan kompensasi atas penyediaan teknologi, sistem pemesanan, dan layanan dukungan pelanggan yang disediakan RIDE.</p>
+            <p>Platform fee adalah biaya layanan & admin yang dipungut RIDE dari <strong>biaya panggilan</strong> per order yang berhasil diselesaikan. Fee ini merupakan kompensasi atas penyediaan teknologi, sistem pemesanan, dan dukungan pelanggan oleh RIDE.</p>
+            <p style={{ marginTop: 8 }}>Biaya jasa dan sparepart sepenuhnya menjadi hak mitra — RIDE hanya mengambil fee dari biaya panggilan saja.</p>
           </Section>
 
           <Section title="2. Besaran Platform Fee">
-            <p>Platform fee saat ini ditetapkan sebesar <strong>persentase tertentu dari biaya panggilan</strong> per order yang dapat dilihat di halaman beranda mitra Anda. Besaran fee ini dapat berubah sewaktu-waktu dengan pemberitahuan minimal 14 hari sebelumnya.</p>
+            <p>Platform fee ditetapkan sebesar <strong>15% dari biaya panggilan</strong> per order. Besaran ini dapat berubah dengan pemberitahuan minimal 14 hari sebelumnya.</p>
             <div style={{ background: "#f0faf8", borderRadius: 12, padding: 14, marginTop: 10, border: "1px solid #d1fae5" }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginBottom: 6 }}>Yang Dikenakan Fee:</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginBottom: 6 }}>Yang Dikenakan Fee (15%):</div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#065f46" }}>
-                <li>Biaya panggilan / biaya jasa yang dikenakan kepada pengguna</li>
+                <li>Biaya panggilan (biaya layanan & admin platform)</li>
               </ul>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginTop: 10, marginBottom: 6 }}>Yang TIDAK Dikenakan Fee:</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginTop: 10, marginBottom: 6 }}>Yang TIDAK Dikenakan Fee (100% milik mitra):</div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#065f46" }}>
+                <li>Biaya jasa / ongkos kerja mitra</li>
                 <li>Biaya sparepart / material tambahan</li>
                 <li>Biaya perjalanan (jika disepakati terpisah)</li>
-                <li>Biaya lain yang tidak termasuk biaya jasa</li>
               </ul>
             </div>
           </Section>
@@ -43,14 +44,18 @@ export default function KebijakanKomisi() {
             <div style={{ background: "#f8faff", borderRadius: 12, padding: 14, marginTop: 10, fontFamily: "monospace" }}>
               <div style={{ fontSize: 12, color: "#2563eb", marginBottom: 8 }}>Contoh Perhitungan:</div>
               <div style={{ fontSize: 12, color: "#1a2a3a", lineHeight: 2 }}>
-                Biaya jasa yang disepakati : Rp 100.000<br />
-                Platform fee (misal 15%)   : Rp 15.000<br />
+                Biaya panggilan               : Rp 50.000<br />
+                Platform fee 15%              : Rp 7.500<br />
                 <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 4, paddingTop: 4, fontWeight: 700 }}>
-                  Pendapatan bersih mitra    : Rp 85.000
+                  Pendapatan bersih mitra      : Rp 42.500
                 </div>
               </div>
             </div>
-            <p style={{ marginTop: 10, fontSize: 12, color: "#7a8a9a" }}>Catatan: Biaya sparepart Rp 50.000 tidak termasuk dalam perhitungan di atas dan langsung menjadi hak mitra sepenuhnya.</p>
+            <div style={{ background: "#f0faf8", borderRadius: 12, padding: 12, marginTop: 10, border: "1px solid #d1fae5", fontSize: 12, color: "#065f46" }}>
+              <strong>Biaya jasa & sparepart terpisah dan 100% milik mitra:</strong><br />
+              Biaya jasa mitra (misal)        : Rp 150.000 → 100% mitra<br />
+              Biaya sparepart (misal)         : Rp 80.000 → 100% mitra
+            </div>
           </Section>
 
           <Section title="4. Periode Tagihan Komisi">
