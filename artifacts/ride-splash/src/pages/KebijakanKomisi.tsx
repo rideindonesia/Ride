@@ -85,40 +85,43 @@ export default function KebijakanKomisi() {
             </div>
           </Section>
 
-          <Section title="6. Periode Tagihan Komisi">
+          <Section title="6. Alur Pembayaran">
+            <p>Mitra <strong>menerima pembayaran langsung dari pengguna</strong>. RIDE tidak menahan atau memproses uang pembayaran dari pengguna.</p>
+            <div style={{ background: "#f0faf8", borderRadius: 12, padding: 14, marginTop: 10, border: "1px solid #d1fae5" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginBottom: 8 }}>Alur Pembayaran per Order:</div>
+              <div style={{ fontSize: 12, color: "#065f46", lineHeight: 2 }}>
+                <div>① Pengguna membayar langsung ke mitra</div>
+                <div style={{ paddingLeft: 12, color: "#6b7280", fontSize: 11 }}>→ Biaya panggilan + biaya jasa + sparepart (jika ada)</div>
+                <div>② Mitra menyisihkan platform fee (15% dari biaya panggilan)</div>
+                <div style={{ paddingLeft: 12, color: "#6b7280", fontSize: 11 }}>→ Dibayarkan ke RIDE sesuai periode tagihan</div>
+                <div>③ Sisanya 100% milik mitra</div>
+                <div style={{ paddingLeft: 12, color: "#6b7280", fontSize: 11 }}>→ Biaya jasa + sparepart + 85% biaya panggilan</div>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="7. Periode & Pembayaran Platform Fee">
+            <SubTitle>7.1. Periode Tagihan</SubTitle>
             <ul>
-              <li>Platform fee dihitung per order yang berhasil diselesaikan</li>
-              <li>Tagihan komisi direkap setiap periode yang ditentukan (mingguan atau bulanan sesuai kebijakan berlaku)</li>
-              <li>Mitra dapat melihat rincian tagihan dan riwayat komisi di halaman beranda mitra</li>
-              <li>Komisi yang belum dilunasi akan ditampilkan sebagai tagihan aktif di aplikasi</li>
+              <li>Platform fee diakumulasi per order yang berhasil diselesaikan</li>
+              <li>Tagihan direkap setiap periode yang ditentukan (mingguan atau bulanan)</li>
+              <li>Mitra dapat melihat rincian tagihan di halaman riwayat transaksi</li>
+              <li>Tagihan yang belum dilunasi ditampilkan sebagai tagihan aktif di aplikasi</li>
+            </ul>
+            <SubTitle>7.2. Cara Pembayaran ke RIDE</SubTitle>
+            <ul>
+              <li>Pembayaran platform fee dilakukan oleh mitra ke RIDE via transfer bank atau metode lain yang ditentukan</li>
+              <li>Detail rekening dan metode pembayaran tersedia di halaman tagihan aplikasi</li>
+            </ul>
+            <SubTitle>7.3. Batas Waktu Pembayaran</SubTitle>
+            <ul>
+              <li>Platform fee harus dilunasi sesuai tanggal jatuh tempo di tagihan</li>
+              <li>Keterlambatan dapat mengakibatkan pembatasan sementara pada akun mitra</li>
+              <li>Tunggakan melebihi batas waktu yang ditentukan dapat mengakibatkan penonaktifan akun</li>
             </ul>
           </Section>
 
-          <Section title="7. Pembayaran Platform Fee">
-            <SubTitle>7.1. Cara Pembayaran</SubTitle>
-            <ul>
-              <li>Pembayaran platform fee dilakukan melalui mekanisme yang ditentukan oleh RIDE (transfer bank, pemotongan saldo, atau metode lain yang berlaku)</li>
-              <li>Detail metode pembayaran akan dikomunikasikan melalui aplikasi dan email</li>
-            </ul>
-            <SubTitle>7.2. Batas Waktu Pembayaran</SubTitle>
-            <ul>
-              <li>Platform fee harus dilunasi sesuai tanggal jatuh tempo yang tertera di tagihan</li>
-              <li>Keterlambatan pembayaran dapat mengakibatkan pembatasan sementara pada akun mitra</li>
-              <li>Akun mitra dengan tunggakan lebih dari batas waktu yang ditentukan dapat dinonaktifkan</li>
-            </ul>
-          </Section>
-
-          <Section title="8. Pencairan Saldo Mitra">
-            <ul>
-              <li>Saldo bersih mitra (setelah dikurangi platform fee) dapat dicairkan sesuai ketentuan pencairan yang berlaku</li>
-              <li>Mitra wajib mendaftarkan rekening bank aktif atas nama sendiri untuk pencairan</li>
-              <li>Minimum saldo untuk pencairan ditentukan sesuai kebijakan yang berlaku</li>
-              <li>Proses pencairan membutuhkan waktu 1–3 hari kerja</li>
-              <li>RIDE tidak bertanggung jawab atas keterlambatan transfer yang disebabkan oleh pihak bank</li>
-            </ul>
-          </Section>
-
-          <Section title="9. Program Mitra Unggulan">
+          <Section title="8. Program Mitra Unggulan">
             <p>Mitra dengan kinerja tinggi dapat mengajukan diri ke program Mitra Unggulan dengan keuntungan:</p>
             <ul>
               <li>Platform fee yang lebih rendah dari standar</li>
@@ -137,11 +140,11 @@ export default function KebijakanKomisi() {
             </div>
           </Section>
 
-          <Section title="10. Perubahan Kebijakan Komisi">
+          <Section title="9. Perubahan Kebijakan Komisi">
             <p>RIDE berhak mengubah besaran platform fee dan ketentuan komisi kapan saja. Perubahan akan diberitahukan melalui notifikasi aplikasi dan/atau email minimal <strong>14 hari</strong> sebelum berlaku. Penggunaan platform setelah perubahan berlaku dianggap sebagai persetujuan atas kebijakan baru.</p>
           </Section>
 
-          <Section title="11. Penyelesaian Sengketa Komisi">
+          <Section title="10. Penyelesaian Sengketa Komisi">
             <p>Jika Anda menemukan ketidaksesuaian dalam perhitungan komisi atau tagihan:</p>
             <ul>
               <li>Ajukan keberatan dalam 7 hari setelah tagihan diterbitkan</li>
@@ -150,7 +153,7 @@ export default function KebijakanKomisi() {
             </ul>
           </Section>
 
-          <Section title="12. Hubungi Kami">
+          <Section title="11. Hubungi Kami">
             <p>Pertanyaan terkait komisi dan pembayaran:</p>
             <ul>
               <li><strong>Email Mitra:</strong> mitra@rideindonesia.com</li>
