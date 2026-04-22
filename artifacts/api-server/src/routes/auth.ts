@@ -12,6 +12,14 @@ function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password + salt).digest("hex");
 }
 
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("0")) return "+62" + digits.slice(1);
+  if (digits.startsWith("62")) return "+" + digits;
+  if (digits.startsWith("8")) return "+62" + digits;
+  return "+" + digits;
+}
+
 router.post("/register", async (req, res) => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
@@ -47,7 +55,8 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  const { email: emailOrPhone, password, role } = parsed.data;
+  const { email: emailOrPhoneRaw, password, role } = parsed.data;
+  const emailOrPhone = emailOrPhoneRaw.includes("@") ? emailOrPhoneRaw : normalizePhone(emailOrPhoneRaw);
 
   const [user] = await db.select().from(usersTable).where(
     and(

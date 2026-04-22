@@ -9,6 +9,14 @@ import fs from "fs";
 import { io } from "../socket";
 import { sendPushToUsers } from "./push";
 
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("0")) return "+62" + digits.slice(1);
+  if (digits.startsWith("62")) return "+" + digits;
+  if (digits.startsWith("8")) return "+62" + digits;
+  return "+" + digits;
+}
+
 async function sendFonnteOtp(phone: string, otpCode: string): Promise<void> {
   const token = process.env.FONNTE_TOKEN;
   if (!token) { console.warn("FONNTE_TOKEN tidak tersedia, OTP tidak dikirim"); return; }
@@ -87,7 +95,8 @@ router.post("/register", async (req, res) => {
     return;
   }
 
-  const { name, phone, email, password, confirmPassword, agreeTerms } = parsed.data;
+  const { name, phone: rawPhone, email, password, confirmPassword, agreeTerms } = parsed.data;
+  const phone = normalizePhone(rawPhone);
 
   if (!agreeTerms) {
     res.status(400).json({ error: "Anda harus menyetujui syarat dan ketentuan" });
