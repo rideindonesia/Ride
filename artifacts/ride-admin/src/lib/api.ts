@@ -1,9 +1,24 @@
 const API = "/api";
+const ADMIN_TOKEN_KEY = "ride_admin_token";
+
+export function setAdminToken(token: string) {
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+export function clearAdminToken() {
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+export function getAdminToken(): string | null {
+  return localStorage.getItem(ADMIN_TOKEN_KEY);
+}
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const token = getAdminToken();
+  const headers: Record<string, string> = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (token) headers["X-Admin-Token"] = token;
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
+    headers,
     credentials: "include",
     body: body ? JSON.stringify(body) : undefined,
   });

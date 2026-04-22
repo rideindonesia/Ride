@@ -97700,9 +97700,41 @@ function hashPassword5(password) {
   if (!salt) throw new Error("SESSION_SECRET tidak ditemukan");
   return crypto6.createHash("sha256").update(password + salt).digest("hex");
 }
+function generateAdminToken(adminId) {
+  const secret = process.env.SESSION_SECRET;
+  const payload = `${adminId}:${Date.now()}`;
+  const hmac = crypto6.createHmac("sha256", secret).update(payload).digest("hex");
+  return Buffer.from(`${payload}:${hmac}`).toString("base64url");
+}
+function verifyAdminToken(token) {
+  try {
+    const secret = process.env.SESSION_SECRET;
+    const decoded = Buffer.from(token, "base64url").toString("utf8");
+    const lastColon = decoded.lastIndexOf(":");
+    if (lastColon === -1) return null;
+    const hmac = decoded.slice(lastColon + 1);
+    const payload = decoded.slice(0, lastColon);
+    const colonIdx = payload.indexOf(":");
+    if (colonIdx === -1) return null;
+    const adminId = payload.slice(0, colonIdx);
+    const ts = payload.slice(colonIdx + 1);
+    const expected = crypto6.createHmac("sha256", secret).update(payload).digest("hex");
+    if (hmac.length !== expected.length) return null;
+    let diff = 0;
+    for (let i = 0; i < hmac.length; i++) diff |= hmac.charCodeAt(i) ^ expected.charCodeAt(i);
+    if (diff !== 0) return null;
+    if (Date.now() - parseInt(ts) > 365 * 24 * 60 * 60 * 1e3) return null;
+    return parseInt(adminId);
+  } catch {
+    return null;
+  }
+}
 function getAdminId(req) {
   const s = req.session;
-  return s.adminId ? Number(s.adminId) : null;
+  if (s.adminId) return Number(s.adminId);
+  const token = req.headers["x-admin-token"];
+  if (token) return verifyAdminToken(token);
+  return null;
 }
 function requireAdmin(req, res, next) {
   if (!getAdminId(req)) {
@@ -97734,7 +97766,7 @@ router8.post("/login", async (req, res) => {
       res.status(500).json({ error: "Gagal menyimpan sesi" });
       return;
     }
-    res.json({ ok: true, admin: { id: user.id, name: user.name, email: user.email } });
+    res.json({ ok: true, admin: { id: user.id, name: user.name, email: user.email }, token: generateAdminToken(user.id) });
   });
 });
 router8.get("/me", requireAdmin, async (req, res) => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext } from "react";
-import { api } from "@/lib/api";
+import { api, setAdminToken, clearAdminToken, getAdminToken } from "@/lib/api";
 
 interface AdminUser { id: number; name: string; email: string }
 
@@ -28,17 +28,22 @@ export function useAdminState(): AdminCtx {
   useEffect(() => {
     api.get<AdminUser>("/admin/me")
       .then(u => setAdmin(u))
-      .catch(() => setAdmin(null))
+      .catch(() => {
+        clearAdminToken();
+        setAdmin(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await api.post<{ ok: boolean; admin: AdminUser }>("/admin/login", { email, password });
+    const res = await api.post<{ ok: boolean; admin: AdminUser; token?: string }>("/admin/login", { email, password });
+    if (res.token) setAdminToken(res.token);
     setAdmin(res.admin);
   };
 
   const logout = async () => {
     await api.post("/admin/logout", {});
+    clearAdminToken();
     setAdmin(null);
   };
 
