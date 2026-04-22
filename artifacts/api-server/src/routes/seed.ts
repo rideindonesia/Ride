@@ -48,7 +48,6 @@ router.post("/demo", async (_req, res) => {
         phone: u.phone,
         passwordHash: hashPassword(u.password),
         role: u.role,
-        walletBalance: u.role === "pengguna" ? 150000 : 0,
       }).returning({ id: usersTable.id });
       userId = inserted.id;
       results.push({ name: u.name, email: u.email, status: "dibuat" });
@@ -109,7 +108,6 @@ router.post("/demo", async (_req, res) => {
       passwordHash: hashPassword("admin1234"),
       role: "pengguna",
       isAdmin: true,
-      walletBalance: 0,
     });
     results.push({ name: "Admin RIDE", email: adminEmail, status: "dibuat" });
   } else {
