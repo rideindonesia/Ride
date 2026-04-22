@@ -12,7 +12,6 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: roleEnum("role").notNull(),
   profilePhotoPath: text("profile_photo_path"),
-  walletBalance: integer("wallet_balance").default(0).notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),
   isSuspended: boolean("is_suspended").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
