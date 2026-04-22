@@ -17,6 +17,4 @@ RUN mkdir -p artifacts/api-server/public && \
 
 EXPOSE 8080
 
-WORKDIR /app/artifacts/api-server
-
-CMD node --enable-source-maps ./dist/index.mjs
+CMD pnpm --filter @workspace/api-server run start
