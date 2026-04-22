@@ -247,15 +247,17 @@ export default function TentangRide() {
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a", marginBottom: 14, borderLeft: "3px solid #2563eb", paddingLeft: 10 }}>Visi & Misi</div>
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#2563eb", marginBottom: 6 }}>VISI</div>
-            <div style={{ fontSize: 13, color: "#2d3748", lineHeight: 1.6 }}>Menjadi platform jasa panggilan terpercaya dan terdepan di Kalimantan, yang menghubungkan masyarakat dengan tenaga profesional berkualitas secara cepat, aman, dan terjangkau.</div>
+            <div style={{ fontSize: 13, color: "#2d3748", lineHeight: 1.6 }}>
+              Menjadi platform penghubung jasa panggilan yang terpercaya di Kalimantan — menyambungkan masyarakat yang membutuhkan layanan dengan tenaga profesional lokal secara cepat, mudah, dan transparan.
+            </div>
           </div>
           <div>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#2563eb", marginBottom: 6 }}>MISI</div>
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "#2d3748", lineHeight: 1.7 }}>
-              <li style={{ marginBottom: 4 }}>Memudahkan akses masyarakat terhadap layanan jasa berkualitas di mana pun mereka berada</li>
-              <li style={{ marginBottom: 4 }}>Memberdayakan tenaga profesional lokal dengan platform yang adil dan transparan</li>
-              <li style={{ marginBottom: 4 }}>Menghadirkan pengalaman layanan yang aman, cepat, dan dapat diandalkan</li>
-              <li>Mendukung pertumbuhan ekonomi lokal Balikpapan melalui ekosistem layanan digital</li>
+              <li style={{ marginBottom: 4 }}>Menyediakan platform yang memudahkan pertemuan antara pengguna jasa dan mitra profesional</li>
+              <li style={{ marginBottom: 4 }}>Memastikan setiap transaksi berjalan aman, transparan, dan bisa diandalkan oleh kedua pihak</li>
+              <li style={{ marginBottom: 4 }}>Memberdayakan tenaga profesional lokal Balikpapan agar lebih mudah menjangkau pelanggan</li>
+              <li>Mendukung pertumbuhan ekonomi lokal melalui ekosistem layanan digital yang adil</li>
             </ul>
           </div>
         </div>
