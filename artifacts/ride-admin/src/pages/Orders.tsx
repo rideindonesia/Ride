@@ -48,7 +48,7 @@ interface OrderDetail extends OrderItem {
   rating: number | null;
   reviewComment: string | null;
   updatedAt: string;
-  pengguna: { id: number; name: string; email: string; phone: string | null; walletBalance: number } | null;
+  pengguna: { id: number; name: string; email: string; phone: string | null } | null;
   mitra: { id: number; name: string; email: string; phone: string | null; serviceType: string; operatingCity: string; mitraStatus: string } | null;
 }
 
@@ -63,7 +63,6 @@ const TRACKING_LABELS: Record<string, string> = {
 };
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  wallet: "RIDE Wallet",
   cash: "Tunai",
   transfer: "Transfer Bank",
 };
@@ -304,7 +303,6 @@ export default function Orders() {
                       <InfoRow label="Nama" value={detail?.pengguna?.name ?? selected.penggunaName} />
                       <InfoRow label="Email" value={detail?.pengguna?.email} />
                       <InfoRow label="No. HP" value={detail?.pengguna?.phone} />
-                      <InfoRow label="Saldo Wallet" value={detail?.pengguna?.walletBalance != null ? rupiahFormat(detail.pengguna.walletBalance) : "–"} />
                     </div>
                   </Section>
 
