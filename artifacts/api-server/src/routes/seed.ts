@@ -233,21 +233,23 @@ router.post("/incoming", async (_req, res) => {
   res.json({ message: "Incoming order berhasil dibuat", orderNo });
 });
 
-// POST /api/seed/admin — buat akun admin default
+// POST /api/seed/admin — buat atau reset akun admin default
 router.post("/admin", async (_req, res) => {
   const email = "admin@ride.app";
   const password = "admin1234";
   const salt = process.env.SESSION_SECRET;
   if (!salt) { res.status(500).json({ error: "SESSION_SECRET tidak ditemukan" }); return; }
 
+  const { createHash } = await import("crypto");
+  const passwordHash = createHash("sha256").update(password + salt).digest("hex");
+
   const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
   if (existing.length > 0) {
-    res.json({ message: "Admin sudah ada", email, password: "(sudah diatur)" });
+    await db.update(usersTable).set({ passwordHash, isAdmin: true }).where(eq(usersTable.email, email));
+    res.json({ message: "Password admin direset", email, password });
     return;
   }
 
-  const { createHash } = await import("crypto");
-  const passwordHash = createHash("sha256").update(password + salt).digest("hex");
   const [user] = await db.insert(usersTable).values({
     name: "Super Admin", email, passwordHash, role: "pengguna", isAdmin: true,
   }).returning({ id: usersTable.id, name: usersTable.name, email: usersTable.email });
