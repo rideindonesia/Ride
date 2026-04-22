@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 interface PenggunaItem {
   id: number; name: string; email: string; phone: string;
-  isSuspended: boolean; walletBalance: number; createdAt: string; totalOrders: number;
+  isSuspended: boolean; createdAt: string; totalOrders: number;
 }
 
 export default function Pengguna() {
@@ -61,7 +61,7 @@ export default function Pengguna() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {["Nama & Email", "Telepon", "Status", "Saldo Wallet", "Total Order", "Terdaftar", "Aksi"].map(h => (
+                {["Nama & Email", "Telepon", "Status", "Total Order", "Terdaftar", "Aksi"].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -79,7 +79,6 @@ export default function Pengguna() {
                       {u.isSuspended ? "Disuspend" : "Aktif"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{rupiahFormat(u.walletBalance ?? 0)}</td>
                   <td className="px-4 py-3 text-gray-600">{u.totalOrders}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{formatDate(u.createdAt)}</td>
                   <td className="px-4 py-3">
@@ -120,7 +119,6 @@ export default function Pengguna() {
                 {[
                   ["Telepon", selected.phone || "-"],
                   ["Status", selected.isSuspended ? "Disuspend" : "Aktif"],
-                  ["Saldo Wallet", rupiahFormat(selected.walletBalance ?? 0)],
                   ["Total Order", String(selected.totalOrders)],
                   ["Terdaftar", formatDate(selected.createdAt)],
                 ].map(([k, v]) => (
