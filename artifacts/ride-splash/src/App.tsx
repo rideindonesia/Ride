@@ -18,6 +18,8 @@ import KebijakanPrivasiPengguna from "@/pages/KebijakanPrivasiPengguna";
 import KebijakanPrivasiMitra from "@/pages/KebijakanPrivasiMitra";
 import SyaratKetentuanPengguna from "@/pages/SyaratKetentuanPengguna";
 import SyaratKetentuanMitra from "@/pages/SyaratKetentuanMitra";
+import TentangRide from "@/pages/TentangRide";
+import KebijakanKomisi from "@/pages/KebijakanKomisi";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +58,8 @@ function Router() {
       <Route path="/kebijakan-privasi-mitra" component={KebijakanPrivasiMitra} />
       <Route path="/syarat-ketentuan" component={SyaratKetentuanPengguna} />
       <Route path="/syarat-ketentuan-mitra" component={SyaratKetentuanMitra} />
+      <Route path="/tentang-ride" component={TentangRide} />
+      <Route path="/kebijakan-komisi" component={KebijakanKomisi} />
     </Switch>
   );
 }

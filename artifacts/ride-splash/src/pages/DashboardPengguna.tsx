@@ -2138,6 +2138,9 @@ export default function DashboardPengguna() {
                       <div style={{ fontSize: 11, color: "#b0bec5", marginTop: 2 }}>Versi 1.0.0 · Build 2026</div>
                     </div>
                     <div style={{ fontSize: 12, color: "#7a8a9a", lineHeight: 1.6, marginTop: 6 }}>RIDE menghubungkan pengguna dengan mitra jasa profesional di bidang bengkel, elektronik, cuci kendaraan, barber, inspeksi, dan towing. Layanan panggilan ke lokasi Anda, cepat dan terpercaya.</div>
+                    <button onClick={() => navigate("/tentang-ride")} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: "#2563eb", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                      Selengkapnya tentang RIDE →
+                    </button>
                   </div>
                 )}
                 {openAkunSection === "syarat" && item.id === "syarat" && (
