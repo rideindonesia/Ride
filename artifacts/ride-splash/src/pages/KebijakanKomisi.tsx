@@ -23,12 +23,39 @@ export default function KebijakanKomisi() {
             <p style={{ marginTop: 8 }}>Biaya jasa dan sparepart sepenuhnya menjadi hak mitra — RIDE hanya mengambil fee dari biaya panggilan saja.</p>
           </Section>
 
-          <Section title="2. Besaran Platform Fee">
+          <Section title="2. Biaya Layanan & Admin (Biaya Panggilan)">
+            <p>Biaya layanan & admin (biaya panggilan) adalah biaya yang <strong>ditetapkan oleh RIDE</strong> dan dikenakan kepada pengguna saat melakukan pemesanan. Biaya ini bukan bagian dari ongkos kerja mitra.</p>
+            <div style={{ background: "#f0faf8", borderRadius: 12, padding: 14, marginTop: 10, border: "1px solid #d1fae5" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginBottom: 8 }}>Yang perlu diketahui mitra:</div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#065f46" }}>
+                <li style={{ marginBottom: 4 }}>Biaya panggilan ditetapkan dan ditampilkan oleh RIDE kepada pengguna</li>
+                <li style={{ marginBottom: 4 }}>Mitra <strong>tidak perlu mengurus</strong> biaya panggilan — sudah dikelola otomatis oleh sistem</li>
+                <li style={{ marginBottom: 4 }}>Platform fee 15% dihitung dari biaya panggilan ini secara otomatis</li>
+                <li>Mitra dapat melihat rincian biaya panggilan per order di halaman riwayat transaksi</li>
+              </ul>
+            </div>
+          </Section>
+
+          <Section title="3. Biaya Jasa & Sparepart (Ditetapkan Mitra)">
+            <p>Berbeda dengan biaya panggilan, <strong>biaya jasa dan sparepart ditetapkan sepenuhnya oleh mitra</strong> dan tidak melewati sistem RIDE. RIDE tidak mengatur, tidak menerima, dan tidak memberitahu pengguna mengenai besaran biaya ini — itu adalah urusan langsung antara mitra dan pengguna.</p>
+            <div style={{ background: "#f0faf8", borderRadius: 12, padding: 14, marginTop: 10, border: "1px solid #d1fae5" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginBottom: 8 }}>Kewajiban Mitra:</div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#065f46" }}>
+                <li style={{ marginBottom: 4 }}>Wajib memberitahu pengguna estimasi biaya jasa sebelum pekerjaan dimulai</li>
+                <li style={{ marginBottom: 4 }}>Wajib memberitahu biaya sparepart (jika ada) sebelum pemasangan</li>
+                <li style={{ marginBottom: 4 }}>Tidak boleh menambahkan biaya di luar yang sudah disepakati tanpa persetujuan pengguna</li>
+                <li>Seluruh biaya jasa dan sparepart dibayarkan langsung oleh pengguna kepada mitra</li>
+              </ul>
+            </div>
+            <p style={{ marginTop: 10, fontSize: 12, color: "#7a8a9a" }}>Biaya jasa dan sparepart <strong>100% menjadi hak mitra</strong> dan tidak dipotong oleh RIDE.</p>
+          </Section>
+
+          <Section title="4. Besaran Platform Fee">
             <p>Platform fee ditetapkan sebesar <strong>15% dari biaya panggilan</strong> per order. Besaran ini dapat berubah dengan pemberitahuan minimal 14 hari sebelumnya.</p>
             <div style={{ background: "#f0faf8", borderRadius: 12, padding: 14, marginTop: 10, border: "1px solid #d1fae5" }}>
               <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginBottom: 6 }}>Yang Dikenakan Fee (15%):</div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#065f46" }}>
-                <li>Biaya panggilan (biaya layanan & admin platform)</li>
+                <li>Biaya panggilan (biaya layanan & admin platform yang ditetapkan RIDE)</li>
               </ul>
               <div style={{ fontSize: 12, fontWeight: 800, color: "#065f46", marginTop: 10, marginBottom: 6 }}>Yang TIDAK Dikenakan Fee (100% milik mitra):</div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#065f46" }}>
@@ -39,26 +66,26 @@ export default function KebijakanKomisi() {
             </div>
           </Section>
 
-          <Section title="3. Cara Penghitungan">
+          <Section title="5. Cara Penghitungan">
             <p>Penghitungan platform fee dilakukan secara otomatis oleh sistem saat order dinyatakan selesai:</p>
             <div style={{ background: "#f8faff", borderRadius: 12, padding: 14, marginTop: 10, fontFamily: "monospace" }}>
               <div style={{ fontSize: 12, color: "#2563eb", marginBottom: 8 }}>Contoh Perhitungan:</div>
               <div style={{ fontSize: 12, color: "#1a2a3a", lineHeight: 2 }}>
-                Biaya panggilan               : Rp 50.000<br />
-                Platform fee 15%              : Rp 7.500<br />
+                Biaya panggilan (ditetapkan RIDE) : Rp 50.000<br />
+                Platform fee 15%                  : Rp 7.500<br />
                 <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 4, paddingTop: 4, fontWeight: 700 }}>
-                  Pendapatan bersih mitra      : Rp 42.500
+                  Pendapatan mitra dari panggilan   : Rp 42.500
                 </div>
               </div>
             </div>
             <div style={{ background: "#f0faf8", borderRadius: 12, padding: 12, marginTop: 10, border: "1px solid #d1fae5", fontSize: 12, color: "#065f46" }}>
-              <strong>Biaya jasa & sparepart terpisah dan 100% milik mitra:</strong><br />
-              Biaya jasa mitra (misal)        : Rp 150.000 → 100% mitra<br />
-              Biaya sparepart (misal)         : Rp 80.000 → 100% mitra
+              <strong>Biaya jasa & sparepart terpisah, langsung dari pengguna ke mitra:</strong><br />
+              Biaya jasa mitra (ditetapkan mitra) : Rp 150.000 → 100% mitra<br />
+              Biaya sparepart (ditetapkan mitra)  : Rp 80.000 → 100% mitra
             </div>
           </Section>
 
-          <Section title="4. Periode Tagihan Komisi">
+          <Section title="6. Periode Tagihan Komisi">
             <ul>
               <li>Platform fee dihitung per order yang berhasil diselesaikan</li>
               <li>Tagihan komisi direkap setiap periode yang ditentukan (mingguan atau bulanan sesuai kebijakan berlaku)</li>
@@ -67,13 +94,13 @@ export default function KebijakanKomisi() {
             </ul>
           </Section>
 
-          <Section title="5. Pembayaran Platform Fee">
-            <SubTitle>5.1. Cara Pembayaran</SubTitle>
+          <Section title="7. Pembayaran Platform Fee">
+            <SubTitle>7.1. Cara Pembayaran</SubTitle>
             <ul>
               <li>Pembayaran platform fee dilakukan melalui mekanisme yang ditentukan oleh RIDE (transfer bank, pemotongan saldo, atau metode lain yang berlaku)</li>
               <li>Detail metode pembayaran akan dikomunikasikan melalui aplikasi dan email</li>
             </ul>
-            <SubTitle>5.2. Batas Waktu Pembayaran</SubTitle>
+            <SubTitle>7.2. Batas Waktu Pembayaran</SubTitle>
             <ul>
               <li>Platform fee harus dilunasi sesuai tanggal jatuh tempo yang tertera di tagihan</li>
               <li>Keterlambatan pembayaran dapat mengakibatkan pembatasan sementara pada akun mitra</li>
@@ -81,7 +108,7 @@ export default function KebijakanKomisi() {
             </ul>
           </Section>
 
-          <Section title="6. Pencairan Saldo Mitra">
+          <Section title="8. Pencairan Saldo Mitra">
             <ul>
               <li>Saldo bersih mitra (setelah dikurangi platform fee) dapat dicairkan sesuai ketentuan pencairan yang berlaku</li>
               <li>Mitra wajib mendaftarkan rekening bank aktif atas nama sendiri untuk pencairan</li>
@@ -91,7 +118,7 @@ export default function KebijakanKomisi() {
             </ul>
           </Section>
 
-          <Section title="7. Program Mitra Unggulan">
+          <Section title="9. Program Mitra Unggulan">
             <p>Mitra dengan kinerja tinggi dapat mengajukan diri ke program Mitra Unggulan dengan keuntungan:</p>
             <ul>
               <li>Platform fee yang lebih rendah dari standar</li>
@@ -110,11 +137,11 @@ export default function KebijakanKomisi() {
             </div>
           </Section>
 
-          <Section title="8. Perubahan Kebijakan Komisi">
+          <Section title="10. Perubahan Kebijakan Komisi">
             <p>RIDE berhak mengubah besaran platform fee dan ketentuan komisi kapan saja. Perubahan akan diberitahukan melalui notifikasi aplikasi dan/atau email minimal <strong>14 hari</strong> sebelum berlaku. Penggunaan platform setelah perubahan berlaku dianggap sebagai persetujuan atas kebijakan baru.</p>
           </Section>
 
-          <Section title="9. Penyelesaian Sengketa Komisi">
+          <Section title="11. Penyelesaian Sengketa Komisi">
             <p>Jika Anda menemukan ketidaksesuaian dalam perhitungan komisi atau tagihan:</p>
             <ul>
               <li>Ajukan keberatan dalam 7 hari setelah tagihan diterbitkan</li>
@@ -123,7 +150,7 @@ export default function KebijakanKomisi() {
             </ul>
           </Section>
 
-          <Section title="10. Hubungi Kami">
+          <Section title="12. Hubungi Kami">
             <p>Pertanyaan terkait komisi dan pembayaran:</p>
             <ul>
               <li><strong>Email Mitra:</strong> mitra@rideindonesia.com</li>
