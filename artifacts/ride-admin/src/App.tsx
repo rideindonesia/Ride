@@ -1,6 +1,6 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AdminContext, useAdminState } from "@/hooks/useAdmin";
+import { AdminContext, useAdmin, useAdminState } from "@/hooks/useAdmin";
 import { Layout } from "@/components/Layout";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -18,7 +18,7 @@ const queryClient = new QueryClient({
 });
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { admin, loading } = useAdminState();
+  const { admin, loading } = useAdmin();
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="animate-spin w-8 h-8 border-2 border-[#1a7a6a] border-t-transparent rounded-full" />
