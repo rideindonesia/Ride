@@ -42,7 +42,7 @@ app.use(cookieParser(process.env.SESSION_SECRET));
 app.use(
   session({
     store: new PgSession({
-      conString: process.env.DATABASE_URL,
+      conString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL,
       tableName: "session",
       createTableIfMissing: true,
     }),

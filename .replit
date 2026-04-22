@@ -85,3 +85,8 @@ externalPort = 9000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+NEON_DATABASE_URL = "postgresql://neondb_owner:npg_KC3MxyXAUju1@ep-nameless-paper-aoix060e.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
