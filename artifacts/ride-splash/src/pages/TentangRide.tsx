@@ -71,6 +71,23 @@ const TECH = [
 
 export default function TentangRide() {
   const [activeCard, setActiveCard] = useState(0);
+  const [caraKerjaTab, setCaraKerjaTab] = useState<"pengguna" | "mitra">("pengguna");
+
+  const caraKerjaPengguna = [
+    { no: "1", title: "Pilih Layanan", desc: "Pilih jenis layanan yang Anda butuhkan dari 6 kategori yang tersedia." },
+    { no: "2", title: "Konfirmasi Lokasi", desc: "Pastikan lokasi Anda akurat agar mitra bisa menemukan Anda dengan mudah." },
+    { no: "3", title: "Mitra Datang ke Lokasi", desc: "Mitra terdekat yang tersedia akan menerima dan datang ke lokasi Anda." },
+    { no: "4", title: "Layanan Selesai & Bayar", desc: "Setelah layanan selesai, lakukan pembayaran sesuai biaya yang disepakati." },
+    { no: "5", title: "Beri Ulasan", desc: "Bantu mitra dan pengguna lain dengan memberikan rating dan ulasan jujur." },
+  ];
+
+  const caraKerjaMitra = [
+    { no: "1", title: "Daftar & Verifikasi", desc: "Daftar sebagai mitra, lengkapi profil, dan verifikasi dokumen KTP untuk mulai menerima order." },
+    { no: "2", title: "Aktifkan Status Online", desc: "Hidupkan status online agar sistem bisa mengirimkan order baru yang masuk di sekitar lokasi Anda." },
+    { no: "3", title: "Terima & Konfirmasi Order", desc: "Terima notifikasi order dari pengguna, konfirmasi dan segera berangkat ke lokasi pelanggan." },
+    { no: "4", title: "Kerjakan Layanan", desc: "Lakukan pekerjaan sesuai permintaan pelanggan secara profesional dan tepat waktu." },
+    { no: "5", title: "Selesaikan & Dapatkan Penghasilan", desc: "Setelah pelanggan mengkonfirmasi selesai, saldo otomatis masuk ke dompet Anda." },
+  ];
 
   return (
     <div style={{ minHeight: "100vh", background: "#f4f7fb", fontFamily: "'Inter', sans-serif", overflowY: "auto" }}>
@@ -188,15 +205,35 @@ export default function TentangRide() {
         {/* Cara Kerja */}
         <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1a2a3a", marginBottom: 14, borderLeft: "3px solid #2563eb", paddingLeft: 10 }}>Cara Kerja RIDE</div>
-          {[
-            { no: "1", title: "Pilih Layanan", desc: "Pilih jenis layanan yang Anda butuhkan dari 6 kategori yang tersedia." },
-            { no: "2", title: "Konfirmasi Lokasi", desc: "Pastikan lokasi Anda akurat agar mitra bisa menemukan Anda dengan mudah." },
-            { no: "3", title: "Mitra Datang ke Lokasi", desc: "Mitra terdekat yang tersedia akan menerima dan datang ke lokasi Anda." },
-            { no: "4", title: "Layanan Selesai & Bayar", desc: "Setelah layanan selesai, lakukan pembayaran sesuai biaya yang disepakati." },
-            { no: "5", title: "Beri Ulasan", desc: "Bantu mitra dan pengguna lain dengan memberikan rating dan ulasan jujur." },
-          ].map(s => (
+
+          {/* Tab Toggle */}
+          <div style={{ display: "flex", background: "#f4f7fb", borderRadius: 10, padding: 4, marginBottom: 16, gap: 4 }}>
+            {(["pengguna", "mitra"] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setCaraKerjaTab(tab)}
+                style={{
+                  flex: 1, padding: "8px 0", borderRadius: 8, border: "none", cursor: "pointer",
+                  fontSize: 12, fontWeight: 700,
+                  background: caraKerjaTab === tab ? "#fff" : "transparent",
+                  color: caraKerjaTab === tab ? "#2563eb" : "#9aa5b4",
+                  boxShadow: caraKerjaTab === tab ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
+                  transition: "all 0.2s",
+                }}
+              >
+                {tab === "pengguna" ? "👤 Sebagai Pengguna" : "🔧 Sebagai Mitra"}
+              </button>
+            ))}
+          </div>
+
+          {(caraKerjaTab === "pengguna" ? caraKerjaPengguna : caraKerjaMitra).map(s => (
             <div key={s.no} style={{ display: "flex", gap: 14, marginBottom: 16, alignItems: "flex-start" }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, flexShrink: 0 }}>{s.no}</div>
+              <div style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: caraKerjaTab === "pengguna" ? "#2563eb" : "#0ea56a",
+                color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 14, fontWeight: 800, flexShrink: 0,
+              }}>{s.no}</div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a" }}>{s.title}</div>
                 <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 3, lineHeight: 1.5 }}>{s.desc}</div>
