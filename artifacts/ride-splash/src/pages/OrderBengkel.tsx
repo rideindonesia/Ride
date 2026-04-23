@@ -914,6 +914,7 @@ export default function OrderBengkel() {
                             const isMine = m.senderRole === "pengguna";
                             return (
                               <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", gap: 2 }}>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: "#7a8a9a" }}>{isMine ? "Anda" : acceptedMitra?.name ?? "Mitra"}</span>
                                 <div style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: isMine ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMine ? "#1a7a6a" : "#eef1f5", color: isMine ? "#fff" : "#1a2a3a", fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                                   {m.message}
                                 </div>
@@ -1091,6 +1092,7 @@ export default function OrderBengkel() {
                       const isMine = m.senderRole === "pengguna";
                       return (
                         <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", gap: 2 }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: "#7a8a9a" }}>{isMine ? "Anda" : acceptedMitra?.name ?? "Mitra"}</span>
                           <div style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: isMine ? "12px 4px 12px 12px" : "4px 12px 12px 12px", background: isMine ? "#1a7a6a" : "#eef1f5", color: isMine ? "#fff" : "#1a2a3a", fontSize: 13, lineHeight: 1.45, whiteSpace: "pre-wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                             {m.message}
                           </div>
