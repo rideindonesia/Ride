@@ -1,7 +1,7 @@
 // v2 — fix: fetchIncoming clears card when order cancelled
 import { Router } from "express";
-import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, vouchersTable, reportsTable } from "@workspace/db";
-import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt, inArray, SQL } from "drizzle-orm";
+import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, vouchersTable, reportsTable, chatMessagesTable } from "@workspace/db";
+import { eq, and, gt, sql, avg, count, or, desc, asc, aliasedTable, isNull, lt, inArray, SQL } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import multer from "multer";
@@ -1015,6 +1015,35 @@ router.get("/tarif", async (req, res) => {
   const cfg: Record<string, string> = {};
   rows.forEach(r => { cfg[r.key] = r.value; });
   res.json({ tarif: cfg });
+});
+
+// POST /api/pengguna/chat/:orderId — send chat as PENGGUNA (session-enforced, no ambiguity)
+router.post("/chat/:orderId", async (req, res) => {
+  const penggunaId = getPenggunaId(req);
+  if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
+
+  const orderId = parseInt(req.params.orderId);
+  const { message } = req.body;
+  if (isNaN(orderId) || !message?.trim()) { res.status(400).json({ error: "Data tidak valid" }); return; }
+
+  const [order] = await db.select({ penggunaId: ordersTable.penggunaId, mitraId: ordersTable.mitraId })
+    .from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+  if (!order || order.penggunaId !== penggunaId) { res.status(403).json({ error: "Akses ditolak" }); return; }
+
+  const [msg] = await db.insert(chatMessagesTable).values({
+    orderId, senderId: penggunaId, senderRole: "pengguna", message: message.trim(),
+  }).returning({ id: chatMessagesTable.id, createdAt: chatMessagesTable.createdAt });
+
+  try {
+    io?.to(`order:${orderId}`).emit("chat:message", {
+      id: msg.id, orderId, senderId: penggunaId, senderRole: "pengguna",
+      message: message.trim(), createdAt: msg.createdAt,
+    });
+    if (order.mitraId) {
+      sendPushToUsers([order.mitraId], { title: "💬 Pesan dari Konsumen", body: message.trim().slice(0, 80), url: "/" });
+    }
+  } catch {}
+  res.json({ ok: true, messageId: msg.id, senderRole: "pengguna" });
 });
 
 export default router;
