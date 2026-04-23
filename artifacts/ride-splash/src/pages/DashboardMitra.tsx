@@ -87,6 +87,7 @@ interface IncomingOrder {
   vehicleModel: string; vehicleYear: string; damageCategories: string[];
   description: string | null;
   pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
+  destLat?: number | null; destLng?: number | null; destAddress?: string | null;
   totalAmount: number; platformFee: number;
   penggunaName: string; penggunaProfilePhoto?: string | null; penggunaPhotoPath?: string | null; createdAt: string;
 }
@@ -125,6 +126,14 @@ const SERVICE_CONFIG: Record<string, {
 
 function getSvcCfg(serviceType?: string | null) {
   return SERVICE_CONFIG[serviceType ?? "bengkel"] ?? SERVICE_CONFIG["bengkel"];
+}
+
+function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function playOrderBeep() {
@@ -1626,6 +1635,18 @@ export default function DashboardMitra() {
                 <span style={{ fontSize: 13 }}>📍</span>
                 <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.pickupAddress ?? "-"}</span>
               </div>
+              {incoming.serviceType === "towing" && incoming.destLat && incoming.destLng && incoming.pickupLat && incoming.pickupLng && (
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#f5f0ff", borderRadius: 10, marginBottom: 8, border: "1px solid rgba(124,58,237,0.15)" }}>
+                  <span style={{ fontSize: 13 }}>🏁</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: "#7a8a9a", fontWeight: 600, marginBottom: 1 }}>Tujuan Derek</div>
+                    <div style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.destAddress || "—"}</div>
+                    <div style={{ fontSize: 11, color: "#7c3aed", fontWeight: 800, marginTop: 3 }}>
+                      📏 Jarak derek ≈ {(Math.round(haversineDist(incoming.pickupLat, incoming.pickupLng, incoming.destLat, incoming.destLng) * 10) / 10)} km
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* Foto dari pengguna */}
               {incoming.penggunaPhotoPath && (
                 <div style={{ marginBottom: 8 }}>
