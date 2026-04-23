@@ -699,11 +699,11 @@ export default function DashboardMitra() {
     setChatInput("");
     setChatSending(true);
     try {
-      const r = await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
+      const r = await fetch(`${BASE}/api/mitra/chat/${activeOrder.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ message: msg, role: "mitra" }),
+        body: JSON.stringify({ message: msg }),
       });
       if (r.status === 401) {
         alert("Sesi Anda telah habis. Silakan login ulang.");
@@ -1419,9 +1419,9 @@ export default function DashboardMitra() {
                       // Kirim juga notifikasi via chat
                       const spareLine = svcCfg.showSparepart && spare > 0 ? `\n• ${svcCfg.sparepartLabel}: ${fmtIdr(spare)}` : "";
                       const msg = `📋 Rincian Biaya:\n• ${svcCfg.jasaLabel}: ${fmtIdr(jasa)}${spareLine}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
-                      await fetch(`${BASE}/api/chat/${activeOrder.id}`, {
+                      await fetch(`${BASE}/api/mitra/chat/${activeOrder.id}`, {
                         method: "POST", headers: { "Content-Type": "application/json" },
-                        credentials: "include", body: JSON.stringify({ message: msg, role: "mitra" }),
+                        credentials: "include", body: JSON.stringify({ message: msg }),
                       });
                       setRincianSent(true);
                       pushNotif({ type: "chat", icon: "📋", title: "Rincian Terkirim", body: "Rincian biaya sudah dikirim ke konsumen." });
