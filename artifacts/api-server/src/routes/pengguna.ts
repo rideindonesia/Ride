@@ -333,7 +333,7 @@ router.post("/orders", (req, res, next) => {
 
   // Notify only available (online + no active order) mitra of this service type
   try {
-    const [pengguna] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+    const [pengguna] = await db.select({ name: usersTable.name, profilePhotoPath: usersTable.profilePhotoPath }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
 
     // Get all online mitra for this service type
     const onlineMitra = await db.select({ userId: mitraLocationsTable.userId })
@@ -364,6 +364,7 @@ router.post("/orders", (req, res, next) => {
       pickupLat: typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null),
       pickupLng: typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null),
       penggunaName: pengguna?.name ?? "",
+      penggunaProfilePhoto: pengguna?.profilePhotoPath ?? null,
       penggunaPhotoPath,
       totalAmount: 0,
       platformFee: 0,
