@@ -16,11 +16,10 @@ const router = Router();
 function getAllUserIds(req: any): Set<number> {
   const ids = new Set<number>();
 
-  const sessionUid = (req.session as any)?.userId;
-  if (sessionUid) {
-    const n = Number(sessionUid);
-    if (!isNaN(n) && n > 0) ids.add(n);
-  }
+  const pId = (req.session as any)?.penggunaId;
+  if (pId) { const n = Number(pId); if (!isNaN(n) && n > 0) ids.add(n); }
+  const mId = (req.session as any)?.mitraId;
+  if (mId) { const n = Number(mId); if (!isNaN(n) && n > 0) ids.add(n); }
 
   const pUid = req.signedCookies?.["ride-p-uid"];
   if (pUid && pUid !== false) {
@@ -89,29 +88,18 @@ router.post("/:orderId", requireAuth, async (req, res) => {
     res.status(403).json({ error: "Akses ditolak" }); return;
   }
 
-  // Determine senderRole: prefer session, fall back to signed cookies.
-  const sessionUserId = Number((req.session as Record<string, unknown>).userId ?? 0) || undefined;
-  const sessionRole   = (req.session as Record<string, unknown>).userRole as string | undefined;
-
-  const pCookieId = req.signedCookies?.["ride-p-uid"] ? parseInt(req.signedCookies["ride-p-uid"]) : undefined;
-  const mCookieId = req.signedCookies?.["ride-m-uid"] ? parseInt(req.signedCookies["ride-m-uid"]) : undefined;
+  // Determine senderRole from session role-specific keys
+  const sessionPenggunaId = (req.session as any)?.penggunaId as number | undefined;
+  const sessionMitraId    = (req.session as any)?.mitraId    as number | undefined;
 
   let senderId: number;
   let senderRole: "pengguna" | "mitra";
 
-  if (sessionRole === "mitra" && sessionUserId && Number(sessionUserId) === Number(order.mitraId)) {
-    senderId   = sessionUserId;
+  if (sessionMitraId && Number(sessionMitraId) === Number(order.mitraId)) {
+    senderId   = sessionMitraId;
     senderRole = "mitra";
-  } else if (sessionRole === "pengguna" && sessionUserId && Number(sessionUserId) === Number(order.penggunaId)) {
-    senderId   = sessionUserId;
-    senderRole = "pengguna";
-  } else if (mCookieId && Number(mCookieId) === Number(order.mitraId)) {
-    // Fallback: signed cookie identifies this device as the mitra for this order
-    senderId   = mCookieId;
-    senderRole = "mitra";
-  } else if (pCookieId && Number(pCookieId) === Number(order.penggunaId)) {
-    // Fallback: signed cookie identifies this device as the pengguna for this order
-    senderId   = pCookieId;
+  } else if (sessionPenggunaId && Number(sessionPenggunaId) === Number(order.penggunaId)) {
+    senderId   = sessionPenggunaId;
     senderRole = "pengguna";
   } else {
     res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
