@@ -114,6 +114,7 @@ export default function OrderTowing() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [foto, setFoto] = useState<File | null>(null);
   const [mitraRejectedCount, setMitraRejectedCount] = useState(0);
+  const [searchElapsed, setSearchElapsed] = useState(0);
   const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
@@ -268,6 +269,13 @@ export default function OrderTowing() {
       setOrderId(d.orderId); setOrderNo(d.orderNo); setOrderStatus("pending");
     }).catch(() => setCreateError("Koneksi gagal. Coba lagi."));
   }, [step, orderId]);
+
+  // Timer elapsed saat mencari mitra
+  useEffect(() => {
+    if (orderStatus !== "pending") { setSearchElapsed(0); return; }
+    const t = setInterval(() => setSearchElapsed(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [orderStatus]);
 
   // Poll order status + socket
   useEffect(() => {
@@ -686,6 +694,7 @@ export default function OrderTowing() {
                     <div className="search-spinner" />
                   </div>
                   <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 12, color: "#64748b", background: "#f1f5f9", borderRadius: 20, padding: "4px 16px", fontWeight: 700, fontVariantNumeric: "tabular-nums", letterSpacing: 0.5, marginBottom: 6 }}>⏱ {String(Math.floor(searchElapsed / 60)).padStart(2, "0")}:{String(searchElapsed % 60).padStart(2, "0")}</div>
                     <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Driver Derek Terdekat...</div>
                     <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Menghubungi driver di sekitar lokasi Anda. Harap tunggu.</div>
                   </div>
