@@ -598,7 +598,7 @@ export default function OrderBengkel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, role: "pengguna" }),
       });
       if (r.status === 401) {
         alert("Sesi Anda telah habis. Silakan login ulang.");
