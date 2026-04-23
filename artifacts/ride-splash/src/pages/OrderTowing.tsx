@@ -98,8 +98,13 @@ export default function OrderTowing() {
   const [detailAlamat, setDetailAlamat] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [tujuanDerek, setTujuanDerek] = useState("");
+  const [destLat, setDestLat] = useState<number | null>(null);
+  const [destLng, setDestLng] = useState<number | null>(null);
+  const [destAutoAddress, setDestAutoAddress] = useState("");
+  const [isDestGeocoding, setIsDestGeocoding] = useState(false);
+  const [showDestMap, setShowDestMap] = useState(false);
 
-  const canNext2 = (pinLat !== null || userLat !== null) && tujuanDerek.trim() !== "";
+  const canNext2 = (pinLat !== null || userLat !== null) && (tujuanDerek.trim() !== "" || destLat !== null);
 
   // ── Step 3 ──
   type AcceptedMitra = { id: number; name: string; lat: number; lng: number; serviceType: string; rating: number | null; totalOrders: number; dist: number; callFee: number; etaMin: number; };
@@ -124,6 +129,8 @@ export default function OrderTowing() {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const gpsMarkerRef = useRef<L.CircleMarker | null>(null);
+  const destMapRef = useRef<HTMLDivElement>(null);
+  const destLeafletMapRef = useRef<L.Map | null>(null);
 
   // ── Step 4 ──
   const [mitraTrackLat, setMitraTrackLat] = useState<number | null>(null);
@@ -216,6 +223,42 @@ export default function OrderTowing() {
     };
   }, [step]);
 
+  // Peta tujuan derek — inisialisasi saat showDestMap true
+  useEffect(() => {
+    if (!showDestMap || step !== 2 || !destMapRef.current || destLeafletMapRef.current) return;
+    const lat = pinLat ?? userLat ?? -1.2654, lng = pinLng ?? userLng ?? 116.8312;
+    const map = L.map(destMapRef.current, { center: [lat, lng], zoom: 15, zoomControl: false, attributionControl: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    if (destLat !== null && destLng !== null) {
+      map.setView([destLat, destLng], 15);
+      setIsDestGeocoding(true);
+      reverseGeocode(destLat, destLng).then(addr => { setDestAutoAddress(addr); setIsDestGeocoding(false); });
+    }
+    map.on("moveend", () => {
+      const c = map.getCenter(); setDestLat(c.lat); setDestLng(c.lng); setIsDestGeocoding(true);
+      reverseGeocode(c.lat, c.lng).then(addr => { setDestAutoAddress(addr); setIsDestGeocoding(false); });
+    });
+    destLeafletMapRef.current = map;
+    // trigger initial geocode
+    if (destLat === null) {
+      setDestLat(lat); setDestLng(lng); setIsDestGeocoding(true);
+      reverseGeocode(lat, lng).then(addr => { setDestAutoAddress(addr); setIsDestGeocoding(false); });
+    }
+  }, [showDestMap, step]);
+
+  // Cleanup peta tujuan saat ditutup atau pindah step
+  useEffect(() => {
+    if (!showDestMap && destLeafletMapRef.current) {
+      destLeafletMapRef.current.remove(); destLeafletMapRef.current = null;
+    }
+  }, [showDestMap]);
+
+  useEffect(() => {
+    return () => {
+      if (destLeafletMapRef.current) { destLeafletMapRef.current.remove(); destLeafletMapRef.current = null; }
+    };
+  }, []);
+
   function calcDist(lat1: number, lng1: number, lat2: number, lng2: number) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
@@ -227,11 +270,12 @@ export default function OrderTowing() {
   useEffect(() => {
     if (step !== 3 || orderId) return;
     setOrderStatus("creating"); setMitraRejectedCount(0); setAcceptedMitra(null); setCreateError(null);
+    const tujuanFinal = destLat !== null ? (destAutoAddress || tujuanDerek) : tujuanDerek;
     const descFull = [
       bisaDinyalakan ? "Kendaraan masih bisa dinyalakan" : "Kendaraan tidak bisa dinyalakan",
-      `Tujuan derek: ${tujuanDerek}`,
+      tujuanFinal ? `Tujuan derek: ${tujuanFinal}` : null,
     ].filter(Boolean).join(". ");
-    (() => { const fd = new FormData(); fd.append("vehicleType", jenisKendaraan); fd.append("vehicleModel", merekModel); fd.append("vehicleYear", ""); fd.append("damageCategories", JSON.stringify(kondisi)); fd.append("description", descFull); fd.append("pickupAddress", autoAddress || "Lokasi yang dipilih"); fd.append("detailAlamat", detailAlamat); fd.append("pickupLat", String(pinLat ?? userLat ?? 0)); fd.append("pickupLng", String(pinLng ?? userLng ?? 0)); fd.append("serviceType", "towing"); if (foto) fd.append("foto", foto); return fetch("/api/pengguna/orders", { method: "POST", credentials: "include", body: fd }); })().then(r => r.json()).then(d => {
+    (() => { const fd = new FormData(); fd.append("vehicleType", jenisKendaraan); fd.append("vehicleModel", merekModel); fd.append("vehicleYear", ""); fd.append("damageCategories", JSON.stringify(kondisi)); fd.append("description", descFull); fd.append("pickupAddress", autoAddress || "Lokasi yang dipilih"); fd.append("detailAlamat", detailAlamat); fd.append("pickupLat", String(pinLat ?? userLat ?? 0)); fd.append("pickupLng", String(pinLng ?? userLng ?? 0)); if (destLat !== null) fd.append("destLat", String(destLat)); if (destLng !== null) fd.append("destLng", String(destLng)); if (destLat !== null && destAutoAddress) fd.append("destAddress", destAutoAddress); else if (tujuanDerek.trim()) fd.append("destAddress", tujuanDerek.trim()); fd.append("serviceType", "towing"); if (foto) fd.append("foto", foto); return fetch("/api/pengguna/orders", { method: "POST", credentials: "include", body: fd }); })().then(r => r.json()).then(d => {
       if (!d.orderId) { if (d.error === "Belum login") { setCreateError("Sesi berakhir. Silakan masuk ulang."); return; } setCreateError(d.error ?? "Gagal membuat pesanan. Coba lagi."); return; }
       setOrderId(d.orderId); setOrderNo(d.orderNo); setOrderStatus("pending");
     }).catch(() => setCreateError("Koneksi gagal. Coba lagi."));
@@ -554,15 +598,54 @@ export default function OrderTowing() {
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>🏁 Tujuan Derek</div>
               <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 12 }}>Bengkel tujuan, alamat rumah, atau lokasi lain</div>
 
-              <div style={{ marginBottom: 12 }}>
-                <textarea
-                  value={tujuanDerek}
-                  onChange={e => setTujuanDerek(e.target.value)}
-                  placeholder="Contoh: Bengkel Pak Budi, Jl. Gatot Subroto No.12"
-                  rows={3}
-                  style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: tujuanDerek.trim() ? `1.5px solid ${ACCENT}` : "1.5px solid #e0e8f0", fontSize: 14, color: "#1a2a3a", background: "#f8fafc", outline: "none", resize: "none", lineHeight: 1.6 }}
-                />
+              {/* Toggle: Peta atau Ketik */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <button
+                  onClick={() => setShowDestMap(false)}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: !showDestMap ? `2px solid ${ACCENT}` : "2px solid #e0e8f0", background: !showDestMap ? `rgba(201,123,0,0.09)` : "#f8fafc", color: !showDestMap ? ACCENT_DARK : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >✏️ Ketik Alamat</button>
+                <button
+                  onClick={() => setShowDestMap(true)}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: showDestMap ? `2px solid ${ACCENT}` : "2px solid #e0e8f0", background: showDestMap ? `rgba(201,123,0,0.09)` : "#f8fafc", color: showDestMap ? ACCENT_DARK : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >🗺️ Pilih di Peta</button>
               </div>
+
+              {/* Map tujuan derek */}
+              {showDestMap && (
+                <>
+                  <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", marginBottom: 10, height: 210 }}>
+                    <div ref={destMapRef} style={{ width: "100%", height: "100%" }} />
+                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -100%)", pointerEvents: "none", zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div style={{ background: "#fff", borderRadius: 8, padding: "4px 10px", marginBottom: 4, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#1a2a3a", whiteSpace: "nowrap" }}>
+                          {isDestGeocoding ? "Memuat..." : "Titik Tujuan Derek"}
+                        </div>
+                        {!isDestGeocoding && <div style={{ fontSize: 10, color: "#7a8a9a", whiteSpace: "nowrap" }}>Geser untuk sesuaikan</div>}
+                      </div>
+                      <span style={{ fontSize: 32, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }}>🏁</span>
+                    </div>
+                  </div>
+                  {destAutoAddress && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "10px 14px", background: `rgba(201,123,0,0.07)`, borderRadius: 12, marginBottom: 14, border: `1px solid rgba(201,123,0,0.25)` }}>
+                      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>🏁</span>
+                      <span style={{ fontSize: 13, color: "#1a2a3a", lineHeight: 1.4 }}>{destAutoAddress}</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Ketik manual */}
+              {!showDestMap && (
+                <div style={{ marginBottom: 12 }}>
+                  <textarea
+                    value={tujuanDerek}
+                    onChange={e => setTujuanDerek(e.target.value)}
+                    placeholder="Contoh: Bengkel Pak Budi, Jl. Gatot Subroto No.12"
+                    rows={3}
+                    style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: tujuanDerek.trim() ? `1.5px solid ${ACCENT}` : "1.5px solid #e0e8f0", fontSize: 14, color: "#1a2a3a", background: "#f8fafc", outline: "none", resize: "none", lineHeight: 1.6 }}
+                  />
+                </div>
+              )}
 
               {/* Info biaya derek */}
               <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 14px", background: "rgba(201,123,0,0.07)", borderRadius: 14, border: "1px solid rgba(201,123,0,0.2)" }}>
