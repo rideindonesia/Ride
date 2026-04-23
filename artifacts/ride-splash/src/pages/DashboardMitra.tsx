@@ -88,7 +88,7 @@ interface IncomingOrder {
   description: string | null;
   pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
   totalAmount: number; platformFee: number;
-  penggunaName: string; penggunaPhotoPath?: string | null; createdAt: string;
+  penggunaName: string; penggunaProfilePhoto?: string | null; penggunaPhotoPath?: string | null; createdAt: string;
 }
 
 interface Notif {
@@ -1578,8 +1578,8 @@ export default function DashboardMitra() {
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   {/* Avatar pengguna */}
                   <div style={{ width: 44, height: 44, borderRadius: 14, background: "linear-gradient(135deg, #1a3a5c, #1a7a6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
-                    {(incoming as any).penggunaPhotoPath
-                      ? <img src={(incoming as any).penggunaPhotoPath} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    {(incoming as any).penggunaProfilePhoto
+                      ? <img src={(incoming as any).penggunaProfilePhoto} alt="foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       : (incoming.penggunaName ?? "U").charAt(0).toUpperCase()}
                   </div>
                   <div>
