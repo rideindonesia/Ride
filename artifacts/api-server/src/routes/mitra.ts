@@ -642,7 +642,7 @@ router.patch("/orders/:id/reject", requireMitra, async (req, res) => {
 router.patch("/orders/:id/cancel", requireMitra, async (req, res) => {
   const mitraId = getMitraId(req) as number;
   const orderId = parseInt(req.params.id);
-  const { cancelReason } = req.body as { cancelReason?: string };
+  const { cancelReason } = (req.body ?? {}) as { cancelReason?: string };
 
   const [cancelled] = await db.update(ordersTable)
     .set({
