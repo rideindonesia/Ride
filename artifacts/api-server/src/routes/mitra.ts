@@ -139,15 +139,10 @@ router.post("/apply", uploadFields, async (req, res) => {
   });
 });
 
-/** Read mitra userId from signed role-cookie or fall back to session */
+/** Read mitra userId from session mitraId key */
 function getMitraId(req: any): number | null {
-  const fromCookie = req.signedCookies?.["ride-m-uid"];
-  if (fromCookie) {
-    const n = parseInt(fromCookie);
-    if (!isNaN(n)) return n;
-  }
-  const fromSession = req.session?.userId;
-  if (fromSession && req.session?.userRole === "mitra") return fromSession as number;
+  const fromSession = req.session?.mitraId;
+  if (fromSession) return fromSession as number;
   return null;
 }
 
