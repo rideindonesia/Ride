@@ -107,6 +107,7 @@ export default function OrderElektronik() {
   const [acceptedMitra, setAcceptedMitra] = useState<AcceptedMitra | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [foto, setFoto] = useState<File | null>(null);
+  const [mitraRejectedCount, setMitraRejectedCount] = useState(0);
   const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
@@ -222,7 +223,7 @@ export default function OrderElektronik() {
   // Create order
   useEffect(() => {
     if (step !== 3 || orderId) return;
-    setOrderStatus("creating"); setAcceptedMitra(null); setCreateError(null);
+    setOrderStatus("creating"); setMitraRejectedCount(0); setAcceptedMitra(null); setCreateError(null);
     (() => { const fd = new FormData(); fd.append("vehicleType", jenisPerangkat); fd.append("vehicleModel", merekPerangkat); fd.append("vehicleYear", ""); fd.append("damageCategories", JSON.stringify(masalah)); fd.append("description", deskripsi); fd.append("pickupAddress", autoAddress || "Lokasi yang dipilih"); fd.append("detailAlamat", detailAlamat); fd.append("pickupLat", String(pinLat ?? userLat ?? 0)); fd.append("pickupLng", String(pinLng ?? userLng ?? 0)); fd.append("serviceType", "elektronik"); if (foto) fd.append("foto", foto); return fetch("/api/pengguna/orders", { method: "POST", credentials: "include", body: fd }); })().then(r => r.json()).then(d => {
       if (!d.orderId) { if (d.error === "Belum login") { setCreateError("Sesi berakhir. Silakan masuk ulang."); return; } setCreateError(d.error ?? "Gagal membuat pesanan. Coba lagi."); return; }
       setOrderId(d.orderId); setOrderNo(d.orderNo); setOrderStatus("pending");
@@ -254,9 +255,11 @@ export default function OrderElektronik() {
     };
     socket.on("order:accepted", onAccepted);
     socket.on("order:cancelled", onCancelledByMitra);
+    const onRejected = (data: any) => { if (data.orderId !== orderId) return; setMitraRejectedCount(c => c + 1); };
+    socket.on("order:rejected", onRejected);
     doPoll();
     orderPollRef.current = setInterval(doPoll, 30000);
-    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); socket.off("order:accepted", onAccepted); socket.off("order:cancelled", onCancelledByMitra); };
+    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); socket.off("order:accepted", onAccepted); socket.off("order:cancelled", onCancelledByMitra); socket.off("order:rejected", onRejected); };
   }, [step, orderId, orderStatus, pinLat, pinLng, userLat, userLng]);
 
   // Real-time chat via socket
@@ -498,6 +501,7 @@ export default function OrderElektronik() {
                     <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Teknisi Terdekat...</div>
                     <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Menghubungi teknisi di sekitar lokasi Anda.</div>
                   </div>
+                  {mitraRejectedCount > 0 && <div style={{ fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "6px 14px" }}>Mitra tidak tersedia, mencari yang lain...</div>}
                   {orderNo && <div style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</div>}
                   <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }); if (orderPollRef.current) clearInterval(orderPollRef.current); navigate("/dashboard/pengguna"); }}
                     style={{ marginTop: 8, padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✕ Batalkan</button>
@@ -554,7 +558,7 @@ export default function OrderElektronik() {
                     {mitraConfirmed ? "✅ Teknisi Dikonfirmasi" : "✅ Setuju & Panggil Teknisi"}
                   </button>
                   {!mitraConfirmed && (
-                    <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {}); if (orderPollRef.current) clearInterval(orderPollRef.current); if (chatPollRef.current) clearInterval(chatPollRef.current); setOrderId(null); setOrderNo(""); setOrderStatus("creating"); setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false); setMitraConfirmed(false);  }}
+                    <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {}); if (orderPollRef.current) clearInterval(orderPollRef.current); if (chatPollRef.current) clearInterval(chatPollRef.current); setOrderId(null); setOrderNo(""); setOrderStatus("creating"); setMitraRejectedCount(0); setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false); setMitraConfirmed(false);  }}
                       style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                       🔄 Cari Teknisi Lain
                     </button>
