@@ -24,7 +24,6 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   });
   if (res.status === 401 && !path.includes("/login")) {
     clearAdminToken();
-    window.location.href = "/admin/";
     throw new Error("Sesi berakhir. Silakan login ulang.");
   }
   if (!res.ok) {
