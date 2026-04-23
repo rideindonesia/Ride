@@ -1,8 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
-import path from "path";
-import fs from "fs";
 import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable, systemSettingsTable, platformFeePaymentsTable } from "@workspace/db";
+import { uploadBufferToCloudinary } from "../lib/cloudinary";
 import { eq, and, or, gt, gte, desc, sql, avg, count, sum, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
@@ -34,49 +33,16 @@ function serverHaversineKm(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-const uploadDir = path.resolve(process.cwd(), "uploads", "mitra");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
-if (!fs.existsSync(profileUploadDir)) fs.mkdirSync(profileUploadDir, { recursive: true });
-
-// Foto bukti kerja mitra
-const proofPhotoDir = path.resolve(process.cwd(), "uploads", "proof-photos");
-if (!fs.existsSync(proofPhotoDir)) fs.mkdirSync(proofPhotoDir, { recursive: true });
-const proofPhotoStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, proofPhotoDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `proof-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-const uploadProofPhoto = multer({ storage: proofPhotoStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+// Semua upload pakai memory storage dan dikirim ke Cloudinary
+const memStorage = multer.memoryStorage();
+const uploadProofPhoto = multer({ storage: memStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
   if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
 }});
-
-// Bukti transfer platform fee
-const feeProofDir = path.resolve(process.cwd(), "uploads", "fee-proofs");
-if (!fs.existsSync(feeProofDir)) fs.mkdirSync(feeProofDir, { recursive: true });
-const feeProofStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, feeProofDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `fee-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-const uploadFeeProof = multer({ storage: feeProofStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+const uploadFeeProof = multer({ storage: memStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
   if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
 }});
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
 const upload = multer({
-  storage,
+  storage: memStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
@@ -84,16 +50,8 @@ const upload = multer({
     else cb(new Error("Format file tidak didukung"));
   },
 });
-
-const profileStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, profileUploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
 const uploadProfilePhoto = multer({
-  storage: profileStorage,
+  storage: memStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -140,16 +98,30 @@ router.post("/apply", uploadFields, async (req, res) => {
 
   const files = req.files as Record<string, Express.Multer.File[]>;
 
+  // Upload dokumen ke Cloudinary
+  const uploadDoc = async (field: string, folder: string): Promise<string | null> => {
+    const file = files?.[field]?.[0];
+    if (!file) return null;
+    try { return await uploadBufferToCloudinary(file.buffer, { folder }); }
+    catch (err) { console.error(`Gagal upload ${field}:`, err); return null; }
+  };
+  const [ktpUrl, selfieKtpUrl, simUrl, certUrl] = await Promise.all([
+    uploadDoc("ktp", "ride/mitra-docs"),
+    uploadDoc("selfieKtp", "ride/mitra-docs"),
+    uploadDoc("sim", "ride/mitra-docs"),
+    uploadDoc("cert", "ride/mitra-docs"),
+  ]);
+
   const [application] = await db.insert(mitraApplicationsTable).values({
     name,
     phone,
     email,
     passwordHash: hashPassword(password),
     serviceType,
-    ktpPath: files?.ktp?.[0]?.filename ?? null,
-    selfieKtpPath: files?.selfieKtp?.[0]?.filename ?? null,
-    simPath: files?.sim?.[0]?.filename ?? null,
-    certPath: files?.cert?.[0]?.filename ?? null,
+    ktpPath: ktpUrl,
+    selfieKtpPath: selfieKtpUrl,
+    simPath: simUrl,
+    certPath: certUrl,
     operatingCity,
     status: "pending",
   }).returning({
@@ -796,14 +768,21 @@ router.patch("/orders/:id/proof-photo", requireMitra, (req, res, next) => {
   const orderId = parseInt(req.params.id);
   if (!req.file) { res.status(400).json({ error: "Tidak ada file" }); return; }
 
-  const relativePath = `/uploads/proof-photos/${req.file.filename}`;
+  let photoUrl: string;
+  try {
+    photoUrl = await uploadBufferToCloudinary(req.file.buffer, { folder: "ride/proof-photos" });
+  } catch (err) {
+    console.error("Gagal upload foto bukti ke Cloudinary:", err);
+    res.status(500).json({ error: "Gagal upload foto, coba lagi" }); return;
+  }
+
   const [updated] = await db.update(ordersTable)
-    .set({ mitraProofPhotoPath: relativePath, updatedAt: new Date() })
+    .set({ mitraProofPhotoPath: photoUrl, updatedAt: new Date() })
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
     .returning({ id: ordersTable.id });
 
   if (!updated) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
-  res.json({ ok: true, photoUrl: relativePath });
+  res.json({ ok: true, photoUrl });
 });
 
 // PATCH /api/mitra/orders/:id/done — mitra marks order complete
@@ -972,9 +951,15 @@ router.post("/upload-photo", (req, res, next) => {
   const mitraId = getMitraId(req);
   if (!mitraId) { res.status(401).json({ error: "Belum login" }); return; }
   if (!req.file) { res.status(400).json({ error: "Tidak ada file yang diunggah" }); return; }
-  const relativePath = `/uploads/profile/${req.file.filename}`;
-  await db.update(usersTable).set({ profilePhotoPath: relativePath }).where(eq(usersTable.id, mitraId as number));
-  res.json({ ok: true, photoUrl: relativePath });
+  let photoUrl: string;
+  try {
+    photoUrl = await uploadBufferToCloudinary(req.file.buffer, { folder: "ride/profile" });
+  } catch (err) {
+    console.error("Gagal upload foto profil mitra ke Cloudinary:", err);
+    res.status(500).json({ error: "Gagal upload foto, coba lagi" }); return;
+  }
+  await db.update(usersTable).set({ profilePhotoPath: photoUrl }).where(eq(usersTable.id, mitraId as number));
+  res.json({ ok: true, photoUrl });
 });
 
 // GET /api/mitra/platform-fee/detail — detail fee, riwayat bayar, dan mingguan
@@ -1059,7 +1044,13 @@ router.post("/platform-fee/pay", (req, res, next) => {
     res.status(400).json({ error: "Foto bukti dan jumlah pembayaran diperlukan" });
     return;
   }
-  const proofPhotoPath = `/uploads/fee-proofs/${req.file.filename}`;
+  let proofPhotoPath: string;
+  try {
+    proofPhotoPath = await uploadBufferToCloudinary(req.file.buffer, { folder: "ride/fee-proofs" });
+  } catch (err) {
+    console.error("Gagal upload bukti fee ke Cloudinary:", err);
+    res.status(500).json({ error: "Gagal upload foto bukti, coba lagi" }); return;
+  }
   const [payment] = await db.insert(platformFeePaymentsTable)
     .values({ mitraId, amountClaimed, proofPhotoPath, status: "pending" })
     .returning();
