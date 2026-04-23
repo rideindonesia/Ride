@@ -249,7 +249,7 @@ export default function DashboardPengguna() {
 
   // Load logged in user
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch("/api/auth/me?role=pengguna", { credentials: "include" })
       .then(r => r.json())
       .then(d => {
         if (d.id) {
