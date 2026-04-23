@@ -378,7 +378,6 @@ export default function OrderBarber() {
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "24px 0 16px" }}>
                   <div style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}><div className="search-pulse" /><div className="search-spinner" /></div>
                   <div style={{ textAlign: "center" }}><div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Barberman Terdekat...</div><div style={{ fontSize: 13, color: "#7a8a9a" }}>Menghubungi barberman di sekitar lokasi Anda.</div></div>
-                  {mitraRejectedCount > 0 && <div style={{ fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "6px 14px" }}>Mitra tidak tersedia, mencari yang lain...</div>}
                   {orderNo && <div style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</div>}
                   <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }); if (orderPollRef.current) clearInterval(orderPollRef.current); navigate("/dashboard/pengguna"); }} style={{ marginTop: 8, padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✕ Batalkan</button>
                 </div>
