@@ -290,7 +290,8 @@ router.post("/orders", (req, res, next) => {
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
 
   const { vehicleType, vehicleModel, vehicleYear, damageCategories, description,
-    pickupAddress, detailAlamat, pickupLat, pickupLng, serviceType } = req.body;
+    pickupAddress, detailAlamat, pickupLat, pickupLng, serviceType,
+    destLat, destLng, destAddress } = req.body;
 
   if (!vehicleModel || !pickupAddress) {
     res.status(400).json({ error: "Data tidak lengkap" }); return;
@@ -327,6 +328,9 @@ router.post("/orders", (req, res, next) => {
     detailAlamat,
     pickupLat: typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null),
     pickupLng: typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null),
+    destLat: typeof destLat === "number" ? destLat : (destLat ? parseFloat(destLat) : null),
+    destLng: typeof destLng === "number" ? destLng : (destLng ? parseFloat(destLng) : null),
+    destAddress: destAddress ?? null,
     status: "pending",
     penggunaPhotoPath,
   }).returning({ id: ordersTable.id, orderNo: ordersTable.orderNo });
@@ -363,6 +367,9 @@ router.post("/orders", (req, res, next) => {
       pickupAddress,
       pickupLat: typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null),
       pickupLng: typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null),
+      destLat: typeof destLat === "number" ? destLat : (destLat ? parseFloat(destLat) : null),
+      destLng: typeof destLng === "number" ? destLng : (destLng ? parseFloat(destLng) : null),
+      destAddress: destAddress ?? null,
       penggunaName: pengguna?.name ?? "",
       penggunaProfilePhoto: pengguna?.profilePhotoPath ?? null,
       penggunaPhotoPath,
