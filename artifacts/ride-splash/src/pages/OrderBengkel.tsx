@@ -332,7 +332,11 @@ export default function OrderBengkel() {
     })
       .then(r => r.json())
       .then(d => {
-        if (!d.orderId) { setCreateError("Gagal membuat pesanan. Coba lagi."); return; }
+        if (!d.orderId) {
+          if (d.error === "Belum login") { setCreateError("Sesi berakhir. Silakan masuk ulang."); return; }
+          setCreateError(d.error ?? "Gagal membuat pesanan. Coba lagi.");
+          return;
+        }
         setOrderId(d.orderId);
         setOrderNo(d.orderNo);
         setOrderStatus("pending");
@@ -796,7 +800,11 @@ export default function OrderBengkel() {
                     <>
                       <span style={{ fontSize: 48 }}>⚠️</span>
                       <div style={{ fontSize: 14, color: "#ea580c", fontWeight: 600, textAlign: "center" }}>{createError}</div>
-                      <button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali</button>
+                      {createError?.includes("masuk ulang") ? (
+                        <button onClick={() => navigate("/")} style={{ padding: "12px 32px", borderRadius: 14, border: "none", background: "linear-gradient(135deg,#1a3a5c,#2a5298)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Masuk Ulang</button>
+                      ) : (
+                        <button onClick={() => navigate("/dashboard/pengguna")} style={{ padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>← Kembali</button>
+                      )}
                     </>
                   ) : (
                     <>
