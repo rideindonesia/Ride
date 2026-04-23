@@ -1946,7 +1946,7 @@ export default function DashboardPengguna() {
             <div>
               <button onClick={() => {
                 if (window.confirm("Yakin ingin keluar dari semua perangkat? Anda akan perlu login ulang.")) {
-                  fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => navigate("/login"));
+                  fetch("/api/auth/logout?role=pengguna", { method: "POST", credentials: "include" }).then(() => navigate("/login"));
                 }
               }} style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" as const, borderTop: "1px solid #f0f4f8" }}>
                 <span style={{ fontSize: 20 }}>🚫</span>
@@ -2164,7 +2164,7 @@ export default function DashboardPengguna() {
           </div>
 
           {/* Tombol Keluar */}
-          <button onClick={() => fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => navigate("/login"))}
+          <button onClick={() => fetch("/api/auth/logout?role=pengguna", { method: "POST", credentials: "include" }).then(() => navigate("/login"))}
             style={{ width: "100%", background: "#fff0f0", borderRadius: 16, padding: "14px 16px", border: "1.5px solid #fde8e8", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 8px rgba(231,76,60,0.07)" }}>
             <span style={{ fontSize: 22 }}>🚪</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#e74c3c" }}>Keluar dari Akun</span>
