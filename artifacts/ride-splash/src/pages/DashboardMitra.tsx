@@ -433,11 +433,12 @@ export default function DashboardMitra() {
     fetchIncoming();
     fetchActiveOrder();
     // Backup polling — refresh incoming koordinat, dashboard, dan active order
+    // 3 detik agar mitra cepat tahu jika konsumen membatalkan order
     pollRef.current = setInterval(() => {
       fetchDashboard();
       fetchIncoming();
       fetchActiveOrder();
-    }, 10000);
+    }, 3000);
 
     // Socket: real-time incoming order notification for mitra
     const onNewOrder = (data: any) => {
@@ -475,7 +476,9 @@ export default function DashboardMitra() {
 
     // When order is cancelled by pengguna — mitra's own cancellation is handled by doCancelOrderMitra directly
     const onOrderCancelled = (data: { orderId: number; canceledBy?: string; cancelReason?: string }) => {
+      setIncoming(prev => (prev?.id === data.orderId ? null : prev));
       setActiveOrder(prev => (prev?.id === data.orderId ? null : prev));
+      setIncomingDistInfo(null);
       setMitraPhase("diterima");
       setChatMsgs([]);
       setPenggunaConfirmed(false);
