@@ -9,10 +9,10 @@ COPY . .
 
 RUN pnpm install --no-frozen-lockfile
 
-# Build shared libraries (db, api-zod)
-RUN pnpm --filter ...@workspace/api-server run build
+# Build api-server backend (esbuild bundles db+api-zod internally)
+RUN pnpm --filter @workspace/api-server run build
 
-# Build ride-splash frontend (PORT and BASE_PATH required by vite.config.ts)
+# Build ride-splash frontend
 RUN PORT=8080 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/ride-splash run build
 
 # Build ride-admin frontend
