@@ -87,19 +87,37 @@ router.post("/login", async (req, res) => {
 });
 
 router.get("/me", async (req, res) => {
-  // Prefer signed role cookies (survive cross-role login on same device)
+  const roleParam = (req.query as any).role as string | undefined;
   const pUid = (req as any).signedCookies?.["ride-p-uid"];
   const mUid = (req as any).signedCookies?.["ride-m-uid"];
   const sessionUid = (req.session as Record<string, unknown>).userId as number | undefined;
   const sessionRole = (req.session as Record<string, unknown>).userRole as string | undefined;
 
   let userId: number | undefined;
-  if (sessionUid) {
-    userId = sessionUid; // session wins (most recently logged-in)
-  } else if (pUid) {
-    userId = parseInt(pUid);
-  } else if (mUid) {
-    userId = parseInt(mUid);
+
+  if (roleParam === "pengguna") {
+    // Prefer pengguna cookie, fall back to session if session is also pengguna
+    if (pUid) {
+      userId = parseInt(pUid);
+    } else if (sessionUid && sessionRole === "pengguna") {
+      userId = sessionUid;
+    }
+  } else if (roleParam === "mitra") {
+    // Prefer mitra cookie, fall back to session if session is also mitra
+    if (mUid) {
+      userId = parseInt(mUid);
+    } else if (sessionUid && sessionRole === "mitra") {
+      userId = sessionUid;
+    }
+  } else {
+    // No role specified: session wins (legacy behavior)
+    if (sessionUid) {
+      userId = sessionUid;
+    } else if (pUid) {
+      userId = parseInt(pUid);
+    } else if (mUid) {
+      userId = parseInt(mUid);
+    }
   }
 
   if (!userId) {
