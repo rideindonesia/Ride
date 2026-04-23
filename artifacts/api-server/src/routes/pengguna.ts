@@ -762,18 +762,22 @@ router.delete("/orders/:id", async (req, res) => {
       eq(ordersTable.penggunaId, penggunaId),
       or(eq(ordersTable.status, "pending"), eq(ordersTable.status, "accepted")) as any,
     ))
-    .returning({ id: ordersTable.id, mitraId: ordersTable.mitraId });
+    .returning({ id: ordersTable.id, mitraId: ordersTable.mitraId, serviceType: ordersTable.serviceType });
 
   if (cancelled) {
     try {
       io?.to(`order:${cancelled.id}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
       if (cancelled.mitraId) {
+        // Order sudah diterima mitra — notifikasi langsung ke mitra
         io?.to(`mitra:${cancelled.mitraId}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
         sendPushToUsers([cancelled.mitraId], {
           title: "❌ Pesanan Dibatalkan",
           body: cancelReason ? `Konsumen membatalkan. Alasan: ${cancelReason}` : "Konsumen membatalkan pesanan.",
           url: "/",
         });
+      } else if (cancelled.serviceType) {
+        // Order masih pending — broadcast ke semua mitra service type ini agar segera refresh
+        io?.to(`service:${cancelled.serviceType}`).emit("order:cancelled", { orderId: cancelled.id, canceledBy: "pengguna", cancelReason });
       }
       io?.to("room:admin").emit("admin:order_update", { type: "cancelled", orderId: cancelled.id });
     } catch { /* ignore */ }
