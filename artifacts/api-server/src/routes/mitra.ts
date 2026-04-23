@@ -1,8 +1,8 @@
 import { Router } from "express";
 import multer from "multer";
-import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable, systemSettingsTable, platformFeePaymentsTable } from "@workspace/db";
+import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable, systemSettingsTable, platformFeePaymentsTable, chatMessagesTable } from "@workspace/db";
 import { uploadBufferToCloudinary } from "../lib/cloudinary";
-import { eq, and, or, gt, gte, desc, sql, avg, count, sum, inArray } from "drizzle-orm";
+import { eq, and, or, gt, gte, desc, asc, sql, avg, count, sum, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
 import { sendPushToUsers } from "./push";
@@ -1070,6 +1070,33 @@ router.post("/reports", requireMitra, async (req, res) => {
     status: "open",
   }).returning();
   res.json({ ok: true, report: inserted });
+});
+
+// POST /api/mitra/chat/:orderId — send chat as MITRA (session-enforced, no ambiguity)
+router.post("/chat/:orderId", requireMitra, async (req, res) => {
+  const mitraId = getMitraId(req) as number;
+  const orderId = parseInt(req.params.orderId);
+  const { message } = req.body;
+  if (isNaN(orderId) || !message?.trim()) { res.status(400).json({ error: "Data tidak valid" }); return; }
+
+  const [order] = await db.select({ penggunaId: ordersTable.penggunaId, mitraId: ordersTable.mitraId })
+    .from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+  if (!order || order.mitraId !== mitraId) { res.status(403).json({ error: "Akses ditolak" }); return; }
+
+  const [msg] = await db.insert(chatMessagesTable).values({
+    orderId, senderId: mitraId, senderRole: "mitra", message: message.trim(),
+  }).returning({ id: chatMessagesTable.id, createdAt: chatMessagesTable.createdAt });
+
+  try {
+    io?.to(`order:${orderId}`).emit("chat:message", {
+      id: msg.id, orderId, senderId: mitraId, senderRole: "mitra",
+      message: message.trim(), createdAt: msg.createdAt,
+    });
+    if (order.penggunaId) {
+      sendPushToUsers([order.penggunaId], { title: "💬 Pesan dari Mitra", body: message.trim().slice(0, 80), url: "/" });
+    }
+  } catch {}
+  res.json({ ok: true, messageId: msg.id, senderRole: "mitra" });
 });
 
 export default router;
