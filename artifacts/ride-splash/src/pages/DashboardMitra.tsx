@@ -289,7 +289,7 @@ export default function DashboardMitra() {
       setIsOnline(d.isOnline ?? false);
       // Connect socket and identify as mitra with service type
       try {
-        const meRes = await fetch(`${BASE}/api/auth/me`, { credentials: "include" });
+        const meRes = await fetch(`${BASE}/api/auth/me?role=mitra`, { credentials: "include" });
         const me = await meRes.json();
         if (me.id) identifySocket(me.id, "mitra", d.serviceType ?? "bengkel");
       } catch {}
