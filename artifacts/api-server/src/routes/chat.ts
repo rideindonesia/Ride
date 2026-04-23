@@ -88,21 +88,40 @@ router.post("/:orderId", requireAuth, async (req, res) => {
     res.status(403).json({ error: "Akses ditolak" }); return;
   }
 
-  // Determine senderRole from session role-specific keys
+  // Determine senderRole — frontend MUST send explicit role to avoid ambiguity
+  // when same device is logged in as both pengguna and mitra simultaneously.
   const sessionPenggunaId = (req.session as any)?.penggunaId as number | undefined;
   const sessionMitraId    = (req.session as any)?.mitraId    as number | undefined;
+  const bodyRole = req.body?.role as string | undefined; // "pengguna" | "mitra"
 
   let senderId: number;
   let senderRole: "pengguna" | "mitra";
 
-  if (sessionMitraId && Number(sessionMitraId) === Number(order.mitraId)) {
-    senderId   = sessionMitraId;
-    senderRole = "mitra";
-  } else if (sessionPenggunaId && Number(sessionPenggunaId) === Number(order.penggunaId)) {
+  if (bodyRole === "pengguna") {
+    // Pengguna side: validate session has this pengguna and matches the order
+    if (!sessionPenggunaId || Number(sessionPenggunaId) !== Number(order.penggunaId)) {
+      res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
+    }
     senderId   = sessionPenggunaId;
     senderRole = "pengguna";
+  } else if (bodyRole === "mitra") {
+    // Mitra side: validate session has this mitra and matches the order
+    if (!sessionMitraId || Number(sessionMitraId) !== Number(order.mitraId)) {
+      res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
+    }
+    senderId   = sessionMitraId;
+    senderRole = "mitra";
   } else {
-    res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
+    // Fallback (no role sent): infer from session — mitra check first only if no pengguna match
+    if (sessionPenggunaId && Number(sessionPenggunaId) === Number(order.penggunaId)) {
+      senderId   = sessionPenggunaId;
+      senderRole = "pengguna";
+    } else if (sessionMitraId && Number(sessionMitraId) === Number(order.mitraId)) {
+      senderId   = sessionMitraId;
+      senderRole = "mitra";
+    } else {
+      res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
+    }
   }
 
   const [msg] = await db.insert(chatMessagesTable).values({
