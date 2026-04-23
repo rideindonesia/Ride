@@ -4,10 +4,9 @@ import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt, inArr
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import multer from "multer";
-import path from "path";
-import fs from "fs";
 import { io } from "../socket";
 import { sendPushToUsers } from "./push";
+import { uploadBufferToCloudinary } from "../lib/cloudinary";
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -35,32 +34,12 @@ async function sendFonnteOtp(phone: string, otpCode: string): Promise<void> {
   }
 }
 
-// Profile photo upload setup
-const profileUploadDir = path.resolve(process.cwd(), "uploads", "profile");
-if (!fs.existsSync(profileUploadDir)) fs.mkdirSync(profileUploadDir, { recursive: true });
-
-const profileStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, profileUploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-const uploadPhoto = multer({ storage: profileStorage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+// All photos use memory storage and upload to Cloudinary
+const memStorage = multer.memoryStorage();
+const uploadPhoto = multer({ storage: memStorage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
   if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
 }});
-
-// Order photo (foto kendaraan pengguna) upload setup
-const orderPhotoDir = path.resolve(process.cwd(), "uploads", "order-photos");
-if (!fs.existsSync(orderPhotoDir)) fs.mkdirSync(orderPhotoDir, { recursive: true });
-const orderPhotoStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, orderPhotoDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `ord-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-const uploadOrderPhoto = multer({ storage: orderPhotoStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
+const uploadOrderPhoto = multer({ storage: memStorage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => {
   if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Hanya file gambar yang diperbolehkan"));
 }});
 
@@ -325,8 +304,15 @@ router.post("/orders", (req, res, next) => {
   const orderNo = `ORD${Date.now().toString().slice(-8)}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 
   const svcType = serviceType ?? "bengkel";
-  // Foto kendaraan pengguna (opsional)
-  const penggunaPhotoPath = req.file ? `/uploads/order-photos/${req.file.filename}` : null;
+  // Foto kendaraan pengguna (opsional) — upload ke Cloudinary
+  let penggunaPhotoPath: string | null = null;
+  if (req.file) {
+    try {
+      penggunaPhotoPath = await uploadBufferToCloudinary(req.file.buffer, { folder: "ride/order-photos" });
+    } catch (err) {
+      console.error("Gagal upload foto order ke Cloudinary:", err);
+    }
+  }
 
   // damageCategories bisa string (FormData) atau array (JSON)
   let dmgCats: string[] = [];
@@ -853,9 +839,15 @@ router.post("/upload-photo", (req, res, next) => {
   const penggunaId = getPenggunaId(req);
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
   if (!req.file) { res.status(400).json({ error: "Tidak ada file yang diunggah" }); return; }
-  const relativePath = `/uploads/profile/${req.file.filename}`;
-  await db.update(usersTable).set({ profilePhotoPath: relativePath }).where(eq(usersTable.id, penggunaId));
-  res.json({ ok: true, photoUrl: relativePath });
+  let photoUrl: string;
+  try {
+    photoUrl = await uploadBufferToCloudinary(req.file.buffer, { folder: "ride/profile" });
+  } catch (err) {
+    console.error("Gagal upload foto profil ke Cloudinary:", err);
+    res.status(500).json({ error: "Gagal upload foto, coba lagi" }); return;
+  }
+  await db.update(usersTable).set({ profilePhotoPath: photoUrl }).where(eq(usersTable.id, penggunaId));
+  res.json({ ok: true, photoUrl });
 });
 
 // POST /api/pengguna/request-profile-otp — minta OTP untuk ganti HP/email
