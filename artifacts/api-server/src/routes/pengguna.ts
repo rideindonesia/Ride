@@ -45,15 +45,10 @@ const uploadOrderPhoto = multer({ storage: memStorage, limits: { fileSize: 8 * 1
 
 const router = Router();
 
-/** Read pengguna userId from signed role-cookie (survives cross-role login) or fall back to session */
+/** Read pengguna userId from session penggunaId key */
 function getPenggunaId(req: any): number | null {
-  const fromCookie = req.signedCookies?.["ride-p-uid"];
-  if (fromCookie) {
-    const n = parseInt(fromCookie);
-    if (!isNaN(n)) return n;
-  }
-  const fromSession = req.session?.userId;
-  if (fromSession && req.session?.userRole === "pengguna") return fromSession as number;
+  const fromSession = req.session?.penggunaId;
+  if (fromSession) return fromSession as number;
   return null;
 }
 
@@ -184,8 +179,7 @@ router.post("/verify-otp", async (req, res) => {
     role: usersTable.role,
   });
 
-  (req.session as Record<string, unknown>).userId = user.id;
-  (req.session as Record<string, unknown>).userRole = user.role;
+  (req.session as Record<string, unknown>).penggunaId = user.id;
 
   res.status(201).json({
     user,
