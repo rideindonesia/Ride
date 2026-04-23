@@ -485,6 +485,7 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
     totalAmount: ordersTable.totalAmount,
     platformFee: ordersTable.platformFee,
     penggunaName: usersTable.name,
+    penggunaProfilePhoto: usersTable.profilePhotoPath,
     penggunaPhotoPath: ordersTable.penggunaPhotoPath,
     createdAt: ordersTable.createdAt,
   }).from(ordersTable)
