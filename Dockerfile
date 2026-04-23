@@ -9,8 +9,16 @@ COPY . .
 
 RUN pnpm install --no-frozen-lockfile
 
-RUN pnpm --filter @workspace/api-server... run build
+# Build shared libraries (db, api-zod)
+RUN pnpm --filter ...@workspace/api-server run build
 
+# Build ride-splash frontend (PORT and BASE_PATH required by vite.config.ts)
+RUN PORT=8080 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/ride-splash run build
+
+# Build ride-admin frontend
+RUN PORT=8081 BASE_PATH=/admin/ NODE_ENV=production pnpm --filter @workspace/ride-admin run build
+
+# Copy frontend outputs to api-server public dir
 RUN mkdir -p artifacts/api-server/public && \
     cp -r artifacts/ride-splash/dist/public/. artifacts/api-server/public/ && \
     mkdir -p artifacts/api-server/public/admin && \
