@@ -124,7 +124,7 @@ export default function OrderBarber() {
   const step5PollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch("/api/auth/me?role=pengguna", { credentials: "include" })
       .then(r => r.json()).then(me => { if (me.id) identifySocket(me.id, "pengguna"); }).catch(() => {});
     return () => { socket.disconnect(); };
   }, []);
