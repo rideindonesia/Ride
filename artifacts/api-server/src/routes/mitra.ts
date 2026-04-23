@@ -482,10 +482,13 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
     .limit(1);
   if (busyOrder) { res.json({ incoming: null }); return; }
 
-  const [locRow] = await db.select({ serviceType: mitraLocationsTable.serviceType })
+  const [locRow] = await db.select({ serviceType: mitraLocationsTable.serviceType, isOnline: mitraLocationsTable.isOnline })
     .from(mitraLocationsTable)
     .where(eq(mitraLocationsTable.userId, mitraId))
     .limit(1);
+
+  // Jika mitra offline, tidak tampilkan order baru
+  if (!locRow?.isOnline) { res.json({ incoming: null }); return; }
 
   // Show pending orders that match mitra's serviceType and are unassigned (mitraId IS NULL)
   // If no serviceType match, fall back to all unassigned pending orders
