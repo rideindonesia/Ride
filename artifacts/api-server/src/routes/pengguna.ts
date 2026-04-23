@@ -1,3 +1,4 @@
+// v2 — fix: fetchIncoming clears card when order cancelled
 import { Router } from "express";
 import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, vouchersTable, reportsTable } from "@workspace/db";
 import { eq, and, gt, sql, avg, count, or, desc, aliasedTable, isNull, lt, inArray, SQL } from "drizzle-orm";
