@@ -247,10 +247,16 @@ export default function OrderElektronik() {
     };
     const doPoll = async () => { try { const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }); if (!res.ok) return; applyOd(await res.json()); } catch { } };
     const onAccepted = (data: any) => { if (data.orderId !== orderId) return; fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }).then(r => r.json()).then(applyOd).catch(() => {}); };
+    const onCancelledByMitra = (data: { orderId: number; canceledBy?: string }) => {
+      if (data.orderId !== orderId) return;
+      if (orderPollRef.current) clearInterval(orderPollRef.current);
+      setOrderStatus("cancelled");
+    };
     socket.on("order:accepted", onAccepted);
+    socket.on("order:cancelled", onCancelledByMitra);
     doPoll();
     orderPollRef.current = setInterval(doPoll, 30000);
-    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); socket.off("order:accepted", onAccepted); };
+    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); socket.off("order:accepted", onAccepted); socket.off("order:cancelled", onCancelledByMitra); };
   }, [step, orderId, orderStatus, pinLat, pinLng, userLat, userLng]);
 
   // Real-time chat via socket
