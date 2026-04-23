@@ -21,7 +21,7 @@ router.post("/subscribe", async (req, res) => {
   const session = req.session as any;
   const pCookieId = (req as any).signedCookies?.["ride-p-uid"] ? parseInt((req as any).signedCookies["ride-p-uid"]) : undefined;
   const mCookieId = (req as any).signedCookies?.["ride-m-uid"] ? parseInt((req as any).signedCookies["ride-m-uid"]) : undefined;
-  const userId = session?.userId || mCookieId || pCookieId;
+  const userId = session?.penggunaId || session?.mitraId || mCookieId || pCookieId;
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
   const { endpoint, keys } = req.body;
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
