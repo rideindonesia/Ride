@@ -109,6 +109,7 @@ export default function OrderTowing() {
   const [acceptedMitra, setAcceptedMitra] = useState<AcceptedMitra | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [foto, setFoto] = useState<File | null>(null);
+  const [mitraRejectedCount, setMitraRejectedCount] = useState(0);
   const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
@@ -225,7 +226,7 @@ export default function OrderTowing() {
   // Create order
   useEffect(() => {
     if (step !== 3 || orderId) return;
-    setOrderStatus("creating"); setAcceptedMitra(null); setCreateError(null);
+    setOrderStatus("creating"); setMitraRejectedCount(0); setAcceptedMitra(null); setCreateError(null);
     const descFull = [
       bisaDinyalakan ? "Kendaraan masih bisa dinyalakan" : "Kendaraan tidak bisa dinyalakan",
       `Tujuan derek: ${tujuanDerek}`,
@@ -255,9 +256,11 @@ export default function OrderTowing() {
     const doPoll = async () => { try { const res = await fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }); if (!res.ok) return; applyOd(await res.json()); } catch { } };
     const onAccepted = (data: any) => { if (data.orderId !== orderId) return; fetch(`/api/pengguna/orders/${orderId}`, { credentials: "include" }).then(r => r.json()).then(applyOd).catch(() => {}); };
     socket.on("order:accepted", onAccepted);
+    const onRejected = (data: any) => { if (data.orderId !== orderId) return; setMitraRejectedCount(c => c + 1); };
+    socket.on("order:rejected", onRejected);
     doPoll();
     orderPollRef.current = setInterval(doPoll, 30000);
-    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); socket.off("order:accepted", onAccepted); };
+    return () => { if (orderPollRef.current) clearInterval(orderPollRef.current); socket.off("order:accepted", onAccepted); socket.off("order:rejected", onRejected); };
   }, [step, orderId, orderStatus, pinLat, pinLng, userLat, userLng]);
 
   // Chat
@@ -634,6 +637,7 @@ export default function OrderTowing() {
                     <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Driver Derek Terdekat...</div>
                     <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Menghubungi driver di sekitar lokasi Anda. Harap tunggu.</div>
                   </div>
+                  {mitraRejectedCount > 0 && <div style={{ fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "6px 14px" }}>Mitra tidak tersedia, mencari yang lain...</div>}
                   {orderNo && <div style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</div>}
                   <button
                     onClick={async () => {
@@ -739,7 +743,7 @@ export default function OrderTowing() {
                         if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }).catch(() => {});
                         if (orderPollRef.current) clearInterval(orderPollRef.current);
                         if (chatPollRef.current) clearInterval(chatPollRef.current);
-                        setOrderId(null); setOrderNo(""); setOrderStatus("creating");
+                        setOrderId(null); setOrderNo(""); setOrderStatus("creating"); setMitraRejectedCount(0);
                         setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false); setMitraConfirmed(false);
                         
                       }}
