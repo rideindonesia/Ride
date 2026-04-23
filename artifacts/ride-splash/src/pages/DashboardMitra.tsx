@@ -351,8 +351,13 @@ export default function DashboardMitra() {
       // Update order data (totalAmount & paymentData dari server)
       setActiveOrder(prev => {
         if (prev && prev.id === o.id) {
-          // Order sama — hanya update data yang bisa berubah dari server
-          return { ...prev, totalAmount: o.totalAmount ?? prev.totalAmount, ...(o.paymentData && { paymentData: o.paymentData }) };
+          // Order sama — update data yang bisa berubah dari server, termasuk foto profil
+          return {
+            ...prev,
+            totalAmount: o.totalAmount ?? prev.totalAmount,
+            penggunaProfilePhoto: (o as any).penggunaProfilePhoto ?? (prev as any).penggunaProfilePhoto ?? null,
+            ...(o.paymentData && { paymentData: o.paymentData }),
+          };
         }
         // Order berbeda atau pertama kali load — gunakan data server sepenuhnya
         return o;
@@ -416,16 +421,17 @@ export default function DashboardMitra() {
           orderId: d.incoming.id,
         });
       } else {
-        // Order sudah ada — refresh koordinat dan deskripsi kalau sebelumnya kosong (dari socket)
+        // Order sudah ada — refresh koordinat, deskripsi, dan foto profil kalau sebelumnya kosong (dari socket)
         setIncoming(prev => {
           if (!prev || prev.id !== d.incoming.id) return prev;
-          const needsRefresh = !prev.pickupLat || !prev.pickupLng || prev.description === undefined;
+          const needsRefresh = !prev.pickupLat || !prev.pickupLng || prev.description === undefined || (prev as any).penggunaProfilePhoto === undefined;
           if (!needsRefresh) return prev;
           return {
             ...prev,
             pickupLat: d.incoming.pickupLat,
             pickupLng: d.incoming.pickupLng,
             description: d.incoming.description ?? prev.description,
+            penggunaProfilePhoto: (d.incoming as any).penggunaProfilePhoto ?? (prev as any).penggunaProfilePhoto ?? null,
           };
         });
       }
