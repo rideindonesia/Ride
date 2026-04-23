@@ -2741,7 +2741,7 @@ export default function DashboardMitra() {
             </div>
 
             {/* Tombol Keluar */}
-            <button onClick={async () => { await fetch(`${BASE}/api/auth/logout`, { method:"POST", credentials:"include" }); navigate("/"); }}
+            <button onClick={async () => { await fetch(`${BASE}/api/auth/logout?role=mitra`, { method:"POST", credentials:"include" }); navigate("/"); }}
               style={{ width:"100%", background:"#fff0f0", borderRadius:16, padding:"14px 16px", border:"1.5px solid #fde8e8", cursor:"pointer", display:"flex", alignItems:"center", gap:14, boxShadow:"0 2px 8px rgba(231,76,60,0.07)" }}>
               <span style={{ fontSize:22 }}>🚪</span>
               <span style={{ fontSize:14, fontWeight:700, color:"#e74c3c" }}>Keluar dari Akun</span>
