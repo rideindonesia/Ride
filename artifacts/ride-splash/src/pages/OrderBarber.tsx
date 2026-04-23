@@ -91,6 +91,7 @@ export default function OrderBarber() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [foto, setFoto] = useState<File | null>(null);
   const [mitraRejectedCount, setMitraRejectedCount] = useState(0);
+  const [searchElapsed, setSearchElapsed] = useState(0);
   const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   type ChatMsg = { id: number; senderRole: string; message: string; createdAt: string };
   const [chatOpen, setChatOpen] = useState(false);
@@ -184,6 +185,13 @@ export default function OrderBarber() {
     (() => { const fd = new FormData(); fd.append("vehicleType", untukSiapa); fd.append("vehicleModel", layanan); fd.append("vehicleYear", ""); fd.append("damageCategories", JSON.stringify([layanan])); fd.append("description", ""); fd.append("pickupAddress", autoAddress || "Lokasi yang dipilih"); fd.append("detailAlamat", detailAlamat); fd.append("pickupLat", String(pinLat ?? userLat ?? 0)); fd.append("pickupLng", String(pinLng ?? userLng ?? 0)); fd.append("serviceType", "barber"); if (foto) fd.append("foto", foto); return fetch("/api/pengguna/orders", { method: "POST", credentials: "include", body: fd }); })()
       .then(r => r.json()).then(d => { if (!d.orderId) { if (d.error === "Belum login") { setCreateError("Sesi berakhir. Silakan masuk ulang."); return; } setCreateError(d.error ?? "Gagal membuat pesanan. Coba lagi."); return; } setOrderId(d.orderId); setOrderNo(d.orderNo); setOrderStatus("pending"); }).catch(() => setCreateError("Koneksi gagal. Coba lagi."));
   }, [step, orderId]);
+
+  // Timer elapsed saat mencari mitra
+  useEffect(() => {
+    if (orderStatus !== "pending") { setSearchElapsed(0); return; }
+    const t = setInterval(() => setSearchElapsed(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [orderStatus]);
 
   useEffect(() => {
     if (step !== 3 || !orderId || orderStatus !== "pending") return;
@@ -377,6 +385,7 @@ export default function OrderBarber() {
               {orderStatus === "pending" && (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "24px 0 16px" }}>
                   <div style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}><div className="search-pulse" /><div className="search-spinner" /></div>
+                  <div style={{ fontSize: 12, color: "#64748b", background: "#f1f5f9", borderRadius: 20, padding: "4px 16px", fontWeight: 700, fontVariantNumeric: "tabular-nums", letterSpacing: 0.5 }}>⏱ {String(Math.floor(searchElapsed / 60)).padStart(2, "0")}:{String(searchElapsed % 60).padStart(2, "0")}</div>
                   <div style={{ textAlign: "center" }}><div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Barberman Terdekat...</div><div style={{ fontSize: 13, color: "#7a8a9a" }}>Menghubungi barberman di sekitar lokasi Anda.</div></div>
                   {orderNo && <div style={{ fontSize: 12, color: "#9aa5b4", fontWeight: 600 }}>No. Pesanan: {orderNo}</div>}
                   <button onClick={async () => { if (orderId) await fetch(`/api/pengguna/orders/${orderId}`, { method: "DELETE", credentials: "include" }); if (orderPollRef.current) clearInterval(orderPollRef.current); navigate("/dashboard/pengguna"); }} style={{ marginTop: 8, padding: "12px 32px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#f8fafc", color: "#ea580c", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✕ Batalkan</button>
