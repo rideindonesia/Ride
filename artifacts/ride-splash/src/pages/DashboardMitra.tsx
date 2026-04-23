@@ -374,8 +374,8 @@ export default function DashboardMitra() {
       const rawDbPhase = phaseMap[o.trackingPhase ?? ""] ?? "diterima";
       const safeDbPhase = !confirmed && rawDbPhase === "menuju" ? "diterima" : rawDbPhase;
       setMitraPhase(prev => {
-        // Kalau prev sudah di fase aktif (bukan diterima), pertahankan
-        if (prev !== "diterima" && prev !== "chat") return prev;
+        // Kalau prev sudah di fase aktif (bukan diterima), pertahankan — termasuk "chat"
+        if (prev !== "diterima") return prev;
         return safeDbPhase as any;
       });
       // Restore paymentData & rincianSent kalau sudah pernah kirim
