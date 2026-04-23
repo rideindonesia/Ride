@@ -397,7 +397,11 @@ export default function DashboardMitra() {
       const res = await fetch(`${BASE}/api/mitra/incoming-orders`);
       if (!res.ok) return;
       const d = await res.json();
-      if (!d.incoming) return;
+      if (!d.incoming) {
+        // Server tidak punya pesanan masuk — bersihkan card jika masih tampil (misalnya order dibatalkan pengguna)
+        setIncoming(prev => prev ? null : prev);
+        return;
+      }
       if (!seenOrderIds.current.has(d.incoming.id)) {
         // Order baru — set sebagai incoming
         seenOrderIds.current.add(d.incoming.id);
