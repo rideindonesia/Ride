@@ -104,6 +104,7 @@ export default function OrderBengkel() {
   const [orderTotal, setOrderTotal] = useState<number | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [mitraRejectedCount, setMitraRejectedCount] = useState(0);
+  const [searchElapsed, setSearchElapsed] = useState(0);
   const orderPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Chat state
@@ -345,6 +346,13 @@ export default function OrderBengkel() {
       })
       .catch(() => setCreateError("Koneksi gagal. Coba lagi."));
   }, [step, orderId]);
+
+  // Timer elapsed saat mencari mitra
+  useEffect(() => {
+    if (orderStatus !== "pending") { setSearchElapsed(0); return; }
+    const t = setInterval(() => setSearchElapsed(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [orderStatus]);
 
   // Step 3 — Phase 2: socket + backup polling for order status when pending
   useEffect(() => {
@@ -831,6 +839,7 @@ export default function OrderBengkel() {
                     <div className="search-pulse" />
                     <div className="search-spinner" />
                   </div>
+                  <div style={{ fontSize: 12, color: "#64748b", background: "#f1f5f9", borderRadius: 20, padding: "4px 16px", fontWeight: 700, fontVariantNumeric: "tabular-nums", letterSpacing: 0.5 }}>⏱ {String(Math.floor(searchElapsed / 60)).padStart(2, "0")}:{String(searchElapsed % 60).padStart(2, "0")}</div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2a3a", marginBottom: 6 }}>Mencari Mitra Terdekat...</div>
                     <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>Menghubungi mitra di sekitar lokasi Anda. Harap tunggu.</div>
