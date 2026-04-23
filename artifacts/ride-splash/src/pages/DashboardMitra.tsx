@@ -1196,11 +1196,11 @@ export default function DashboardMitra() {
                   <div style={{ fontSize: 12, color: "#7a8a9a" }}>📍 {activeOrder.vehicleModel} {activeOrder.vehicleYear}</div>
                 </div>
               </div>
-              {/* Foto kendaraan dari pengguna */}
+              {/* Foto dari pengguna */}
               {(activeOrder as any).penggunaPhotoPath && (
                 <div style={{ padding: "0 10px 10px" }}>
-                  <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 6, fontWeight: 600 }}>📸 Foto Kendaraan</div>
-                  <img src={(activeOrder as any).penggunaPhotoPath} alt="foto kendaraan" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 12, border: "1px solid #e0e8f0" }} />
+                  <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 6, fontWeight: 600 }}>📸 {({ barber: "Foto Referensi Gaya", elektronik: "Foto Perangkat" } as Record<string, string>)[activeOrder.serviceType] ?? "Foto Kendaraan"}</div>
+                  <img src={(activeOrder as any).penggunaPhotoPath} alt="foto" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 12, border: "1px solid #e0e8f0" }} />
                 </div>
               )}
 
@@ -1626,11 +1626,11 @@ export default function DashboardMitra() {
                 <span style={{ fontSize: 13 }}>📍</span>
                 <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.pickupAddress ?? "-"}</span>
               </div>
-              {/* Foto kendaraan dari pengguna */}
+              {/* Foto dari pengguna */}
               {incoming.penggunaPhotoPath && (
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, color: "#7a8a9a", marginBottom: 4, fontWeight: 600 }}>📸 Foto Kendaraan</div>
-                  <img src={incoming.penggunaPhotoPath} alt="foto kendaraan" style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 10, border: "1px solid #e0e8f0" }} />
+                  <div style={{ fontSize: 11, color: "#7a8a9a", marginBottom: 4, fontWeight: 600 }}>📸 {({ barber: "Foto Referensi Gaya", elektronik: "Foto Perangkat" } as Record<string, string>)[incoming.serviceType] ?? "Foto Kendaraan"}</div>
+                  <img src={incoming.penggunaPhotoPath} alt="foto" style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 10, border: "1px solid #e0e8f0" }} />
                 </div>
               )}
               {incomingDistInfo && (
