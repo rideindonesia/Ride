@@ -594,11 +594,11 @@ export default function OrderBengkel() {
     setChatInput("");
     setChatSending(true);
     try {
-      const r = await fetch(`/api/chat/${orderId}`, {
+      const r = await fetch(`/api/pengguna/chat/${orderId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ message: msg, role: "pengguna" }),
+        body: JSON.stringify({ message: msg }),
       });
       if (r.status === 401) {
         alert("Sesi Anda telah habis. Silakan login ulang.");
