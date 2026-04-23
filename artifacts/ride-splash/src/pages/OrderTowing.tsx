@@ -736,7 +736,7 @@ export default function OrderTowing() {
                         if (chatPollRef.current) clearInterval(chatPollRef.current);
                         setOrderId(null); setOrderNo(""); setOrderStatus("creating");
                         setAcceptedMitra(null); setChatMessages([]); setChatInput(""); setChatOpen(false); setMitraConfirmed(false);
-                        setStep(2); setTimeout(() => setStep(3), 50);
+                        
                       }}
                       style={{ width: "100%", padding: "14px", borderRadius: 14, border: "1.5px solid #e0e8f0", background: "#fff", color: "#4a5568", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                     >🔄 Cari Driver Lain</button>
