@@ -37,11 +37,17 @@ rsync -a --delete \
   "$WORKSPACE/" "$TEMP_DIR/" 2>/dev/null || {
     # rsync tidak tersedia, gunakan cp
     echo "📋 Menggunakan cp..."
-    for dir in artifacts lib scripts; do
+    for dir in artifacts lib scripts twa-android; do
       if [ -d "$WORKSPACE/$dir" ]; then
+        mkdir -p "$TEMP_DIR/$dir"
         cp -r "$WORKSPACE/$dir"/* "$TEMP_DIR/$dir/" 2>/dev/null || true
       fi
     done
+    # Copy .github folder (GitHub Actions workflows)
+    if [ -d "$WORKSPACE/.github" ]; then
+      mkdir -p "$TEMP_DIR/.github"
+      cp -r "$WORKSPACE/.github"/* "$TEMP_DIR/.github/" 2>/dev/null || true
+    fi
     cp "$WORKSPACE/pnpm-workspace.yaml" "$TEMP_DIR/" 2>/dev/null || true
     cp "$WORKSPACE/tsconfig"*.json "$TEMP_DIR/" 2>/dev/null || true
     cp "$WORKSPACE/package.json" "$TEMP_DIR/" 2>/dev/null || true

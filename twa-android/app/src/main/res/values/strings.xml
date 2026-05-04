@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RIDE - Super App Jasa Panggilan</string>
+    <string name="launchUrl">https://workspaceapi-server-production-7ba1.up.railway.app/</string>
+    <string name="assetLinksHost">workspaceapi-server-production-7ba1.up.railway.app</string>
+</resources>
