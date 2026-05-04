@@ -65,6 +65,23 @@ app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api", router);
 
+// Digital Asset Links — wajib untuk TWA Android
+app.get("/.well-known/assetlinks.json", (_req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.json([
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: "id.ride.superapp",
+        sha256_cert_fingerprints: [
+          "53:9F:57:F7:CE:35:B7:23:10:AD:95:66:3C:5B:5B:73:66:C5:BC:30:36:5C:9E:AE:67:E9:BD:58:DF:7F:96:ED",
+        ],
+      },
+    },
+  ]);
+});
+
 const frontendDist = path.resolve(process.cwd(), "public");
 const adminDist = path.resolve(process.cwd(), "public/admin");
 
