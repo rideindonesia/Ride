@@ -21,17 +21,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.4
+      - name: Install Gradle 8.4
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.4'
 
-      - name: Accept Android Licenses & Install SDK Components
+      - name: Accept Android Licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "build-tools;34.0.0" \
-            "platforms;android-34"
 
       - name: Generate Keystore
         working-directory: twa-android/app
@@ -45,7 +42,7 @@ jobs:
             -storepass rideindonesia \
             -keypass rideindonesia \
             -dname "CN=RIDE Indonesia, OU=Mobile, O=RIDE, L=Jakarta, ST=DKI Jakarta, C=ID"
-          echo "✅ Keystore berhasil dibuat"
+          echo "✅ Keystore dibuat"
 
       - name: Get SHA-256 Fingerprint
         working-directory: twa-android/app
@@ -56,11 +53,7 @@ jobs:
             -storepass rideindonesia \
             | grep "SHA256:" | awk '{print $2}')
           echo "SHA256_FINGERPRINT=$SHA256" >> $GITHUB_ENV
-          echo ""
-          echo "======================================"
-          echo "SHA-256 untuk assetlinks.json:"
-          echo "$SHA256"
-          echo "======================================"
+          echo "SHA-256: $SHA256"
 
       - name: Build Release AAB
         working-directory: twa-android
@@ -89,8 +82,5 @@ jobs:
           echo "$SHA256_FINGERPRINT" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Salin fingerprint di atas untuk dipasang di server Railway." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Download:" >> $GITHUB_STEP_SUMMARY
-          echo "- **RIDE-SuperApp-v1.0.aab** — upload ke Google Play Console" >> $GITHUB_STEP_SUMMARY
-          echo "- **keystore-SIMPAN-INI** — simpan di tempat aman, jangan sampai hilang!" >> $GITHUB_STEP_SUMMARY
+          echo "Download **RIDE-SuperApp-v1.0.aab** dari tab Artifacts di atas." >> $GITHUB_STEP_SUMMARY
+          echo "Download juga **keystore-SIMPAN-INI** — jangan sampai hilang!" >> $GITHUB_STEP_SUMMARY
