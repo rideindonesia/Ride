@@ -2,19 +2,18 @@ plugins {
     id 'com.android.application'
 }
 
-// Versi otomatis dari environment variable (di-set oleh GitHub Actions)
-// versionCode naik otomatis setiap build — wajib untuk update Play Store
+// Versi otomatis dari GitHub Actions run number
 def buildNumber = System.getenv("BUILD_NUMBER") ? System.getenv("BUILD_NUMBER").toInteger() : 1
 def buildVersion = System.getenv("BUILD_VERSION") ?: "1.0.0"
 
 android {
     namespace 'id.ride.superapp'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "id.ride.superapp"
         minSdk 24
-        targetSdk 34
+        targetSdk 35
         versionCode buildNumber
         versionName buildVersion
     }
@@ -36,8 +35,14 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    bundle {
+        language {
+            enableSplit = false
+        }
     }
 }
 
