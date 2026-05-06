@@ -44,22 +44,21 @@ jobs:
           echo "📦 versionCode: $BUILD_NUMBER"
           echo "📦 versionName: $BUILD_VERSION"
 
-      - name: Restore or Generate Keystore
+      - name: Restore Keystore
         working-directory: twa-android/app
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "✅ Menggunakan keystore dari GitHub Secret (konsisten)"
-            echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+          if [ -f "../keystore.b64" ]; then
+            echo "✅ Menggunakan keystore permanen dari repo (konsisten setiap build)"
+            base64 -d ../keystore.b64 > keystore.jks
           else
-            echo "⚠️  KEYSTORE_BASE64 belum diset — membuat keystore baru (sementara)"
+            echo "⚠️  keystore.b64 belum ada — membuat keystore sementara"
+            echo "   Jalankan workflow 'Setup Keystore' untuk membuat keystore permanen"
             keytool -genkey -v \
               -keystore keystore.jks \
               -alias ride \
               -keyalg RSA \
               -keysize 2048 \
-              -validity 10000 \
+              -validity 36500 \
               -storepass rideindonesia \
               -keypass rideindonesia \
               -dname "CN=RIDE Indonesia, OU=Mobile, O=RIDE, L=Jakarta, ST=DKI Jakarta, C=ID"
