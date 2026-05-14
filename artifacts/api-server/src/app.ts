@@ -75,7 +75,7 @@ app.get("/.well-known/assetlinks.json", (_req, res) => {
         namespace: "android_app",
         package_name: "id.ride.superapp",
         sha256_cert_fingerprints: [
-          "53:9F:57:F7:CE:35:B7:23:10:AD:95:66:3C:5B:5B:73:66:C5:BC:30:36:5C:9E:AE:67:E9:BD:58:DF:7F:96:ED",
+          "93:E5:A0:A1:30:17:17:78:F5:0A:BD:F5:F5:15:77:DF:37:B2:38:DC:4D:F9:6B:C5:DD:0C:1C:39:E3:1E:14:A1",
         ],
       },
     },
