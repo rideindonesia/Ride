@@ -6,7 +6,7 @@ WORKDIR /app
 RUN npm install -g pnpm@latest
 
 COPY . .
-
+RUN pnpm approve-builds --yes || true
 RUN pnpm install --no-frozen-lockfile
 
 # Build api-server backend (esbuild bundles db+api-zod internally)
