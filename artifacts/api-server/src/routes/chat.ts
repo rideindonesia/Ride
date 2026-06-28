@@ -1,0 +1,169 @@
+import { Router } from "express";
+import { db, chatMessagesTable, ordersTable } from "@workspace/db";
+import { eq, asc } from "drizzle-orm";
+import { io } from "../socket";
+import { sendPushToUsers } from "./push";
+
+const router = Router();
+
+/**
+ * Collect all verified user IDs from this request.
+ * On a same-device test with multiple accounts, both a pengguna cookie and a mitra
+ * cookie (and/or a session) may be present simultaneously.  Instead of picking just
+ * one winner, we return the full set so callers can check whether ANY identity is
+ * authorised for the target order.
+ */
+function getAllUserIds(req: any): Set<number> {
+  const ids = new Set<number>();
+
+  const pId = (req.session as any)?.penggunaId;
+  if (pId) { const n = Number(pId); if (!isNaN(n) && n > 0) ids.add(n); }
+  const mId = (req.session as any)?.mitraId;
+  if (mId) { const n = Number(mId); if (!isNaN(n) && n > 0) ids.add(n); }
+
+  const pUid = req.signedCookies?.["ride-p-uid"];
+  if (pUid && pUid !== false) {
+    const n = parseInt(pUid);
+    if (!isNaN(n) && n > 0) ids.add(n);
+  }
+
+  const mUid = req.signedCookies?.["ride-m-uid"];
+  if (mUid && mUid !== false) {
+    const n = parseInt(mUid);
+    if (!isNaN(n) && n > 0) ids.add(n);
+  }
+
+  return ids;
+}
+
+// Auth guard — at least one verified identity must exist
+function requireAuth(req: any, res: any, next: any) {
+  if (getAllUserIds(req).size === 0) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+}
+
+// GET /api/chat/:orderId — fetch messages
+router.get("/:orderId", requireAuth, async (req, res) => {
+  const orderId = parseInt(req.params.orderId);
+  if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID" }); return; }
+
+  const [order] = await db.select({ penggunaId: ordersTable.penggunaId, mitraId: ordersTable.mitraId })
+    .from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+
+  const ids = getAllUserIds(req);
+  if (!order || (!ids.has(order.penggunaId) && !ids.has(order.mitraId ?? -1))) {
+    res.status(403).json({ error: "Akses ditolak" }); return;
+  }
+
+  const messages = await db.select({
+    id: chatMessagesTable.id,
+    senderId: chatMessagesTable.senderId,
+    senderRole: chatMessagesTable.senderRole,
+    message: chatMessagesTable.message,
+    createdAt: chatMessagesTable.createdAt,
+  }).from(chatMessagesTable)
+    .where(eq(chatMessagesTable.orderId, orderId))
+    .orderBy(asc(chatMessagesTable.createdAt));
+
+  res.json({ messages });
+});
+
+// POST /api/chat/:orderId — send message
+router.post("/:orderId", requireAuth, async (req, res) => {
+  const orderId = parseInt(req.params.orderId);
+  const { message } = req.body;
+
+  if (isNaN(orderId) || !message?.trim()) {
+    res.status(400).json({ error: "Data tidak valid" }); return;
+  }
+
+  const [order] = await db.select({ penggunaId: ordersTable.penggunaId, mitraId: ordersTable.mitraId, status: ordersTable.status })
+    .from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+
+  const ids = getAllUserIds(req);
+  if (!order || (!ids.has(order.penggunaId) && !ids.has(order.mitraId ?? -1))) {
+    res.status(403).json({ error: "Akses ditolak" }); return;
+  }
+
+  // Chat ditutup setelah order selesai/dibatalkan — tidak bisa kirim pesan lagi.
+  if (order.status === "done" || order.status === "cancelled") {
+    res.status(409).json({ error: "Pesanan sudah selesai/dibatalkan. Chat ditutup." }); return;
+  }
+
+  // Determine senderRole — frontend MUST send explicit role to avoid ambiguity
+  // when same device is logged in as both pengguna and mitra simultaneously.
+  const sessionPenggunaId = (req.session as any)?.penggunaId as number | undefined;
+  const sessionMitraId    = (req.session as any)?.mitraId    as number | undefined;
+  const bodyRole = req.body?.role as string | undefined; // "pengguna" | "mitra"
+
+  let senderId: number;
+  let senderRole: "pengguna" | "mitra";
+
+  if (bodyRole === "pengguna") {
+    // Pengguna side: validate session has this pengguna and matches the order
+    if (!sessionPenggunaId || Number(sessionPenggunaId) !== Number(order.penggunaId)) {
+      res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
+    }
+    senderId   = sessionPenggunaId;
+    senderRole = "pengguna";
+  } else if (bodyRole === "mitra") {
+    // Mitra side: validate session has this mitra and matches the order
+    if (!sessionMitraId || Number(sessionMitraId) !== Number(order.mitraId)) {
+      res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
+    }
+    senderId   = sessionMitraId;
+    senderRole = "mitra";
+  } else {
+    // Fallback (no role sent): infer from session — mitra check first only if no pengguna match
+    if (sessionPenggunaId && Number(sessionPenggunaId) === Number(order.penggunaId)) {
+      senderId   = sessionPenggunaId;
+      senderRole = "pengguna";
+    } else if (sessionMitraId && Number(sessionMitraId) === Number(order.mitraId)) {
+      senderId   = sessionMitraId;
+      senderRole = "mitra";
+    } else {
+      res.status(401).json({ error: "Sesi habis, silakan login ulang" }); return;
+    }
+  }
+
+  const [msg] = await db.insert(chatMessagesTable).values({
+    orderId,
+    senderId,
+    senderRole,
+    message: message.trim(),
+  }).returning({ id: chatMessagesTable.id, createdAt: chatMessagesTable.createdAt });
+
+  try {
+    io?.to(`order:${orderId}`).emit("chat:message", {
+      id: msg.id,
+      orderId,
+      senderId,
+      senderRole,
+      message: message.trim(),
+      createdAt: msg.createdAt,
+    });
+
+    // Push notification ke pihak lawan bicara
+    const shortMsg = message.trim().slice(0, 80);
+    if (senderRole === "mitra" && order.penggunaId) {
+      sendPushToUsers([order.penggunaId], {
+        title: "💬 Pesan dari Mitra",
+        body: shortMsg,
+        url: "/",
+      }, "chat");
+    } else if (senderRole === "pengguna" && order.mitraId) {
+      sendPushToUsers([order.mitraId], {
+        title: "💬 Pesan dari Konsumen",
+        body: shortMsg,
+        url: "/",
+      }, "chat");
+    }
+  } catch {}
+
+  res.json({ ok: true, messageId: msg.id, senderRole });
+});
+
+export default router;

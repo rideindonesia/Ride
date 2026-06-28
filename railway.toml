@@ -1,0 +1,8 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+watchPatterns = ["**"]
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

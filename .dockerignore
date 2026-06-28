@@ -1,0 +1,18 @@
+node_modules
+**/node_modules
+**/dist
+**/.tsbuildinfo
+**/*.tsbuildinfo
+.git
+.gitignore
+*.log
+
+# Replit-specific (not needed for Railway build)
+.local
+.agents
+.replit
+attached_assets
+ride_db_backup.sql
+
+# Generated single-server output (rebuilt during docker build)
+artifacts/api-server/public
