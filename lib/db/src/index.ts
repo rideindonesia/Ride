@@ -19,6 +19,20 @@ export const db = drizzle(pool, { schema });
 // Idempotent additive migrations applied at startup so new columns exist on
 // every environment (local dev + Railway prod) without a separate migrate step.
 export async function ensureSchema(): Promise<void> {
+  // express-session store table (connect-pg-simple). Created here because the
+  // store's own `createTableIfMissing` reads a bundled table.sql via __dirname,
+  // which does not survive the esbuild server bundle.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "session" (
+      "sid" varchar NOT NULL COLLATE "default",
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+    )
+  `);
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`,
+  );
   await db.execute(
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_prefs jsonb NOT NULL DEFAULT '{}'::jsonb`,
   );

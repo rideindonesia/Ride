@@ -167,6 +167,8 @@ Semua tarif dibaca dari `system_settings` table, admin bisa edit via panel:
 - Daftar kota/kabupaten Indonesia (514 kota) ada di `artifacts/ride-splash/src/data/indonesian-cities.ts`
 - OTP berlaku 5 menit, kode OTP dikembalikan di response (mode dev — ganti dengan SMS production)
 - Password di-hash SHA256 + SESSION_SECRET
+- **Session store**: Tabel `session` (express-session/connect-pg-simple) dibuat di `ensureSchema()` (`lib/db/src/index.ts`), BUKAN mengandalkan `createTableIfMissing` — karena server di-bundle esbuild sehingga `table.sql` connect-pg-simple tidak ikut ter-bundle (`__dirname` menunjuk ke `dist/`). Tanpa ini, semua `req.session.save()` gagal di DB baru.
+- **Secrets terpakai**: SESSION_SECRET, DATABASE_URL/PG*, CLOUDINARY_* (upload Cloudinary), FONNTE_TOKEN (OTP WhatsApp), VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY (push). Opsional: NEON_DATABASE_URL (fallback ke DATABASE_URL), ADMIN_TOKEN_VERSION (default "1").
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 

@@ -1,9 +1,1 @@
-- [Orval schema naming](orval-schema-naming.md) — openapi request-body components must be named *Input not *Body, or Orval collides with operation-derived Zod names (TS2308).
-- [RIDE deployment targets](deployment-targets.md) — app deploys to BOTH Railway (prod, via GitHub Dockerfile) and Replit; pnpm v10 build scripts via onlyBuiltDependencies not approve-builds.
-- [Socket service-room auth](socket-service-room-auth.md) — socket identify must resolve mitra serviceType from DB, never trust client payload (broken-access-control fix).
-- [Payment amount integrity](payment-amount-integrity.md) — payment-data must reuse server-stored callFee (from accept) + DB biaya_layanan; only biayaJasa/sparepart come from mitra.
-- [Headless geolocation testing](headless-geolocation-testing.md) — Playwright/curl getCurrentPosition can't be e2e'd (only denied-gate is); validate location throttle by code + PATCH /api/mitra/location. Hard-timeout getCurrentPosition.
-- [Dual-role identity](dual-role-identity.md) — one session can be pengguna AND mitra; per-account endpoints must resolve userId strictly by role, never session.penggunaId||mitraId.
-- [Persistent login routing](persistent-login-routing.md) — splash must route active /auth/me session to dashboard by role; multi-role device disambiguated via localStorage ride-last-role.
-- [Push permission once](push-permission-once.md) — usePushNotification must ask Notification permission at most once (localStorage ride-push-asked); never auto-prompt on every mount/login.
-- [Notification feed (bell)](notification-feed.md) — in-app feed persists in sendPushToUsers before the PUSH_ENABLED return; feed works even without web-push.
+- [Session table on fresh DB](session-table-bundling.md) — connect-pg-simple's createTableIfMissing silently fails under esbuild bundle; create the `session` table in ensureSchema() instead.
