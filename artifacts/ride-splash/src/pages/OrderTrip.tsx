@@ -336,6 +336,7 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
     if (step !== 2) return;
     if (pickupLat == null || pickupLng == null || destLat == null || destLng == null) {
       setRouteDistKm(null);
+      setRouteLoading(false);
       if (routePolylineRef.current && leafletMapRef.current) { routePolylineRef.current.remove(); routePolylineRef.current = null; }
       return;
     }
@@ -360,9 +361,10 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
           }
         } else {
           setRouteDistKm(null);
+          if (routePolylineRef.current) { routePolylineRef.current.remove(); routePolylineRef.current = null; }
         }
       } catch {
-        if (!cancelled) setRouteDistKm(null); // fallback haversine dipakai otomatis
+        if (!cancelled) { setRouteDistKm(null); if (routePolylineRef.current) { routePolylineRef.current.remove(); routePolylineRef.current = null; } } // fallback haversine dipakai otomatis
       } finally {
         clearTimeout(timer);
         if (!cancelled) setRouteLoading(false);

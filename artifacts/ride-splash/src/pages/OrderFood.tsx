@@ -149,6 +149,9 @@ export default function OrderFood() {
   const gpsMarkerRef = useRef<L.CircleMarker | null>(null);
   const pickupMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
+  const routePolylineRef = useRef<L.Polyline | null>(null);
+  const [routeDistKm, setRouteDistKm] = useState<number | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
 
   // Step 4 tracking
   const [mitraTrackLat, setMitraTrackLat] = useState<number | null>(null);
@@ -173,9 +176,10 @@ export default function OrderFood() {
   // Subtotal item (keranjang)
   const subtotal = cart.reduce((sum, c) => sum + c.qty * c.price, 0);
 
-  // Ongkir distance & estimated fare (merchant → destination, from pricing config — no hardcode)
-  const tripDistKm = (pickupLat != null && pickupLng != null && destLat != null && destLng != null)
-    ? haversineDist(pickupLat, pickupLng, destLat, destLng) : null;
+  // Ongkir distance & estimated fare (merchant → destination, mengikuti jalan via OSRM — no hardcode).
+  // Prefer road distance; fall back to straight-line while OSRM is loading/unavailable.
+  const tripDistKm = routeDistKm ?? ((pickupLat != null && pickupLng != null && destLat != null && destLng != null)
+    ? haversineDist(pickupLat, pickupLng, destLat, destLng) : null);
   const estFee = tripDistKm != null ? calcBiayaPanggilan(svc, tripDistKm) : null;
 
   const canNext1 = cart.length > 0;
@@ -322,9 +326,52 @@ export default function OrderFood() {
         gpsMarkerRef.current = null;
         pickupMarkerRef.current = null;
         destMarkerRef.current = null;
+        routePolylineRef.current = null;
       }
     };
   }, [step]);
+
+  // Ambil rute jalan (OSRM) merchant→tujuan: set jarak ongkir + gambar garis biru mengikuti jalan
+  useEffect(() => {
+    if (step !== 2) return;
+    if (pickupLat == null || pickupLng == null || destLat == null || destLng == null) {
+      setRouteDistKm(null);
+      setRouteLoading(false);
+      if (routePolylineRef.current && leafletMapRef.current) { routePolylineRef.current.remove(); routePolylineRef.current = null; }
+      return;
+    }
+    let cancelled = false;
+    setRouteLoading(true);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    (async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pickupLng},${pickupLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+        const res = await fetch(url, { signal: ctrl.signal });
+        const data = await res.json();
+        const route = data?.routes?.[0];
+        if (cancelled) return;
+        if (route && typeof route.distance === "number" && route.distance > 0) {
+          setRouteDistKm(route.distance / 1000);
+          const coords: [number, number][] = (route.geometry?.coordinates ?? []).map((c: [number, number]) => [c[1], c[0]]);
+          const map = leafletMapRef.current;
+          if (map && coords.length > 1) {
+            if (routePolylineRef.current) routePolylineRef.current.setLatLngs(coords);
+            else routePolylineRef.current = L.polyline(coords, { color: "#2563eb", weight: 5, opacity: 0.85 }).addTo(map);
+          }
+        } else {
+          setRouteDistKm(null);
+          if (routePolylineRef.current) { routePolylineRef.current.remove(); routePolylineRef.current = null; }
+        }
+      } catch {
+        if (!cancelled) { setRouteDistKm(null); if (routePolylineRef.current) { routePolylineRef.current.remove(); routePolylineRef.current = null; } } // fallback haversine dipakai otomatis
+      } finally {
+        clearTimeout(timer);
+        if (!cancelled) setRouteLoading(false);
+      }
+    })();
+    return () => { cancelled = true; clearTimeout(timer); ctrl.abort(); };
+  }, [step, pickupLat, pickupLng, destLat, destLng]);
 
   function calcDist(lat1: number, lng1: number, lat2: number, lng2: number) {
     return haversineDist(lat1, lng1, lat2, lng2);
@@ -918,7 +965,7 @@ export default function OrderFood() {
                 </div>
                 {tripDistKm != null && estFee != null && (
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", background: "#f0faf7" }}>
-                    <span style={{ fontSize: 13, color: "#4a9a7a" }}>Estimasi Ongkir · {tripDistKm.toFixed(1)} km</span>
+                    <span style={{ fontSize: 13, color: "#4a9a7a" }}>Estimasi Ongkir · {tripDistKm.toFixed(1)} km {routeLoading ? "· menghitung rute..." : routeDistKm != null ? "· via jalan" : ""}</span>
                     <span style={{ fontSize: 13, fontWeight: 800, color: "#1a7a6a" }}>Rp {estFee.toLocaleString("id-ID")}</span>
                   </div>
                 )}
@@ -943,6 +990,7 @@ export default function OrderFood() {
                   gpsMarkerRef.current = null;
                   pickupMarkerRef.current = null;
                   destMarkerRef.current = null;
+                  routePolylineRef.current = null;
                 }
                 setStep(3);
               }}
