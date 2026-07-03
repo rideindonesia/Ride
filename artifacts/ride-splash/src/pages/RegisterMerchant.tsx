@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { CITIES } from "@/data/indonesian-cities";
 import { takeWarungHandoff } from "@/lib/warungHandoff";
+import LocationPicker from "@/components/LocationPicker";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -294,20 +295,11 @@ function Step2({ form, setField, onNext, onBack }: { form: FormData; setField: <
             </div>
           )}
         </Field>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <Field label="Latitude (opsional)">
-              <Input type="text" value={form.lat} onChange={v => setField("lat", v)} placeholder="-6.2088" />
-            </Field>
-          </div>
-          <div style={{ flex: 1 }}>
-            <Field label="Longitude (opsional)">
-              <Input type="text" value={form.lng} onChange={v => setField("lng", v)} placeholder="106.8456" />
-            </Field>
-          </div>
-        </div>
+        <Field label="Titik Lokasi Warung (Peta)">
+          <LocationPicker lat={form.lat} lng={form.lng} onChange={(la, ln) => { setField("lat", la); setField("lng", ln); }} />
+        </Field>
         <div style={{ fontSize: 12, color: "#7a8a9a", fontFamily: "'Inter', sans-serif", lineHeight: 1.5 }}>
-          Koordinat lokasi membantu ojol menemukan warung Anda. Kosongkan jika tidak tahu.
+          Titik lokasi membantu ojol menuju warung Anda dengan tepat, dan pengguna melihat seberapa dekat warung dari lokasi mereka.
         </div>
       </Card>
       {error && <ErrorMsg>{error}</ErrorMsg>}
