@@ -279,12 +279,11 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 
 // Jarak mengikuti jalan (OSRM). Fallback ke haversine jika gagal, agar order tetap bisa dibuat.
 async function roadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number, log?: any): Promise<number> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(timer);
     if (res.ok) {
       const data: any = await res.json();
       const meters = data?.routes?.[0]?.distance;
@@ -292,6 +291,8 @@ async function roadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: nu
     }
   } catch (err) {
     log?.warn?.({ err }, "OSRM road distance gagal, fallback ke haversine");
+  } finally {
+    clearTimeout(timer);
   }
   return haversineKm(lat1, lng1, lat2, lng2);
 }

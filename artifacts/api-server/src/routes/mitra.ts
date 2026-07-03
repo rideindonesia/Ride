@@ -43,6 +43,25 @@ function serverHaversineKm(lat1: number, lng1: number, lat2: number, lng2: numbe
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+// Jarak mengikuti jalan (OSRM). Fallback ke haversine jika gagal/timeout, agar fee tetap terhitung.
+async function serverRoadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number, log?: any): Promise<number> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (res.ok) {
+      const data: any = await res.json();
+      const meters = data?.routes?.[0]?.distance;
+      if (typeof meters === "number" && meters > 0) return meters / 1000;
+    }
+  } catch (err) {
+    log?.warn?.({ err }, "OSRM road distance gagal, fallback ke haversine");
+  } finally {
+    clearTimeout(timer);
+  }
+  return serverHaversineKm(lat1, lng1, lat2, lng2);
+}
 
 // Semua upload pakai memory storage dan dikirim ke Cloudinary
 const memStorage = multer.memoryStorage();
@@ -610,15 +629,15 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
 
       let distKm = 0;
       if (trip) {
-        // Fare over the passenger/parcel trip distance (pickup → destination).
+        // Fare over the passenger/parcel trip distance (pickup → destination), mengikuti jalan (OSRM).
         if (updated.tripDistanceKm != null && updated.tripDistanceKm > 0) {
           distKm = updated.tripDistanceKm;
         } else if (updated.pickupLat != null && updated.pickupLng != null && updated.destLat != null && updated.destLng != null) {
-          distKm = serverHaversineKm(updated.pickupLat, updated.pickupLng, updated.destLat, updated.destLng);
+          distKm = await serverRoadDistanceKm(updated.pickupLat, updated.pickupLng, updated.destLat, updated.destLng, req.log);
         }
       } else if (mitraLoc && updated.pickupLat != null && updated.pickupLng != null) {
-        // On-site services: fee over how far the mitra travels to the user.
-        distKm = serverHaversineKm(mitraLoc.lat, mitraLoc.lng, updated.pickupLat, updated.pickupLng);
+        // On-site services: fee over how far the mitra travels to the user, mengikuti jalan (OSRM).
+        distKm = await serverRoadDistanceKm(mitraLoc.lat, mitraLoc.lng, updated.pickupLat, updated.pickupLng, req.log);
       }
       const rawFee = base + Math.max(0, distKm - freeKm) * perKm;
       let callFee = Math.round(rawFee / 500) * 500;

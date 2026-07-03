@@ -144,6 +144,23 @@ function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Jarak mengikuti jalan (OSRM) untuk preview fee. Fallback ke haversine bila gagal/timeout.
+async function roadKm(lat1: number, lng1: number, lat2: number, lng2: number): Promise<number> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`, { signal: ctrl.signal });
+    if (res.ok) {
+      const data = await res.json();
+      const meters = data?.routes?.[0]?.distance;
+      if (typeof meters === "number" && meters > 0) return meters / 1000;
+    }
+  } catch { /* fallback */ } finally {
+    clearTimeout(timer);
+  }
+  return haversineDist(lat1, lng1, lat2, lng2);
+}
+
 function playOrderBeep() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -694,38 +711,49 @@ export default function DashboardMitra() {
     // Trip verticals (goride/gocar/gosend/goshop/gofood) bill the pickup→destination
     // distance, matching the backend. The mitra→pickup distance is only for arrival ETA.
     const trip = isTripService(incoming.serviceType);
-    let fareKm: number | null = null;
-    if (trip) {
-      if (incoming.tripDistanceKm != null && incoming.tripDistanceKm > 0) {
-        fareKm = incoming.tripDistanceKm;
-      } else if (pLat != null && pLng != null && incoming.destLat != null && incoming.destLng != null) {
-        fareKm = haversineDist(pLat, pLng, incoming.destLat, incoming.destLng);
-      } else {
-        fareKm = 0;
+    let cancelled = false;
+    // Trip: jarak tempuh (pickup→dest) mengikuti jalan; tripDistanceKm dari server sudah OSRM.
+    const resolveFareKm = async (): Promise<number | null> => {
+      if (!trip) return null;
+      if (incoming.tripDistanceKm != null && incoming.tripDistanceKm > 0) return incoming.tripDistanceKm;
+      if (pLat != null && pLng != null && incoming.destLat != null && incoming.destLng != null) {
+        return await roadKm(pLat, pLng, incoming.destLat, incoming.destLng);
       }
-    }
+      return 0;
+    };
     if (pLat == null || pLng == null) {
       // Koordinat belum tersedia — tampilkan base fee sementara, polling akan refresh
-      const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
-      setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
-      return;
+      resolveFareKm().then(fareKm => {
+        if (cancelled) return;
+        const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
+        setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
+      });
+      return () => { cancelled = true; };
     }
     navigator.geolocation?.getCurrentPosition(
-      pos => {
+      async pos => {
         const mLat = pos.coords.latitude;
         const mLng = pos.coords.longitude;
-        const km = haversineKmMitra(mLat, mLng, pLat, pLng);
+        const fareKm = await resolveFareKm();
+        // On-site: fee atas jarak mitra→pickup mengikuti jalan (OSRM).
+        const feeKm = fareKm ?? await roadKm(mLat, mLng, pLat, pLng);
+        if (cancelled) return;
+        const km = haversineKmMitra(mLat, mLng, pLat, pLng); // proximity/ETA display
         const eta = calcEtaMinutes(km);
-        const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? km);
+        const callFee = calcBiayaPanggilan(incoming.serviceType, feeKm);
         setIncomingDistInfo({ km: Math.round(km * 10) / 10, eta, callFee });
       },
       () => {
         // GPS ditolak — hitung berdasarkan koordinat saja tanpa posisi mitra
-        const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
-        setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
+        resolveFareKm().then(fareKm => {
+          if (cancelled) return;
+          const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
+          setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
+        });
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
+    return () => { cancelled = true; };
   }, [incoming?.id, incoming?.pickupLat, incoming?.pickupLng, incoming?.destLat, incoming?.destLng, incoming?.tripDistanceKm]);
 
   const ACTIVE_PHASES = ["accepted", "menuju", "tiba", "pengerjaan"];

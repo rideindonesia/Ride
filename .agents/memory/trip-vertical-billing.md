@@ -2,7 +2,7 @@
 name: Trip-vertical billing distance
 description: goride/gocar/gosend/goshop/gofood are billed on pickup→destination distance with no free km, unlike the on-site services.
 ---
-The Gojek-style verticals (goride, gocar, gosend, goshop, gofood) are "trip" services: the call fee is charged over the pickup→destination distance with `freeKm: 0`. The original on-site services (bengkel/elektronik/cuci/barber/inspeksi) charge over the mitra→pickup distance with a free-km allowance; towing is a trip service too (pickup→dest) but keeps free km.
+The Gojek-style verticals (goride, gocar, gosend, goshop, gofood) are "trip" services: the call fee is charged over the pickup→destination distance with `freeKm: 0`. The original on-site services (bengkel/elektronik/cuci/barber/inspeksi) charge over the mitra→pickup distance with a free-km allowance. **Towing is NOT in `TRIP_SERVICES`** — it is billed as on-site (mitra→pickup) with its own free km, even though it collects a destination and DISPLAYS a pickup→dest "jarak derek" in DashboardMitra. That display-vs-billing mismatch for towing is pre-existing; do not "fix" it by moving towing into TRIP_SERVICES without an explicit product decision (it would change towing prices).
 
 **Why:** A/B transport & courier fares must reflect the passenger/parcel journey, not how far the mitra travels to reach pickup. Getting this wrong makes the mitra's pre-accept fee preview disagree with the backend-computed fare.
 
