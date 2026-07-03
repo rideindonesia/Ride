@@ -277,6 +277,25 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Jarak mengikuti jalan (OSRM). Fallback ke haversine jika gagal, agar order tetap bisa dibuat.
+async function roadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number, log?: any): Promise<number> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data: any = await res.json();
+      const meters = data?.routes?.[0]?.distance;
+      if (typeof meters === "number" && meters > 0) return meters / 1000;
+    }
+  } catch (err) {
+    log?.warn?.({ err }, "OSRM road distance gagal, fallback ke haversine");
+  }
+  return haversineKm(lat1, lng1, lat2, lng2);
+}
+
 // POST /api/pengguna/orders — buat order baru (multipart/form-data, foto opsional)
 router.post("/orders", (req, res, next) => {
   uploadOrderPhoto.single("foto")(req, res, (err) => {
@@ -331,10 +350,10 @@ router.post("/orders", (req, res, next) => {
   const dLng = typeof destLng === "number" ? destLng : (destLng ? parseFloat(destLng) : null);
   const merchantIdNum = merchantId != null && merchantId !== "" ? parseInt(String(merchantId)) : null;
 
-  // Trip verticals: precompute pickup→destination distance for the fare.
+  // Trip verticals: precompute pickup→destination distance for the fare (mengikuti jalan via OSRM).
   let tripDistanceKm: number | null = null;
   if (isTrip && pLat != null && pLng != null && dLat != null && dLng != null) {
-    tripDistanceKm = haversineKm(pLat, pLng, dLat, dLng);
+    tripDistanceKm = await roadDistanceKm(pLat, pLng, dLat, dLng, req.log);
   }
 
   const [order] = await db.insert(ordersTable).values({

@@ -148,6 +148,11 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
   const gpsMarkerRef = useRef<L.CircleMarker | null>(null);
   const pickupMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
+  const routePolylineRef = useRef<L.Polyline | null>(null);
+
+  // Jarak mengikuti jalan (OSRM) — untuk estimasi biaya & garis rute
+  const [routeDistKm, setRouteDistKm] = useState<number | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
 
   // Step 4 tracking
   const [mitraTrackLat, setMitraTrackLat] = useState<number | null>(null);
@@ -169,9 +174,11 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
   const trackUserMarkerRef = useRef<L.Marker | null>(null);
   const trackingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Trip distance & estimated fare (from pricing config — no hardcode)
-  const tripDistKm = (pickupLat != null && pickupLng != null && destLat != null && destLng != null)
+  // Trip distance & estimated fare (from pricing config — no hardcode).
+  // Utamakan jarak mengikuti jalan (OSRM); haversine hanya cadangan saat rute belum termuat.
+  const haversineKm = (pickupLat != null && pickupLng != null && destLat != null && destLng != null)
     ? haversineDist(pickupLat, pickupLng, destLat, destLng) : null;
+  const tripDistKm = routeDistKm ?? haversineKm;
   const estFee = tripDistKm != null ? calcBiayaPanggilan(svc, tripDistKm) : null;
 
   const canNext1 = meta.needRecipient
@@ -324,6 +331,46 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
     }
   }, [step, pickingMode, pickupLat, pickupLng, destLat, destLng]);
 
+  // Ambil rute jalan (OSRM): set jarak + gambar garis biru mengikuti jalan
+  useEffect(() => {
+    if (step !== 2) return;
+    if (pickupLat == null || pickupLng == null || destLat == null || destLng == null) {
+      setRouteDistKm(null);
+      if (routePolylineRef.current && leafletMapRef.current) { routePolylineRef.current.remove(); routePolylineRef.current = null; }
+      return;
+    }
+    let cancelled = false;
+    setRouteLoading(true);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    (async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pickupLng},${pickupLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+        const res = await fetch(url, { signal: ctrl.signal });
+        const data = await res.json();
+        const route = data?.routes?.[0];
+        if (cancelled) return;
+        if (route && typeof route.distance === "number" && route.distance > 0) {
+          setRouteDistKm(route.distance / 1000);
+          const coords: [number, number][] = (route.geometry?.coordinates ?? []).map((c: [number, number]) => [c[1], c[0]]);
+          const map = leafletMapRef.current;
+          if (map && coords.length > 1) {
+            if (routePolylineRef.current) routePolylineRef.current.setLatLngs(coords);
+            else routePolylineRef.current = L.polyline(coords, { color: "#2563eb", weight: 5, opacity: 0.85 }).addTo(map);
+          }
+        } else {
+          setRouteDistKm(null);
+        }
+      } catch {
+        if (!cancelled) setRouteDistKm(null); // fallback haversine dipakai otomatis
+      } finally {
+        clearTimeout(timer);
+        if (!cancelled) setRouteLoading(false);
+      }
+    })();
+    return () => { cancelled = true; clearTimeout(timer); ctrl.abort(); };
+  }, [step, pickupLat, pickupLng, destLat, destLng]);
+
   // When switching picking mode, recenter map to that point if set
   const switchMode = (mode: "pickup" | "dest") => {
     setPickingMode(mode);
@@ -382,6 +429,7 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
         gpsMarkerRef.current = null;
         pickupMarkerRef.current = null;
         destMarkerRef.current = null;
+        routePolylineRef.current = null;
       }
     };
   }, [step]);
@@ -860,7 +908,7 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
               {tripDistKm != null && estFee != null && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#f0faf7", borderRadius: 14, marginBottom: 16, border: "1.5px solid #b6e6d7" }}>
                   <div>
-                    <div style={{ fontSize: 11, color: "#4a9a7a", fontWeight: 600 }}>Estimasi Biaya · {tripDistKm.toFixed(1)} km</div>
+                    <div style={{ fontSize: 11, color: "#4a9a7a", fontWeight: 600 }}>Estimasi Biaya · {tripDistKm.toFixed(1)} km {routeLoading ? "· menghitung rute..." : routeDistKm != null ? "· via jalan" : ""}</div>
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#1a7a6a" }}>Rp {estFee.toLocaleString("id-ID")}</div>
                   </div>
                   <span style={{ fontSize: 24 }}>{meta.emoji}</span>
@@ -894,6 +942,7 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
                   gpsMarkerRef.current = null;
                   pickupMarkerRef.current = null;
                   destMarkerRef.current = null;
+                  routePolylineRef.current = null;
                 }
                 setStep(3);
               }}
