@@ -614,19 +614,36 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
     res.status(404).json({ error: "Order tidak ditemukan atau sudah diambil mitra lain." });
     return;
   }
+  // Resolve the mitra's REGISTERED service type (yang didaftarkan saat pendaftaran mitra):
+  // mitra_locations dulu (disalin dari aplikasi saat go-online), fallback ke mitra_applications.
+  let mitraSvc: string | null = null;
   const [mLocSvc] = await db.select({ serviceType: mitraLocationsTable.serviceType })
     .from(mitraLocationsTable)
     .where(eq(mitraLocationsTable.userId, mitraId))
     .limit(1);
-  if (mLocSvc?.serviceType) {
-    const orderSvc = normSvc(orderRow.serviceType);
-    const allowed = normSvc(mLocSvc.serviceType) === orderSvc
-      || (isOjolCapableMitra(mLocSvc.serviceType) && OJOL_ORDER_TYPES.includes(orderSvc));
-    if (!allowed) {
-      req.log.warn({ mitraId, mitraServiceType: mLocSvc.serviceType, orderId, orderServiceType: orderRow.serviceType }, "mitra menolak-otomatis: layanan order tidak sesuai");
-      res.status(403).json({ error: "Layanan order ini tidak sesuai dengan layanan mitra Anda." });
-      return;
+  mitraSvc = mLocSvc?.serviceType ?? null;
+  if (!mitraSvc) {
+    const [u] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, mitraId)).limit(1);
+    if (u?.email) {
+      const [appRow] = await db.select({ serviceType: mitraApplicationsTable.serviceType })
+        .from(mitraApplicationsTable)
+        .where(eq(mitraApplicationsTable.email, u.email))
+        .limit(1);
+      mitraSvc = appRow?.serviceType ?? null;
     }
+  }
+  // Enforce: mitra HANYA boleh menerima order sesuai layanan yang didaftarkan.
+  // Cocok persis, ATAU payung ojol (mitra ojol → 4 tipe order ojol). Selain itu → 403.
+  // Contoh yang ditolak: mitra ojol ambil order gocar; mitra towing ambil order ojol.
+  const orderSvc = normSvc(orderRow.serviceType);
+  const allowed = !!mitraSvc && (
+    normSvc(mitraSvc) === orderSvc
+    || (isOjolCapableMitra(mitraSvc) && OJOL_ORDER_TYPES.includes(orderSvc))
+  );
+  if (!allowed) {
+    req.log.warn({ mitraId, mitraServiceType: mitraSvc, orderId, orderServiceType: orderRow.serviceType }, "tolak terima order: layanan tidak sesuai pendaftaran mitra");
+    res.status(403).json({ error: "Layanan order ini tidak sesuai dengan layanan yang Anda daftarkan." });
+    return;
   }
 
   // Assign mitraId + set accepted.
