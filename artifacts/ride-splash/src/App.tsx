@@ -50,6 +50,7 @@ function Router() {
         <AuthForm mode="login" />
       </Route>
       <Route path="/register/form" component={RegisterFormRouter} />
+      <Route path="/register/merchant" component={RegisterMerchant} />
       <Route path="/dashboard/pengguna" component={DashboardPengguna} />
       <Route path="/dashboard/mitra" component={DashboardMitra} />
       <Route path="/dashboard/merchant" component={DashboardMerchant} />

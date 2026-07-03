@@ -90,7 +90,7 @@ export default function RegisterMitra() {
       <Header step={step} onBack={step < 5 ? handleBack : undefined} />
       <div style={{ flex: 1, background: "#f0f4f8", borderRadius: "28px 28px 0 0", overflow: "auto" }}>
         {step === 1 && <Step1 form={form} setField={setField} onNext={() => setStep(2)} />}
-        {step === 2 && <Step2 form={form} setField={setField} onNext={() => { if (form.serviceType === "warung") navigate("/register/form?role=merchant"); else setStep(3); }} onBack={() => setStep(1)} />}
+        {step === 2 && <Step2 form={form} setField={setField} onNext={() => { if (form.serviceType === "warung") navigate("/register/merchant"); else setStep(3); }} onBack={() => setStep(1)} />}
         {step === 3 && <Step3 form={form} setField={setField} onNext={() => setStep(4)} onBack={() => setStep(2)} />}
         {step === 4 && <Step4 form={form} setField={setField} onSubmit={handleSubmit} onBack={() => setStep(3)} submitting={submitting} error={submitError} />}
         {step === 5 && <Step5 form={form} onLogin={() => navigate("/login")} />}
