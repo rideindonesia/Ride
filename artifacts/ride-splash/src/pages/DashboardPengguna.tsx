@@ -49,6 +49,13 @@ const COMING_SOON_SERVICES = [
   { id: "ride_repair", label: "Ride Repair & Build", emoji: "🏗️", color: "#8a9aaa" },
 ];
 
+// Pengelompokan layanan aktif ala Gojek (judul + daftar id layanan)
+const SERVICE_GROUPS: { title: string; ids: string[] }[] = [
+  { title: "Bepergian & Pengiriman", ids: ["ride_goride", "ride_gocar", "ride_gosend"] },
+  { title: "Pesan Makan & Belanja", ids: ["ride_gofood", "ride_goshop"] },
+  { title: "Jasa Service Panggilan", ids: ["ride_auto", "ride_towing", "ride_service", "ride_barber", "ride_wash", "ride_inspection"] },
+];
+
 const SERVICES = [...ACTIVE_SERVICES, ...COMING_SOON_SERVICES];
 
 interface OnlineMitra {
@@ -2338,24 +2345,35 @@ export default function DashboardPengguna() {
 
           {/* White content */}
           <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", flex: 1, padding: "26px 14px 40px", marginTop: -12 }}>
-            {/* Active services grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
-              {ACTIVE_SERVICES.map(s => {
-                const route = SERVICE_ROUTES[s.id];
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => { setShowAllServices(false); if (route) navigate(route); }}
-                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: route ? "pointer" : "default" }}
-                  >
-                    <div style={{ width: 56, height: 56, borderRadius: 16, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
-                      {s.emoji}
-                    </div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.25 }}>{s.label}</div>
+            {/* Active services — grouped like Gojek */}
+            {SERVICE_GROUPS.map(group => {
+              const items = group.ids
+                .map(id => ACTIVE_SERVICES.find(s => s.id === id))
+                .filter((s): s is typeof ACTIVE_SERVICES[number] => Boolean(s));
+              if (items.length === 0) return null;
+              return (
+                <div key={group.title} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2a3a", marginBottom: 14 }}>{group.title}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                    {items.map(s => {
+                      const route = SERVICE_ROUTES[s.id];
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => { setShowAllServices(false); if (route) navigate(route); }}
+                          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: route ? "pointer" : "default" }}
+                        >
+                          <div style={{ width: 56, height: 56, borderRadius: 16, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
+                            {s.emoji}
+                          </div>
+                          <div style={{ fontSize: 10.5, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.25 }}>{s.label}</div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
 
             {/* Divider */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
