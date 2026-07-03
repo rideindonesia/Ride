@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { CITIES } from "@/data/indonesian-cities";
+import { takeWarungHandoff } from "@/lib/warungHandoff";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -31,8 +32,22 @@ const INITIAL_FORM: FormData = {
 
 export default function RegisterMerchant() {
   const [, navigate] = useLocation();
-  const [step, setStep] = useState<Step>(1);
-  const [form, setForm] = useState<FormData>(INITIAL_FORM);
+  const [handoff] = useState(() => takeWarungHandoff());
+  const fromMitra = !!handoff;
+  const [step, setStep] = useState<Step>(fromMitra ? 2 : 1);
+  const [form, setForm] = useState<FormData>(() =>
+    handoff
+      ? {
+          ...INITIAL_FORM,
+          ownerName: handoff.ownerName,
+          email: handoff.email,
+          phone: handoff.phone,
+          password: handoff.password,
+          confirmPassword: handoff.confirmPassword,
+          agreeTerms: true,
+        }
+      : INITIAL_FORM
+  );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -40,7 +55,8 @@ export default function RegisterMerchant() {
     setForm(prev => ({ ...prev, [key]: value }));
 
   const handleBack = () => {
-    if (step === 1) navigate("/register");
+    if (fromMitra && step === 2) navigate("/register/form?role=mitra");
+    else if (step === 1) navigate("/register");
     else setStep(prev => (prev - 1) as Step);
   };
 
@@ -79,10 +95,10 @@ export default function RegisterMerchant() {
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "linear-gradient(180deg, #0d2137 0%, #1a3a5c 50%, #1c4a5a 100%)", overflow: "hidden" }}>
-      <Header step={step} onBack={step < 4 ? handleBack : undefined} />
+      <Header step={step} fromMitra={fromMitra} onBack={step < 4 ? handleBack : undefined} />
       <div style={{ flex: 1, background: "#f0f4f8", borderRadius: "28px 28px 0 0", overflow: "auto" }}>
         {step === 1 && <Step1 form={form} setField={setField} onNext={() => setStep(2)} />}
-        {step === 2 && <Step2 form={form} setField={setField} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
+        {step === 2 && <Step2 form={form} setField={setField} onNext={() => setStep(3)} onBack={handleBack} />}
         {step === 3 && <Step3 form={form} setField={setField} onSubmit={handleSubmit} onBack={() => setStep(2)} submitting={submitting} error={submitError} />}
         {step === 4 && <Step4 form={form} onLogin={() => navigate("/login")} />}
       </div>
@@ -90,7 +106,9 @@ export default function RegisterMerchant() {
   );
 }
 
-function Header({ step, onBack }: { step: Step; onBack?: () => void }) {
+function Header({ step, fromMitra, onBack }: { step: Step; fromMitra: boolean; onBack?: () => void }) {
+  const total = fromMitra ? 3 : 4;
+  const displayCurrent = fromMitra ? step - 1 : step;
   return (
     <div style={{ paddingTop: 48, paddingBottom: 24, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", flex: "0 0 auto" }}>
       {onBack && (
@@ -105,15 +123,15 @@ function Header({ step, onBack }: { step: Step; onBack?: () => void }) {
         <text x="60" y="78" textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize="38" fontWeight="700" fontFamily="'Inter', sans-serif">R</text>
       </svg>
       <div style={{ marginTop: 8, color: "#fff", fontSize: 18, fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>Daftar Warung</div>
-      <StepIndicator current={step} />
+      <StepIndicator current={displayCurrent} total={total} />
     </div>
   );
 }
 
-function StepIndicator({ current }: { current: Step }) {
+function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
     <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 0 }}>
-      {([1, 2, 3, 4] as Step[]).map((s, i) => (
+      {Array.from({ length: total }, (_, i) => i + 1).map((s, i) => (
         <div key={s} style={{ display: "flex", alignItems: "center" }}>
           {i > 0 && (
             <div style={{ width: 28, height: 2, background: s <= current ? "#2ecc71" : "rgba(255,255,255,0.3)" }} />
