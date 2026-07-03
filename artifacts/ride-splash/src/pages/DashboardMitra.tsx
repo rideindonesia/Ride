@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
-import { BIAYA_LAYANAN, PLATFORM_FEE_PCT, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, loadTarif } from "../utils/pricing";
+import { BIAYA_LAYANAN, PLATFORM_FEE_PCT, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, loadTarif, isTripService } from "../utils/pricing";
 import { usePushNotification } from "../hooks/usePushNotification";
 import { useRideToast, RideToastContainer } from "../components/RideToast";
 
@@ -88,6 +88,9 @@ interface IncomingOrder {
   description: string | null;
   pickupAddress: string; pickupLat: number | null; pickupLng: number | null;
   destLat?: number | null; destLng?: number | null; destAddress?: string | null;
+  tripDistanceKm?: number | null;
+  recipientName?: string | null; recipientPhone?: string | null; itemNote?: string | null;
+  orderItems?: { name: string; qty: number; price?: number }[] | null;
   totalAmount: number; platformFee: number;
   penggunaName: string; penggunaProfilePhoto?: string | null; penggunaPhotoPath?: string | null; createdAt: string;
 }
@@ -122,6 +125,11 @@ const SERVICE_CONFIG: Record<string, {
   barber:     { emoji: "✂️", header: "Pangkas Rambut",     mulai: "✂️ Mulai Pangkas",   selesai: "✅ Pangkas Selesai",   foto: "Foto Hasil Pangkas",    jasaLabel: "Biaya Jasa Pangkas",       jasaSub: "Ongkos pangkas rambut",       showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
   inspeksi:   { emoji: "🔍", header: "Inspeksi Kendaraan", mulai: "🔍 Mulai Inspeksi",  selesai: "✅ Inspeksi Selesai",  foto: "Foto Hasil Inspeksi",   jasaLabel: "Biaya Laporan Inspeksi",   jasaSub: "Ongkos inspeksi kendaraan",   showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
   towing:     { emoji: "🚐", header: "Towing / Derek",     mulai: "🚐 Mulai Derek",     selesai: "✅ Kendaraan Tiba",    foto: "Foto Bukti Derek",      jasaLabel: "Biaya Jasa Derek",         jasaSub: "Tarif derek kendaraan",       showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
+  goride:     { emoji: "🏍️", header: "Ride Ojek",          mulai: "🏍️ Mulai Perjalanan", selesai: "✅ Tiba di Tujuan",    foto: "Foto Bukti Perjalanan", jasaLabel: "Biaya Perjalanan",         jasaSub: "Tarif antar penumpang",       showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
+  gocar:      { emoji: "🚗", header: "Ride Mobil",         mulai: "🚗 Mulai Perjalanan", selesai: "✅ Tiba di Tujuan",    foto: "Foto Bukti Perjalanan", jasaLabel: "Biaya Perjalanan",         jasaSub: "Tarif antar penumpang",       showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
+  gosend:     { emoji: "📦", header: "Ride Kirim",         mulai: "📦 Mulai Pengiriman", selesai: "✅ Paket Terkirim",    foto: "Foto Bukti Pengiriman", jasaLabel: "Biaya Pengiriman",         jasaSub: "Tarif kirim barang",          showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
+  goshop:     { emoji: "🛍️", header: "Ride Belanja",       mulai: "🛍️ Mulai Belanja",   selesai: "✅ Belanja Terkirim",  foto: "Foto Bukti Belanja",    jasaLabel: "Biaya Jasa Belanja",       jasaSub: "Ongkos titip belanja",        showSparepart: true,  sparepartLabel: "Biaya Barang",     sparepartSub: "Total belanjaan yang dibeli" },
+  gofood:     { emoji: "🍔", header: "Ride Makan",         mulai: "🍔 Mulai Antar",     selesai: "✅ Makanan Terkirim",  foto: "Foto Bukti Pesanan",    jasaLabel: "Biaya Jasa Antar",         jasaSub: "Ongkos kirim makanan",        showSparepart: true,  sparepartLabel: "Biaya Makanan",    sparepartSub: "Total pesanan makanan" },
 };
 
 function getSvcCfg(serviceType?: string | null) {
@@ -683,9 +691,22 @@ export default function DashboardMitra() {
     if (!incoming) { setIncomingDistInfo(null); return; }
     const pLat = incoming.pickupLat;
     const pLng = incoming.pickupLng;
+    // Trip verticals (goride/gocar/gosend/goshop/gofood) bill the pickup→destination
+    // distance, matching the backend. The mitra→pickup distance is only for arrival ETA.
+    const trip = isTripService(incoming.serviceType);
+    let fareKm: number | null = null;
+    if (trip) {
+      if (incoming.tripDistanceKm != null && incoming.tripDistanceKm > 0) {
+        fareKm = incoming.tripDistanceKm;
+      } else if (pLat != null && pLng != null && incoming.destLat != null && incoming.destLng != null) {
+        fareKm = haversineDist(pLat, pLng, incoming.destLat, incoming.destLng);
+      } else {
+        fareKm = 0;
+      }
+    }
     if (pLat == null || pLng == null) {
       // Koordinat belum tersedia — tampilkan base fee sementara, polling akan refresh
-      const callFee = calcBiayaPanggilan(incoming.serviceType, 0);
+      const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
       setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
       return;
     }
@@ -695,17 +716,17 @@ export default function DashboardMitra() {
         const mLng = pos.coords.longitude;
         const km = haversineKmMitra(mLat, mLng, pLat, pLng);
         const eta = calcEtaMinutes(km);
-        const callFee = calcBiayaPanggilan(incoming.serviceType, km);
+        const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? km);
         setIncomingDistInfo({ km: Math.round(km * 10) / 10, eta, callFee });
       },
       () => {
         // GPS ditolak — hitung berdasarkan koordinat saja tanpa posisi mitra
-        const callFee = calcBiayaPanggilan(incoming.serviceType, 0);
+        const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
         setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
-  }, [incoming?.id, incoming?.pickupLat, incoming?.pickupLng]);
+  }, [incoming?.id, incoming?.pickupLat, incoming?.pickupLng, incoming?.destLat, incoming?.destLng, incoming?.tripDistanceKm]);
 
   const ACTIVE_PHASES = ["accepted", "menuju", "tiba", "pengerjaan"];
   const isBusyWithOrder = activeOrder !== null && ACTIVE_PHASES.includes(activeOrder.status ?? "");
@@ -1790,16 +1811,44 @@ export default function DashboardMitra() {
                 <span style={{ fontSize: 13 }}>📍</span>
                 <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.pickupAddress ?? "-"}</span>
               </div>
-              {incoming.serviceType === "towing" && incoming.destLat && incoming.destLng && incoming.pickupLat && incoming.pickupLng && (
+              {(incoming.serviceType === "towing" || isTripService(incoming.serviceType)) && incoming.destAddress && (
                 <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#f5f0ff", borderRadius: 10, marginBottom: 8, border: "1px solid rgba(124,58,237,0.15)" }}>
                   <span style={{ fontSize: 13 }}>🏁</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: "#7a8a9a", fontWeight: 600, marginBottom: 1 }}>Tujuan Derek</div>
+                    <div style={{ fontSize: 10, color: "#7a8a9a", fontWeight: 600, marginBottom: 1 }}>{incoming.serviceType === "towing" ? "Tujuan Derek" : "Tujuan Pengantaran"}</div>
                     <div style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.destAddress || "—"}</div>
-                    <div style={{ fontSize: 11, color: "#7c3aed", fontWeight: 800, marginTop: 3 }}>
-                      📏 Jarak derek ≈ {(Math.round(haversineDist(incoming.pickupLat, incoming.pickupLng, incoming.destLat, incoming.destLng) * 10) / 10)} km
-                    </div>
+                    {incoming.pickupLat != null && incoming.pickupLng != null && incoming.destLat != null && incoming.destLng != null && (
+                      <div style={{ fontSize: 11, color: "#7c3aed", fontWeight: 800, marginTop: 3 }}>
+                        📏 Jarak {incoming.serviceType === "towing" ? "derek" : "tempuh"} ≈ {(incoming.tripDistanceKm != null && incoming.tripDistanceKm > 0 ? Math.round(incoming.tripDistanceKm * 10) / 10 : Math.round(haversineDist(incoming.pickupLat, incoming.pickupLng, incoming.destLat, incoming.destLng) * 10) / 10)} km
+                      </div>
+                    )}
                   </div>
+                </div>
+              )}
+              {(incoming.recipientName || incoming.recipientPhone) && (
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#eef6ff", borderRadius: 10, marginBottom: 8, border: "1px solid rgba(2,132,199,0.15)" }}>
+                  <span style={{ fontSize: 13 }}>📦</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: "#7a8a9a", fontWeight: 600, marginBottom: 1 }}>Penerima</div>
+                    <div style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.recipientName || "—"}{incoming.recipientPhone ? ` · ${incoming.recipientPhone}` : ""}</div>
+                  </div>
+                </div>
+              )}
+              {Array.isArray(incoming.orderItems) && incoming.orderItems.length > 0 && (
+                <div style={{ padding: "8px 12px", background: "#fff7ed", borderRadius: 10, marginBottom: 8, border: "1px solid rgba(234,88,12,0.15)" }}>
+                  <div style={{ fontSize: 10, color: "#7a8a9a", fontWeight: 600, marginBottom: 4 }}>{incoming.serviceType === "gofood" ? "Pesanan Makanan" : "Daftar Belanja"}</div>
+                  {incoming.orderItems.map((it, idx) => (
+                    <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#1a3a5c", lineHeight: 1.6 }}>
+                      <span>{it.qty}× {it.name}</span>
+                      {it.price != null && <span>Rp {(it.price * it.qty).toLocaleString("id-ID")}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {incoming.itemNote && (
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "8px 12px", background: "#f0f8f6", borderRadius: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 13 }}>📝</span>
+                  <span style={{ fontSize: 12, color: "#1a3a5c", lineHeight: 1.4 }}>{incoming.itemNote}</span>
                 </div>
               )}
               {/* Foto dari pengguna */}

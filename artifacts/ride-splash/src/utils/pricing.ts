@@ -5,7 +5,21 @@ export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm
   cuci:       { base: 12000, freeKm: 3, perKm: 2500 },
   inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
+  // Gojek-style verticals: fare charged from km 0 (freeKm: 0) over trip distance A→B.
+  goride:     { base: 5000,  freeKm: 0, perKm: 2000 },
+  gocar:      { base: 10000, freeKm: 0, perKm: 4000 },
+  gosend:     { base: 6000,  freeKm: 0, perKm: 2500 },
+  goshop:     { base: 8000,  freeKm: 0, perKm: 2500 },
+  gofood:     { base: 6000,  freeKm: 0, perKm: 2500 },
 };
+
+// Verticals whose fare is based on the trip distance (pickup → destination),
+// not the "mitra travels to you" call-fee model. These never get free km.
+export const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
+
+export function isTripService(serviceType: string): boolean {
+  return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
 
 export let BIAYA_LAYANAN = 2000;
 export let PLATFORM_FEE_PCT = 15;
@@ -22,17 +36,14 @@ export async function loadTarif(apiBase: string = ""): Promise<void> {
     const biayaLayanan = parseInt(tarif["biaya_layanan_admin"] ?? "2000") || 2000;
     PLATFORM_FEE_PCT = parseInt(tarif["platform_fee_pct"] ?? "15") || 15;
 
-    const map: Record<string, string> = {
-      bengkel: "bengkel", elektronik: "elektronik", barber: "barber",
-      cuci: "cuci", inspeksi: "inspeksi", towing: "towing",
-    };
-
     const newCfg: typeof CALL_FEE_CONFIG = { ...CALL_FEE_CONFIG };
-    for (const [svc, key] of Object.entries(map)) {
-      const base = parseInt(tarif[`call_fee_${key}_base`] ?? "");
-      const perKm = parseInt(tarif[`call_fee_${key}_per_km`] ?? "");
+    for (const svc of Object.keys(CALL_FEE_CONFIG)) {
+      const base = parseInt(tarif[`call_fee_${svc}_base`] ?? "");
+      const perKm = parseInt(tarif[`call_fee_${svc}_per_km`] ?? "");
       if (!isNaN(base) && !isNaN(perKm)) {
-        newCfg[svc] = { base, freeKm, perKm };
+        // Trip-based verticals (goride/gocar/gosend/goshop/gofood) never get free km.
+        const svcFreeKm = TRIP_SERVICES.has(svc) ? 0 : freeKm;
+        newCfg[svc] = { base, freeKm: svcFreeKm, perKm };
       }
     }
     CALL_FEE_CONFIG = newCfg;

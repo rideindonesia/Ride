@@ -13,3 +13,5 @@ export * from "./platform_fee_payments";
 export * from "./login_history";
 export * from "./user_addresses";
 export * from "./voucher_usage";
+export * from "./merchants";
+export * from "./menu_items";

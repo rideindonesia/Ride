@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraLocationsTable, mitraApplicationsTable, systemSettingsTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraLocationsTable, mitraApplicationsTable, systemSettingsTable, merchantsTable, menuItemsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -23,6 +23,33 @@ const DEMO_MITRA = [
   { name: "Anto Wijaya",    phone: "+6285211223344", email: "anto.wijaya@ride.app",    password: "mitra1234", role: "mitra" as const, service: "barber",     lat: -1.2754, lng: 116.8312 },
   { name: "Heru Gunawan",   phone: "+6289934567890", email: "heru.gunawan@ride.app",   password: "mitra1234", role: "mitra" as const, service: "inspeksi",   lat: -1.2654, lng: 116.8452 },
   { name: "Rudi Hermawan",  phone: "+6282198765432", email: "rudi.hermawan@ride.app",  password: "mitra1234", role: "mitra" as const, service: "towing",     lat: -1.2554, lng: 116.8482 },
+  { name: "Joko Riyanto",   phone: "+6281700000001", email: "joko.goride@ride.app",   password: "mitra1234", role: "mitra" as const, service: "goride",     lat: -1.2600, lng: 116.8300 },
+  { name: "Slamet Widodo",  phone: "+6281700000002", email: "slamet.gocar@ride.app",  password: "mitra1234", role: "mitra" as const, service: "gocar",      lat: -1.2620, lng: 116.8320 },
+  { name: "Eko Purnomo",    phone: "+6281700000003", email: "eko.gosend@ride.app",    password: "mitra1234", role: "mitra" as const, service: "gosend",     lat: -1.2580, lng: 116.8340 },
+  { name: "Bayu Saputra",   phone: "+6281700000004", email: "bayu.goshop@ride.app",   password: "mitra1234", role: "mitra" as const, service: "goshop",     lat: -1.2640, lng: 116.8290 },
+  { name: "Fajar Nugroho",  phone: "+6281700000005", email: "fajar.gofood@ride.app",  password: "mitra1234", role: "mitra" as const, service: "gofood",     lat: -1.2610, lng: 116.8310 },
+];
+
+const DEMO_MERCHANTS = [
+  { name: "Warung Nasi Ibu Sari", category: "food", description: "Masakan rumahan khas Balikpapan", address: "Jl. Ahmad Yani No. 12, Balikpapan", lat: -1.2620, lng: 116.8330, menu: [
+    { name: "Nasi Ayam Goreng", price: 22000, category: "Makanan" },
+    { name: "Nasi Rendang", price: 27000, category: "Makanan" },
+    { name: "Soto Banjar", price: 20000, category: "Makanan" },
+    { name: "Es Teh Manis", price: 5000, category: "Minuman" },
+    { name: "Es Jeruk", price: 7000, category: "Minuman" },
+  ]},
+  { name: "Kedai Kopi Senja", category: "food", description: "Kopi & camilan", address: "Jl. Jenderal Sudirman No. 45, Balikpapan", lat: -1.2680, lng: 116.8280, menu: [
+    { name: "Kopi Susu Gula Aren", price: 18000, category: "Minuman" },
+    { name: "Americano", price: 15000, category: "Minuman" },
+    { name: "Croissant Cokelat", price: 20000, category: "Camilan" },
+    { name: "Kentang Goreng", price: 17000, category: "Camilan" },
+  ]},
+  { name: "Ayam Geprek Mantul", category: "food", description: "Ayam geprek pedas level", address: "Jl. MT Haryono No. 8, Balikpapan", lat: -1.2560, lng: 116.8380, menu: [
+    { name: "Geprek Original", price: 18000, category: "Makanan" },
+    { name: "Geprek Keju", price: 23000, category: "Makanan" },
+    { name: "Geprek Sambal Matah", price: 24000, category: "Makanan" },
+    { name: "Es Teh", price: 5000, category: "Minuman" },
+  ]},
 ];
 
 router.post("/demo", async (_req, res) => {
@@ -118,6 +145,25 @@ router.post("/demo", async (_req, res) => {
       .set({ passwordHash: hashPassword("admin1234"), isAdmin: true })
       .where(eq(usersTable.id, existingAdmin[0].id));
     results.push({ name: "Admin RIDE", email: adminEmail, status: "password diperbarui" });
+  }
+
+  // Seed demo merchants + menu (untuk GoFood/GoShop)
+  for (const m of DEMO_MERCHANTS) {
+    const existingM = await db.select({ id: merchantsTable.id }).from(merchantsTable).where(eq(merchantsTable.name, m.name)).limit(1);
+    if (existingM.length > 0) {
+      results.push({ name: m.name, email: "-", status: "merchant sudah ada" });
+      continue;
+    }
+    const [ins] = await db.insert(merchantsTable).values({
+      name: m.name, category: m.category, description: m.description,
+      address: m.address, lat: m.lat, lng: m.lng, isOpen: true,
+    }).returning({ id: merchantsTable.id });
+    for (const item of m.menu) {
+      await db.insert(menuItemsTable).values({
+        merchantId: ins.id, name: item.name, price: item.price, category: item.category, isAvailable: true,
+      });
+    }
+    results.push({ name: m.name, email: "-", status: "merchant dibuat" });
   }
 
   res.json({ message: "Seeding selesai", results });
@@ -248,17 +294,18 @@ router.post("/admin", async (_req, res) => {
   const passwordHash = createHash("sha256").update(password + salt).digest("hex");
 
   const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  let adminMsg: string;
   if (existing.length > 0) {
     await db.update(usersTable).set({ passwordHash, isAdmin: true }).where(eq(usersTable.email, email));
-    res.json({ message: "Password admin direset", email, password });
-    return;
+    adminMsg = "Password admin direset";
+  } else {
+    await db.insert(usersTable).values({
+      name: "Super Admin", email, passwordHash, role: "pengguna", isAdmin: true,
+    });
+    adminMsg = "Admin berhasil dibuat";
   }
 
-  const [user] = await db.insert(usersTable).values({
-    name: "Super Admin", email, passwordHash, role: "pengguna", isAdmin: true,
-  }).returning({ id: usersTable.id, name: usersTable.name, email: usersTable.email });
-
-  // Upsert all system settings defaults
+  // Upsert all system settings defaults (selalu dijalankan, idempotent)
   const settings = [
     { key: "call_fee_bengkel_base", value: "12000", label: "Bengkel — Biaya Dasar (Rp)" },
     { key: "call_fee_bengkel_per_km", value: "2500", label: "Bengkel — Per Km Lebih (Rp)" },
@@ -272,6 +319,16 @@ router.post("/admin", async (_req, res) => {
     { key: "call_fee_inspeksi_per_km", value: "3000", label: "Inspeksi — Per Km Lebih (Rp)" },
     { key: "call_fee_towing_base", value: "75000", label: "Towing — Biaya Dasar (Rp)" },
     { key: "call_fee_towing_per_km", value: "8000", label: "Towing — Per Km Lebih (Rp)" },
+    { key: "call_fee_goride_base", value: "5000", label: "GoRide (Ojek) — Tarif Dasar (Rp)" },
+    { key: "call_fee_goride_per_km", value: "2000", label: "GoRide (Ojek) — Per Km (Rp)" },
+    { key: "call_fee_gocar_base", value: "10000", label: "GoCar (Mobil) — Tarif Dasar (Rp)" },
+    { key: "call_fee_gocar_per_km", value: "4000", label: "GoCar (Mobil) — Per Km (Rp)" },
+    { key: "call_fee_gosend_base", value: "6000", label: "GoSend (Kirim Barang) — Tarif Dasar (Rp)" },
+    { key: "call_fee_gosend_per_km", value: "2500", label: "GoSend (Kirim Barang) — Per Km (Rp)" },
+    { key: "call_fee_goshop_base", value: "8000", label: "GoShop (Titip Belanja) — Tarif Dasar (Rp)" },
+    { key: "call_fee_goshop_per_km", value: "2500", label: "GoShop (Titip Belanja) — Per Km (Rp)" },
+    { key: "call_fee_gofood_base", value: "6000", label: "GoFood (Antar Makanan) — Tarif Dasar (Rp)" },
+    { key: "call_fee_gofood_per_km", value: "2500", label: "GoFood (Antar Makanan) — Per Km (Rp)" },
     { key: "call_fee_free_km", value: "3", label: "Jarak Gratis (km)" },
     { key: "biaya_layanan_admin", value: "2000", label: "Biaya Layanan & Admin (Rp)" },
     { key: "platform_fee_pct", value: "15", label: "Platform Fee Mitra (%)" },
@@ -280,7 +337,7 @@ router.post("/admin", async (_req, res) => {
     await db.insert(systemSettingsTable).values(s).onConflictDoNothing();
   }
 
-  res.json({ message: "Admin berhasil dibuat", id: user.id, email, password });
+  res.json({ message: adminMsg, email, password, settingsSeeded: settings.length });
 });
 
 export default router;

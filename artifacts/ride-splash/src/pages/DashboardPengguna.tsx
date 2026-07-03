@@ -14,6 +14,11 @@ const SERVICE_ROUTES: Record<string, string> = {
   ride_barber: "/order/barber",
   ride_inspection: "/order/inspeksi",
   ride_towing: "/order/towing",
+  ride_goride: "/order/goride",
+  ride_gocar: "/order/gocar",
+  ride_gosend: "/order/gosend",
+  ride_goshop: "/order/goshop",
+  ride_gofood: "/order/gofood",
 };
 
 // Fix leaflet default icon paths
@@ -31,6 +36,11 @@ const ACTIVE_SERVICES = [
   { id: "ride_barber", label: "Ride Barber", emoji: "✂️", color: "#7c2a2a" },
   { id: "ride_wash", label: "Ride Wash", emoji: "🚿", color: "#1a5c7c" },
   { id: "ride_inspection", label: "Ride Inspection", emoji: "🔍", color: "#2a5c2a" },
+  { id: "ride_goride", label: "Ride Ojek", emoji: "🏍️", color: "#0a6b3d" },
+  { id: "ride_gocar", label: "Ride Mobil", emoji: "🚗", color: "#0a5c6b" },
+  { id: "ride_gosend", label: "Ride Kirim", emoji: "📦", color: "#6b4a0a" },
+  { id: "ride_goshop", label: "Ride Belanja", emoji: "🛍️", color: "#6b0a4a" },
+  { id: "ride_gofood", label: "Ride Makan", emoji: "🍔", color: "#a83214" },
 ];
 
 const COMING_SOON_SERVICES = [
@@ -83,6 +93,11 @@ const SVC_CFG: Record<string, { emoji: string; label: string; serviceLabel: stri
   barber:    { emoji: "✂️", label: "Ride Barber",      serviceLabel: "Barber Panggilan",    route: "/order/barber" },
   inspeksi:  { emoji: "🔍", label: "Ride Inspection",  serviceLabel: "Inspeksi Kendaraan",  route: "/order/inspeksi" },
   towing:    { emoji: "🚛", label: "Ride Towing",      serviceLabel: "Towing & Derek",      route: "/order/towing" },
+  goride:    { emoji: "🏍️", label: "Ride Ojek",        serviceLabel: "Ojek Online",         route: "/order/goride" },
+  gocar:     { emoji: "🚗", label: "Ride Mobil",       serviceLabel: "Mobil Online",        route: "/order/gocar" },
+  gosend:    { emoji: "📦", label: "Ride Kirim",       serviceLabel: "Kirim Barang",        route: "/order/gosend" },
+  goshop:    { emoji: "🛍️", label: "Ride Belanja",     serviceLabel: "Titip Belanja",       route: "/order/goshop" },
+  gofood:    { emoji: "🍔", label: "Ride Makan",       serviceLabel: "Pesan Makanan",       route: "/order/gofood" },
 };
 const getSvc = (t: string) => SVC_CFG[t] ?? { emoji: "🔧", label: t, serviceLabel: t, route: "/" };
 const fmtRp = (n: number | null | undefined) => "Rp " + (n ?? 0).toLocaleString("id-ID");
@@ -160,6 +175,7 @@ export default function DashboardPengguna() {
   const [activeOrder, setActiveOrder] = useState<null | {
     id: number; orderNo: string; status: string; trackingPhase: string;
     vehicleModel: string; damageCategories: string[]; mitraName: string | null;
+    serviceType?: string;
   }>(null);
   const [showAllServices, setShowAllServices] = useState(false);
 
@@ -1032,7 +1048,7 @@ export default function DashboardPengguna() {
           {/* Active order card */}
           {activeOrder && (
             <div
-              onClick={() => navigate(`/order/bengkel?resume=${activeOrder.id}`)}
+              onClick={() => navigate(`${getSvc(activeOrder.serviceType ?? "bengkel").route}?resume=${activeOrder.id}`)}
               style={{ borderRadius: 16, background: "linear-gradient(135deg, #0d2137 0%, #1a3a5c 100%)", padding: 16, cursor: "pointer", border: "1.5px solid rgba(26,122,106,0.4)", boxShadow: "0 4px 16px rgba(26,58,92,0.25)" }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -1043,9 +1059,9 @@ export default function DashboardPengguna() {
                 <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 18 }}>›</span>
               </div>
               <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🔧</div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{getSvc(activeOrder.serviceType ?? "bengkel").emoji}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{activeOrder.vehicleModel || "Bengkel Panggilan"}</div>
+                  <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>{activeOrder.vehicleModel || getSvc(activeOrder.serviceType ?? "bengkel").serviceLabel}</div>
                   <div style={{ color: "#5fd3c4", fontSize: 12, marginTop: 2 }}>
                     {activeOrder.trackingPhase === "selesai"
                       ? "💳 Menunggu pembayaran"

@@ -13,6 +13,8 @@ import OrderCuci from "@/pages/OrderCuci";
 import OrderBarber from "@/pages/OrderBarber";
 import OrderInspeksi from "@/pages/OrderInspeksi";
 import OrderTowing from "@/pages/OrderTowing";
+import OrderTrip from "@/pages/OrderTrip";
+import OrderFood from "@/pages/OrderFood";
 import ReviewPage from "@/pages/ReviewPage";
 import KebijakanPrivasiPengguna from "@/pages/KebijakanPrivasiPengguna";
 import KebijakanPrivasiMitra from "@/pages/KebijakanPrivasiMitra";
@@ -53,6 +55,11 @@ function Router() {
       <Route path="/order/barber" component={OrderBarber} />
       <Route path="/order/inspeksi" component={OrderInspeksi} />
       <Route path="/order/towing" component={OrderTowing} />
+      <Route path="/order/goride" component={() => <OrderTrip svc="goride" />} />
+      <Route path="/order/gocar" component={() => <OrderTrip svc="gocar" />} />
+      <Route path="/order/gosend" component={() => <OrderTrip svc="gosend" />} />
+      <Route path="/order/goshop" component={() => <OrderTrip svc="goshop" />} />
+      <Route path="/order/gofood" component={OrderFood} />
       <Route path="/review/:orderId" component={ReviewPage} />
       <Route path="/kebijakan-privasi" component={KebijakanPrivasiPengguna} />
       <Route path="/kebijakan-privasi-mitra" component={KebijakanPrivasiMitra} />

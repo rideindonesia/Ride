@@ -9,6 +9,7 @@ import Pengguna from "@/pages/Pengguna";
 import Orders from "@/pages/Orders";
 import Keuangan from "@/pages/Keuangan";
 import Voucher from "@/pages/Voucher";
+import Merchant from "@/pages/Merchant";
 import Laporan from "@/pages/Laporan";
 import Tiket from "@/pages/Tiket";
 import Settings from "@/pages/Settings";
@@ -40,6 +41,7 @@ function AppRoutes() {
         <Route path="/orders" component={() => <AuthGuard><Orders /></AuthGuard>} />
         <Route path="/keuangan" component={() => <AuthGuard><Keuangan /></AuthGuard>} />
         <Route path="/voucher" component={() => <AuthGuard><Voucher /></AuthGuard>} />
+        <Route path="/merchant" component={() => <AuthGuard><Merchant /></AuthGuard>} />
         <Route path="/laporan" component={() => <AuthGuard><Laporan /></AuthGuard>} />
         <Route path="/tiket" component={() => <AuthGuard><Tiket /></AuthGuard>} />
         <Route path="/settings" component={() => <AuthGuard><Settings /></AuthGuard>} />

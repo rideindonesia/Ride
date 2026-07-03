@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable, platformFeePaymentsTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable, platformFeePaymentsTable, merchantsTable, menuItemsTable } from "@workspace/db";
 import { eq, and, or, desc, asc, sql, count, sum, ilike, gte, lte, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
@@ -962,6 +962,106 @@ router.post("/broadcast", requireAdmin, async (req, res) => {
 
   await sendPushToUsers(userIds, { title, body, url: "/" }, "promo");
   res.json({ sent: userIds.length });
+});
+
+// ─────────────────── Merchants & Menu (GoFood/GoShop) ───────────────────
+// GET /api/admin/merchants — semua merchant
+router.get("/merchants", requireAdmin, async (_req, res) => {
+  const merchants = await db.select().from(merchantsTable).orderBy(desc(merchantsTable.createdAt));
+  res.json({ merchants });
+});
+
+// POST /api/admin/merchants — buat merchant
+router.post("/merchants", requireAdmin, async (req, res) => {
+  const { name, category, description, address, lat, lng, photoPath, isOpen, ownerUserId } = req.body;
+  if (!name) { res.status(400).json({ error: "Nama merchant wajib diisi" }); return; }
+  const [merchant] = await db.insert(merchantsTable).values({
+    name,
+    category: category ?? "food",
+    description: description ?? null,
+    address: address ?? null,
+    lat: lat != null && lat !== "" ? Number(lat) : null,
+    lng: lng != null && lng !== "" ? Number(lng) : null,
+    photoPath: photoPath ?? null,
+    isOpen: isOpen !== false,
+    ownerUserId: ownerUserId != null && ownerUserId !== "" ? Number(ownerUserId) : null,
+  }).returning();
+  res.json({ merchant });
+});
+
+// PATCH /api/admin/merchants/:id — ubah merchant
+router.patch("/merchants/:id", requireAdmin, async (req, res) => {
+  const id = parseInt(String(req.params.id));
+  const { name, category, description, address, lat, lng, photoPath, isOpen } = req.body;
+  const patch: Record<string, unknown> = {};
+  if (name !== undefined) patch.name = name;
+  if (category !== undefined) patch.category = category;
+  if (description !== undefined) patch.description = description;
+  if (address !== undefined) patch.address = address;
+  if (lat !== undefined) patch.lat = lat != null && lat !== "" ? Number(lat) : null;
+  if (lng !== undefined) patch.lng = lng != null && lng !== "" ? Number(lng) : null;
+  if (photoPath !== undefined) patch.photoPath = photoPath;
+  if (isOpen !== undefined) patch.isOpen = !!isOpen;
+  if (Object.keys(patch).length === 0) { res.status(400).json({ error: "Tidak ada perubahan" }); return; }
+  const [merchant] = await db.update(merchantsTable).set(patch).where(eq(merchantsTable.id, id)).returning();
+  if (!merchant) { res.status(404).json({ error: "Merchant tidak ditemukan" }); return; }
+  res.json({ merchant });
+});
+
+// DELETE /api/admin/merchants/:id — hapus merchant + menunya
+router.delete("/merchants/:id", requireAdmin, async (req, res) => {
+  const id = parseInt(String(req.params.id));
+  await db.delete(menuItemsTable).where(eq(menuItemsTable.merchantId, id));
+  await db.delete(merchantsTable).where(eq(merchantsTable.id, id));
+  res.json({ ok: true });
+});
+
+// GET /api/admin/merchants/:id/menu — daftar menu merchant
+router.get("/merchants/:id/menu", requireAdmin, async (req, res) => {
+  const id = parseInt(String(req.params.id));
+  const menu = await db.select().from(menuItemsTable).where(eq(menuItemsTable.merchantId, id)).orderBy(asc(menuItemsTable.name));
+  res.json({ menu });
+});
+
+// POST /api/admin/merchants/:id/menu — tambah menu
+router.post("/merchants/:id/menu", requireAdmin, async (req, res) => {
+  const merchantId = parseInt(String(req.params.id));
+  const { name, description, price, photoPath, category, isAvailable } = req.body;
+  if (!name) { res.status(400).json({ error: "Nama menu wajib diisi" }); return; }
+  const [menuItem] = await db.insert(menuItemsTable).values({
+    merchantId,
+    name,
+    description: description ?? null,
+    price: price != null ? Math.max(0, parseInt(String(price)) || 0) : 0,
+    photoPath: photoPath ?? null,
+    category: category ?? null,
+    isAvailable: isAvailable !== false,
+  }).returning();
+  res.json({ menuItem });
+});
+
+// PATCH /api/admin/menu-items/:id — ubah menu
+router.patch("/menu-items/:id", requireAdmin, async (req, res) => {
+  const id = parseInt(String(req.params.id));
+  const { name, description, price, photoPath, category, isAvailable } = req.body;
+  const patch: Record<string, unknown> = {};
+  if (name !== undefined) patch.name = name;
+  if (description !== undefined) patch.description = description;
+  if (price !== undefined) patch.price = Math.max(0, parseInt(String(price)) || 0);
+  if (photoPath !== undefined) patch.photoPath = photoPath;
+  if (category !== undefined) patch.category = category;
+  if (isAvailable !== undefined) patch.isAvailable = !!isAvailable;
+  if (Object.keys(patch).length === 0) { res.status(400).json({ error: "Tidak ada perubahan" }); return; }
+  const [menuItem] = await db.update(menuItemsTable).set(patch).where(eq(menuItemsTable.id, id)).returning();
+  if (!menuItem) { res.status(404).json({ error: "Menu tidak ditemukan" }); return; }
+  res.json({ menuItem });
+});
+
+// DELETE /api/admin/menu-items/:id — hapus menu
+router.delete("/menu-items/:id", requireAdmin, async (req, res) => {
+  const id = parseInt(String(req.params.id));
+  await db.delete(menuItemsTable).where(eq(menuItemsTable.id, id));
+  res.json({ ok: true });
 });
 
 export default router;

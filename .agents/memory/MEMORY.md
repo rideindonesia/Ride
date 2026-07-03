@@ -1,1 +1,4 @@
 - [Session table on fresh DB](session-table-bundling.md) — connect-pg-simple's createTableIfMissing silently fails under esbuild bundle; create the `session` table in ensureSchema() instead.
+- [Seed settings gotcha](seed-settings-gotcha.md) — system_settings tarif upsert must run on EVERY /seed/admin call, not just admin-create branch, or tarif ends up empty & frontend falls back to hardcode.
+- [api-server typecheck debt](api-server-typecheck-debt.md) — ~25 pre-existing leaf typecheck errors (session cast + Express5 req.query/params string|string[]); dev runs via esbuild so not blocking; cast req.params.id with String() in new code.
+- [Trip-vertical billing](trip-vertical-billing.md) — goride/gocar/gosend/goshop/gofood bill pickup→destination distance (freeKm 0), NOT mitra→pickup; keep isTripService sets in sync across pricing.ts/mitra.ts/pengguna.ts.

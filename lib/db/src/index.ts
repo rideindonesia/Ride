@@ -94,6 +94,44 @@ export async function ensureSchema(): Promise<void> {
   await db.execute(
     sql`CREATE INDEX IF NOT EXISTS voucher_usage_pengguna_idx ON voucher_usage (pengguna_id, used_at)`,
   );
+  // New Gojek-style verticals (transport/courier/food): extra order fields.
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS trip_distance_km double precision`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS recipient_name varchar(120)`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS recipient_phone varchar(30)`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS item_note text`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS merchant_id integer`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_items json`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS merchants (
+      id serial PRIMARY KEY,
+      owner_user_id integer,
+      name varchar(160) NOT NULL,
+      category varchar(30) NOT NULL DEFAULT 'food',
+      description text,
+      address text,
+      lat double precision,
+      lng double precision,
+      photo_path text,
+      is_open boolean NOT NULL DEFAULT true,
+      created_at timestamp NOT NULL DEFAULT now()
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS menu_items (
+      id serial PRIMARY KEY,
+      merchant_id integer NOT NULL,
+      name varchar(160) NOT NULL,
+      description text,
+      price integer NOT NULL DEFAULT 0,
+      photo_path text,
+      category varchar(60),
+      is_available boolean NOT NULL DEFAULT true,
+      created_at timestamp NOT NULL DEFAULT now()
+    )
+  `);
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS menu_items_merchant_idx ON menu_items (merchant_id)`,
+  );
 }
 
 export * from "./schema";

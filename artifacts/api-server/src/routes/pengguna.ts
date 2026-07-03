@@ -1,6 +1,6 @@
 // v2 — fix: fetchIncoming clears card when order cancelled
 import { Router } from "express";
-import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, vouchersTable, reportsTable, chatMessagesTable, loginHistoryTable, userAddressesTable, voucherUsageTable } from "@workspace/db";
+import { db, usersTable, otpCodesTable, mitraLocationsTable, ordersTable, vouchersTable, reportsTable, chatMessagesTable, loginHistoryTable, userAddressesTable, voucherUsageTable, merchantsTable, menuItemsTable } from "@workspace/db";
 import { eq, and, gt, sql, avg, count, or, desc, asc, aliasedTable, isNull, lt, inArray, SQL } from "drizzle-orm";
 import { RegisterPenggunaBody, VerifyOtpPenggunaBody, ResendOtpPenggunaBody } from "@workspace/api-zod";
 import crypto from "crypto";
@@ -267,6 +267,16 @@ router.get("/mitra-online", async (req, res) => {
   res.json({ mitra });
 });
 
+// Trip-based verticals (transport/courier/food): fare over pickup→destination.
+const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // POST /api/pengguna/orders — buat order baru (multipart/form-data, foto opsional)
 router.post("/orders", (req, res, next) => {
   uploadOrderPhoto.single("foto")(req, res, (err) => {
@@ -279,22 +289,29 @@ router.post("/orders", (req, res, next) => {
 
   const { vehicleType, vehicleModel, vehicleYear, damageCategories, description,
     pickupAddress, detailAlamat, pickupLat, pickupLng, serviceType,
-    destLat, destLng, destAddress } = req.body;
+    destLat, destLng, destAddress,
+    recipientName, recipientPhone, itemNote, merchantId, orderItems } = req.body;
 
-  if (!vehicleModel || !pickupAddress) {
+  const svcType = serviceType ?? "bengkel";
+  const isTrip = TRIP_SERVICES.has(svcType.toLowerCase().replace(/[\s_-]+/g, ""));
+
+  if (!pickupAddress) {
+    res.status(400).json({ error: "Alamat jemput wajib diisi" }); return;
+  }
+  // On-site services (bengkel/cuci/dll) butuh data kendaraan; trip services tidak.
+  if (!isTrip && !vehicleModel) {
     res.status(400).json({ error: "Data tidak lengkap" }); return;
   }
 
   const orderNo = `ORD${Date.now().toString().slice(-8)}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 
-  const svcType = serviceType ?? "bengkel";
   // Foto kendaraan pengguna (opsional) — upload ke Cloudinary
   let penggunaPhotoPath: string | null = null;
   if (req.file) {
     try {
       penggunaPhotoPath = await uploadBufferToCloudinary(req.file.buffer, { folder: "ride/order-photos" });
     } catch (err) {
-      console.error("Gagal upload foto order ke Cloudinary:", err);
+      req.log?.error({ err }, "Gagal upload foto order ke Cloudinary");
     }
   }
 
@@ -302,6 +319,23 @@ router.post("/orders", (req, res, next) => {
   let dmgCats: string[] = [];
   if (Array.isArray(damageCategories)) dmgCats = damageCategories;
   else if (typeof damageCategories === "string") { try { dmgCats = JSON.parse(damageCategories); } catch { dmgCats = []; } }
+
+  // orderItems (GoFood/GoShop) bisa string (FormData) atau array (JSON)
+  let items: { name: string; qty: number; price: number; note?: string }[] | null = null;
+  if (Array.isArray(orderItems)) items = orderItems;
+  else if (typeof orderItems === "string") { try { items = JSON.parse(orderItems); } catch { items = null; } }
+
+  const pLat = typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null);
+  const pLng = typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null);
+  const dLat = typeof destLat === "number" ? destLat : (destLat ? parseFloat(destLat) : null);
+  const dLng = typeof destLng === "number" ? destLng : (destLng ? parseFloat(destLng) : null);
+  const merchantIdNum = merchantId != null && merchantId !== "" ? parseInt(String(merchantId)) : null;
+
+  // Trip verticals: precompute pickup→destination distance for the fare.
+  let tripDistanceKm: number | null = null;
+  if (isTrip && pLat != null && pLng != null && dLat != null && dLng != null) {
+    tripDistanceKm = haversineKm(pLat, pLng, dLat, dLng);
+  }
 
   const [order] = await db.insert(ordersTable).values({
     orderNo,
@@ -314,11 +348,17 @@ router.post("/orders", (req, res, next) => {
     description,
     pickupAddress,
     detailAlamat,
-    pickupLat: typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null),
-    pickupLng: typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null),
-    destLat: typeof destLat === "number" ? destLat : (destLat ? parseFloat(destLat) : null),
-    destLng: typeof destLng === "number" ? destLng : (destLng ? parseFloat(destLng) : null),
+    pickupLat: pLat,
+    pickupLng: pLng,
+    destLat: dLat,
+    destLng: dLng,
     destAddress: destAddress ?? null,
+    tripDistanceKm,
+    recipientName: recipientName ?? null,
+    recipientPhone: recipientPhone ?? null,
+    itemNote: itemNote ?? null,
+    merchantId: merchantIdNum,
+    orderItems: items,
     status: "pending",
     penggunaPhotoPath,
   }).returning({ id: ordersTable.id, orderNo: ordersTable.orderNo });
@@ -353,11 +393,17 @@ router.post("/orders", (req, res, next) => {
       damageCategories: dmgCats,
       description: description ?? null,
       pickupAddress,
-      pickupLat: typeof pickupLat === "number" ? pickupLat : (pickupLat ? parseFloat(pickupLat) : null),
-      pickupLng: typeof pickupLng === "number" ? pickupLng : (pickupLng ? parseFloat(pickupLng) : null),
-      destLat: typeof destLat === "number" ? destLat : (destLat ? parseFloat(destLat) : null),
-      destLng: typeof destLng === "number" ? destLng : (destLng ? parseFloat(destLng) : null),
+      pickupLat: pLat,
+      pickupLng: pLng,
+      destLat: dLat,
+      destLng: dLng,
       destAddress: destAddress ?? null,
+      tripDistanceKm,
+      recipientName: recipientName ?? null,
+      recipientPhone: recipientPhone ?? null,
+      itemNote: itemNote ?? null,
+      merchantId: merchantIdNum,
+      orderItems: items,
       penggunaName: pengguna?.name ?? "",
       penggunaProfilePhoto: pengguna?.profilePhotoPath ?? null,
       penggunaPhotoPath,
@@ -1155,6 +1201,27 @@ router.post("/chat/:orderId", async (req, res) => {
     }
   } catch {}
   res.json({ ok: true, messageId: msg.id, senderRole: "pengguna" });
+});
+
+// GET /api/pengguna/merchants — daftar merchant (GoFood/GoShop)
+router.get("/merchants", async (req, res) => {
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const conds = [eq(merchantsTable.isOpen, true)];
+  if (category) conds.push(eq(merchantsTable.category, category));
+  const merchants = await db.select().from(merchantsTable).where(and(...conds)).orderBy(asc(merchantsTable.name));
+  res.json({ merchants });
+});
+
+// GET /api/pengguna/merchants/:id — detail merchant + menu tersedia
+router.get("/merchants/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID tidak valid" }); return; }
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, id)).limit(1);
+  if (!merchant) { res.status(404).json({ error: "Merchant tidak ditemukan" }); return; }
+  const menu = await db.select().from(menuItemsTable)
+    .where(and(eq(menuItemsTable.merchantId, id), eq(menuItemsTable.isAvailable, true)))
+    .orderBy(asc(menuItemsTable.category), asc(menuItemsTable.name));
+  res.json({ merchant, menu });
 });
 
 export default router;

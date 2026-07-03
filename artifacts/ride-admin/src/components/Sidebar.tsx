@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { useAdmin } from "@/hooks/useAdmin";
 import {
   LayoutDashboard, Users, Wrench, ShoppingBag, Wallet,
-  Tag, BarChart3, Settings, LogOut, ChevronRight, Menu, X, TicketCheck
+  Tag, BarChart3, Settings, LogOut, ChevronRight, Menu, X, TicketCheck, Store
 } from "lucide-react";
 import { useState } from "react";
 
@@ -14,6 +14,7 @@ const navItems = [
   { icon: ShoppingBag, label: "Order", path: "/orders" },
   { icon: Wallet, label: "Keuangan", path: "/keuangan" },
   { icon: Tag, label: "Voucher", path: "/voucher" },
+  { icon: Store, label: "Merchant", path: "/merchant" },
   { icon: BarChart3, label: "Laporan", path: "/laporan" },
   { icon: TicketCheck, label: "Tiket", path: "/tiket" },
   { icon: Settings, label: "Pengaturan", path: "/settings" },

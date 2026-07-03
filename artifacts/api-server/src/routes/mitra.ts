@@ -17,7 +17,18 @@ const CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm: num
   cuci:       { base: 12000, freeKm: 3, perKm: 2500 },
   inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
+  // Gojek-style verticals: fare over trip distance (pickup→dest), no free km.
+  goride:     { base: 5000,  freeKm: 0, perKm: 2000 },
+  gocar:      { base: 10000, freeKm: 0, perKm: 4000 },
+  gosend:     { base: 6000,  freeKm: 0, perKm: 2500 },
+  goshop:     { base: 8000,  freeKm: 0, perKm: 2500 },
+  gofood:     { base: 6000,  freeKm: 0, perKm: 2500 },
 };
+// Verticals whose fare is based on trip distance (pickup→destination) with no free km.
+const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
+function isTripService(serviceType: string): boolean {
+  return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
 const BIAYA_LAYANAN = 2000;
 function serverCalcBiayaPanggilan(serviceType: string, distKm: number): number {
   const key = serviceType.toLowerCase().replace(/[\s_-]+/g, "");
@@ -485,6 +496,11 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
     destLat: ordersTable.destLat,
     destLng: ordersTable.destLng,
     destAddress: ordersTable.destAddress,
+    tripDistanceKm: ordersTable.tripDistanceKm,
+    recipientName: ordersTable.recipientName,
+    recipientPhone: ordersTable.recipientPhone,
+    itemNote: ordersTable.itemNote,
+    orderItems: ordersTable.orderItems,
     totalAmount: ordersTable.totalAmount,
     platformFee: ordersTable.platformFee,
     penggunaName: usersTable.name,
@@ -569,6 +585,9 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
       serviceType: ordersTable.serviceType,
       pickupLat: ordersTable.pickupLat,
       pickupLng: ordersTable.pickupLng,
+      destLat: ordersTable.destLat,
+      destLng: ordersTable.destLng,
+      tripDistanceKm: ordersTable.tripDistanceKm,
     });
 
   try {
@@ -581,14 +600,24 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
       const settingsRows = await db.select().from(systemSettingsTable);
       const sMap: Record<string, string> = {};
       settingsRows.forEach(r => { sMap[r.key] = r.value; });
-      const freeKm = parseFloat(sMap["call_fee_free_km"] ?? "3") || 3;
       const svcKey = updated.serviceType.toLowerCase().replace(/[\s_-]+/g, "");
+      const trip = isTripService(svcKey);
+      // Trip verticals charge from km 0; on-site services grant free km.
+      const freeKm = trip ? 0 : (parseFloat(sMap["call_fee_free_km"] ?? "3") || 3);
       const base = parseInt(sMap[`call_fee_${svcKey}_base`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.base ?? 12000);
       const perKm = parseInt(sMap[`call_fee_${svcKey}_per_km`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.perKm ?? 2500);
       const biayaLayananDB = parseInt(sMap["biaya_layanan_admin"] ?? "2000") || 2000;
 
       let distKm = 0;
-      if (mitraLoc && updated.pickupLat != null && updated.pickupLng != null) {
+      if (trip) {
+        // Fare over the passenger/parcel trip distance (pickup → destination).
+        if (updated.tripDistanceKm != null && updated.tripDistanceKm > 0) {
+          distKm = updated.tripDistanceKm;
+        } else if (updated.pickupLat != null && updated.pickupLng != null && updated.destLat != null && updated.destLng != null) {
+          distKm = serverHaversineKm(updated.pickupLat, updated.pickupLng, updated.destLat, updated.destLng);
+        }
+      } else if (mitraLoc && updated.pickupLat != null && updated.pickupLng != null) {
+        // On-site services: fee over how far the mitra travels to the user.
         distKm = serverHaversineKm(mitraLoc.lat, mitraLoc.lng, updated.pickupLat, updated.pickupLng);
       }
       const rawFee = base + Math.max(0, distKm - freeKm) * perKm;
