@@ -2339,19 +2339,19 @@ export default function DashboardPengguna() {
           {/* White content */}
           <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", flex: 1, padding: "26px 14px 40px", marginTop: -12 }}>
             {/* Active services grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
               {ACTIVE_SERVICES.map(s => {
                 const route = SERVICE_ROUTES[s.id];
                 return (
                   <div
                     key={s.id}
                     onClick={() => { setShowAllServices(false); if (route) navigate(route); }}
-                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, cursor: route ? "pointer" : "default" }}
+                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: route ? "pointer" : "default" }}
                   >
-                    <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 16, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
                       {s.emoji}
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.25 }}>{s.label}</div>
                   </div>
                 );
               })}
@@ -2365,16 +2365,16 @@ export default function DashboardPengguna() {
             </div>
 
             {/* Coming soon grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
               {COMING_SOON_SERVICES.map(s => (
-                <div key={s.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: "#c8d4e0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontSize: 24, position: "relative", overflow: "hidden" }}>
+                <div key={s.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 16, background: "#c8d4e0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontSize: 22, position: "relative", overflow: "hidden" }}>
                     <span style={{ filter: "grayscale(0.4) opacity(0.6)" }}>{s.emoji}</span>
-                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(80,100,120,0.82)", padding: "5px 0", textAlign: "center" }}>
-                      <span style={{ color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>COMING SOON</span>
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(80,100,120,0.82)", padding: "3px 0", textAlign: "center" }}>
+                      <span style={{ color: "#fff", fontSize: 7, fontWeight: 800, letterSpacing: 0.5 }}>SOON</span>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#9aa5b4", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
+                  <div style={{ fontSize: 10.5, fontWeight: 600, color: "#9aa5b4", textAlign: "center", lineHeight: 1.25 }}>{s.label}</div>
                 </div>
               ))}
             </div>
