@@ -15,11 +15,12 @@ export type TripSvc = "goride" | "gocar" | "gosend" | "goshop";
 const SVC_META: Record<TripSvc, {
   emoji: string; title: string; sub: string; step1Title: string;
   needRecipient: boolean; needItemNote: boolean; itemNoteLabel: string; itemNotePlaceholder: string;
+  skipDetail: boolean;
 }> = {
-  goride: { emoji: "🏍️", title: "RIDE Ojek", sub: "Antar penumpang cepat", step1Title: "🏍️ Detail Perjalanan", needRecipient: false, needItemNote: false, itemNoteLabel: "", itemNotePlaceholder: "" },
-  gocar:  { emoji: "🚗", title: "RIDE Mobil", sub: "Antar penumpang nyaman", step1Title: "🚗 Detail Perjalanan", needRecipient: false, needItemNote: false, itemNoteLabel: "", itemNotePlaceholder: "" },
-  gosend: { emoji: "📦", title: "RIDE Kirim", sub: "Kirim barang cepat", step1Title: "📦 Detail Pengiriman", needRecipient: true, needItemNote: true, itemNoteLabel: "Deskripsi Barang", itemNotePlaceholder: "Contoh: Dokumen, makanan, paket kecil..." },
-  goshop: { emoji: "🛍️", title: "RIDE Belanja", sub: "Titip belanja apa saja", step1Title: "🛍️ Detail Belanja", needRecipient: false, needItemNote: true, itemNoteLabel: "Daftar Belanja", itemNotePlaceholder: "Contoh:\n- 2 kg beras\n- 1 botol minyak goreng\n- 1 pak telur" },
+  goride: { emoji: "🏍️", title: "RIDE Ojek", sub: "Antar penumpang cepat", step1Title: "🏍️ Detail Perjalanan", needRecipient: false, needItemNote: false, itemNoteLabel: "", itemNotePlaceholder: "", skipDetail: true },
+  gocar:  { emoji: "🚗", title: "RIDE Mobil", sub: "Antar penumpang nyaman", step1Title: "🚗 Detail Perjalanan", needRecipient: false, needItemNote: false, itemNoteLabel: "", itemNotePlaceholder: "", skipDetail: true },
+  gosend: { emoji: "📦", title: "RIDE Kirim", sub: "Kirim barang cepat", step1Title: "📦 Detail Pengiriman", needRecipient: true, needItemNote: true, itemNoteLabel: "Deskripsi Barang", itemNotePlaceholder: "Contoh: Dokumen, makanan, paket kecil...", skipDetail: false },
+  goshop: { emoji: "🛍️", title: "RIDE Belanja", sub: "Titip belanja apa saja", step1Title: "🛍️ Detail Belanja", needRecipient: false, needItemNote: true, itemNoteLabel: "Daftar Belanja", itemNotePlaceholder: "Contoh:\n- 2 kg beras\n- 1 botol minyak goreng\n- 1 pak telur", skipDetail: false },
 };
 
 const STEPS = [
@@ -51,14 +52,17 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   } catch { return ""; }
 }
 
-function StepProgress({ step }: { step: number }) {
+function StepProgress({ step, skipDetail }: { step: number; skipDetail?: boolean }) {
+  const visible = skipDetail
+    ? STEPS.slice(1).map((s, i) => ({ ...s, num: i + 2 }))
+    : STEPS.map((s, i) => ({ ...s, num: i + 1 }));
   return (
     <div style={{ display: "flex", alignItems: "center" }}>
-      {STEPS.map((s, i) => {
-        const isActive = i + 1 === step;
-        const isDone = i + 1 < step;
+      {visible.map((s, i) => {
+        const isActive = s.num === step;
+        const isDone = s.num < step;
         return (
-          <div key={s.label} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : 0 }}>
+          <div key={s.label} style={{ display: "flex", alignItems: "center", flex: i < visible.length - 1 ? 1 : 0 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 18,
@@ -70,7 +74,7 @@ function StepProgress({ step }: { step: number }) {
               </div>
               <div style={{ color: isActive ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: isActive ? 700 : 400, whiteSpace: "nowrap" }}>{s.label}</div>
             </div>
-            {i < STEPS.length - 1 && (
+            {i < visible.length - 1 && (
               <div style={{ flex: 1, height: 2, background: isDone ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.2)", margin: "0 4px", marginBottom: 16 }} />
             )}
           </div>
@@ -83,7 +87,7 @@ function StepProgress({ step }: { step: number }) {
 export default function OrderTrip({ svc }: { svc: TripSvc }) {
   const meta = SVC_META[svc];
   const [, navigate] = useLocation();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(meta.skipDetail ? 2 : 1);
 
   // Step 1 — svc-specific detail
   const [description, setDescription] = useState("");
@@ -665,7 +669,7 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
             <button
               onClick={() => {
                 if (step === 1) { navigate("/dashboard/pengguna"); return; }
-                if (step === 2) { setStep(1); return; }
+                if (step === 2) { if (meta.skipDetail) { navigate("/dashboard/pengguna"); } else { setStep(1); } return; }
                 navigate("/dashboard/pengguna");
               }}
               style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "monospace", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", flexShrink: 0 }}
@@ -676,7 +680,7 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
             <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 2 }}>{meta.sub}</div>
           </div>
         </div>
-        <StepProgress step={step} />
+        <StepProgress step={step} skipDetail={meta.skipDetail} />
       </div>
 
       {/* ── STEP 1 ── */}
@@ -786,15 +790,23 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
               )}
 
               {/* Detail Alamat */}
-              <div>
+              <div style={{ marginBottom: meta.skipDetail ? 20 : 0 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 8 }}>Detail Alamat <span style={{ color: "#9aa5b4", fontWeight: 400 }}>(opsional)</span></label>
                 <textarea value={detailAlamat} onChange={e => setDetailAlamat(e.target.value)} placeholder="Depan Indomaret, dekat lampu merah..." rows={2} style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", fontSize: 15, color: "#1a2a3a", background: "#f8fafc", outline: "none", resize: "none", lineHeight: 1.5 }} />
               </div>
+
+              {/* Catatan untuk mitra — hanya untuk layanan tanpa step Detail (Ride Ojek/Mobil) */}
+              {meta.skipDetail && (
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 8 }}>Catatan <span style={{ color: "#9aa5b4", fontWeight: 400 }}>(opsional)</span></label>
+                  <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Catatan tambahan untuk mitra..." rows={3} style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #e0e8f0", fontSize: 15, color: "#1a2a3a", background: "#f8fafc", outline: "none", resize: "none", lineHeight: 1.5 }} />
+                </div>
+              )}
             </div>
           </div>
 
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 14px", background: "linear-gradient(to top, #f0f4f8 80%, transparent)", zIndex: 100, display: "flex", gap: 12 }}>
-            <button onClick={() => setStep(1)} style={{ flex: 1, padding: "17px", borderRadius: 16, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>← Kembali</button>
+            <button onClick={() => { if (meta.skipDetail) { navigate("/dashboard/pengguna"); } else { setStep(1); } }} style={{ flex: 1, padding: "17px", borderRadius: 16, border: "1.5px solid #1a3a5c", background: "#fff", color: "#1a3a5c", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>← Kembali</button>
             <button
               disabled={!canNext2}
               onClick={() => {
