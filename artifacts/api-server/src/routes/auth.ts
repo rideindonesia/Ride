@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Request } from "express";
 import { db, usersTable, loginHistoryTable, merchantsTable } from "@workspace/db";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, inArray } from "drizzle-orm";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import crypto from "crypto";
 
@@ -82,17 +82,30 @@ router.post("/login", async (req, res) => {
   const { email: emailOrPhoneRaw, password, role } = parsed.data;
   const emailOrPhone = emailOrPhoneRaw.includes("@") ? emailOrPhoneRaw : normalizePhone(emailOrPhoneRaw);
 
-  const [user] = await db.select().from(usersTable).where(
+  // Warung (role 'merchant') kini login lewat form Mitra (berbasis nomor HP).
+  // Saat role='mitra', cocokkan juga akun warung agar terarah ke dashboard warung.
+  const roleFilter =
+    role === "mitra"
+      ? inArray(usersTable.role, ["mitra", "merchant"])
+      : eq(usersTable.role, role);
+
+  // Ambil semua kandidat yang cocok identifier + peran, lalu pilih yang password-nya
+  // cocok. Ini deterministik walau ada mitra & warung yang berbagi nomor HP/email
+  // (limit(1) tanpa urutan bisa mengembalikan baris yang salah dan menggagalkan login).
+  const candidates = await db.select().from(usersTable).where(
     and(
       or(
         eq(usersTable.email, emailOrPhone),
         eq(usersTable.phone, emailOrPhone),
       ),
-      eq(usersTable.role, role),
+      roleFilter,
     )
-  ).limit(1);
+  ).limit(5);
 
-  if (!user || user.passwordHash !== hashPassword(password)) {
+  const pwHash = hashPassword(password);
+  const user = candidates.find((u) => u.passwordHash === pwHash);
+
+  if (!user) {
     res.status(401).json({ error: "Email/No. HP, password, atau peran tidak cocok" });
     return;
   }

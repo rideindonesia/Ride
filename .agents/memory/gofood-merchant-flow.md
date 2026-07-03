@@ -20,5 +20,11 @@ RIDE gofood has a 4th role: **merchant** (warung). These are the non-obvious rul
 - `orders.merchant_status`: `menunggu`→`diterima`→`siap` (`ditolak` cancels). **Ojol cannot advance a gofood order to delivery phase until `merchant_status='siap'` — enforced server-side (409), not frontend-only.**
 - Pengguna/mitra recovery endpoints must return `merchantStatus`/`foodTotal`/`orderItems` so UI restores warung prep state after refresh (socket events alone insufficient).
 
+## Warung is merged INTO Mitra at the UI/login layer (not the data model)
+- Role-select shows only **Pengguna + Mitra** (no standalone Warung card). Warung is a service option ("Warung / Makanan") inside Mitra registration that redirects to the dedicated warung apply form (`?role=merchant`, RegisterMerchant) — warung needs shop data + shop photo, so it keeps its own form.
+- **Warung logs in through the Mitra login form (phone-based).** Backend `/api/auth/login`: when `role='mitra'`, match `role IN (mitra, merchant)`; the approved-merchant gate + real-role response are unchanged, so frontend still routes merchants to `/dashboard/merchant`.
+- **Why the data model stays 4-role:** the account is still `role='merchant'` with a `merchants` row; only the entry points (register card + login form) were merged. Keeps admin approval, order flow, and dashboards intact.
+- **Login must select the candidate by matching password hash, NOT `limit(1)`.** A mitra and a warung can share a phone/email (merchant apply only enforces *email* uniqueness), so `OR(email/phone) + IN(mitra,merchant) + limit(1)` can return the wrong row and block a valid login. Fetch candidates, then `.find(u => u.passwordHash === hash)`.
+
 ## Note
 `merchants.status` column DEFAULTs to `'approved'` in the migration — rely on the login gate (row must exist) rather than the default to keep unapproved accounts out.

@@ -433,7 +433,7 @@ router.patch("/merchant-applications/:email/status", requireAdmin, async (req, r
 
     void sendWhatsApp(
       application.phone,
-      `Halo ${application.ownerName}! 🎉\n\nSelamat, pendaftaran Warung *${application.shopName}* di RIDE telah *DISETUJUI*.\n\nAnda sekarang dapat login sebagai Warung menggunakan email & password yang Anda daftarkan, lalu mulai menambahkan menu. Selamat berjualan bersama RIDE!`,
+      `Halo ${application.ownerName}! 🎉\n\nSelamat, pendaftaran Warung *${application.shopName}* di RIDE telah *DISETUJUI*.\n\nAnda sekarang dapat login melalui menu *Mitra* menggunakan *nomor HP* & password yang Anda daftarkan, lalu mulai menambahkan menu. Selamat berjualan bersama RIDE!`,
     );
   } else {
     await db.update(merchantApplicationsTable).set({ status }).where(eq(merchantApplicationsTable.email, email));
