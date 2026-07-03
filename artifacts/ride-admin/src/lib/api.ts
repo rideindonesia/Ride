@@ -59,6 +59,11 @@ export const SERVICE_LABELS: Record<string, string> = {
   elektronik: "Elektronik",
   inspeksi: "Inspeksi",
   towing: "Towing",
+  goride: "Ride Ojek",
+  gocar: "Ride Mobil",
+  gosend: "Ride Kirim",
+  goshop: "Ride Belanja",
+  gofood: "Ride Makan",
 };
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -86,4 +91,4 @@ export const MITRA_STATUS_COLORS: Record<string, string> = {
   suspended: "bg-gray-100 text-gray-800",
 };
 
-export const SERVICE_COLORS = ["#1a7a6a", "#1a3a5c", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+export const SERVICE_COLORS = ["#1a7a6a", "#1a3a5c", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#0a6b3d", "#0a5c6b", "#6b4a0a", "#6b0a4a", "#a83214"];

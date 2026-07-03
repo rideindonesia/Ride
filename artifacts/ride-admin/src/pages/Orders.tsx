@@ -53,7 +53,7 @@ interface OrderDetail extends OrderItem {
 }
 
 const STATUS_OPTIONS = ["all", "pending", "accepted", "in_progress", "done", "cancelled"];
-const SERVICE_OPTIONS = ["all", "bengkel", "barber", "cuci", "elektronik", "inspeksi", "towing"];
+const SERVICE_OPTIONS = ["all", "bengkel", "barber", "cuci", "elektronik", "inspeksi", "towing", "goride", "gocar", "gosend", "goshop", "gofood"];
 
 const TRACKING_LABELS: Record<string, string> = {
   menuju: "Menuju Lokasi",
