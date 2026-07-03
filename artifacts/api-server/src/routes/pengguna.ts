@@ -231,7 +231,13 @@ router.get("/mitra-online", async (req, res) => {
   };
 
   const conditions: SQL[] = [eq(mitraLocationsTable.isOnline, true)];
-  if (serviceType) conditions.push(eq(mitraLocationsTable.serviceType, serviceType));
+  if (serviceType) {
+    conditions.push(
+      isOjolOrderType(serviceType)
+        ? inArray(mitraLocationsTable.serviceType, OJOL_CAPABLE_MITRA)
+        : eq(mitraLocationsTable.serviceType, serviceType),
+    );
+  }
 
   let rows;
   if (isNaN(lat) || isNaN(lng)) {
@@ -269,6 +275,12 @@ router.get("/mitra-online", async (req, res) => {
 
 // Trip-based verticals (transport/courier/food): fare over pickup→destination.
 const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
+
+// Ojol umbrella: satu mitra motor menerima order antar penumpang + kirim + belanja + makan.
+const OJOL_ORDER_TYPES = ["goride", "gosend", "goshop", "gofood"];
+const OJOL_CAPABLE_MITRA = ["ojol", "goride", "gosend", "goshop", "gofood"];
+function normSvc(s: string): string { return s.toLowerCase().replace(/[\s_-]+/g, ""); }
+function isOjolOrderType(s: string): boolean { return OJOL_ORDER_TYPES.includes(normSvc(s)); }
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -390,7 +402,12 @@ router.post("/orders", (req, res, next) => {
     // Get all online mitra for this service type
     const onlineMitra = await db.select({ userId: mitraLocationsTable.userId })
       .from(mitraLocationsTable)
-      .where(and(eq(mitraLocationsTable.isOnline, true), eq(mitraLocationsTable.serviceType, svcType)));
+      .where(and(
+        eq(mitraLocationsTable.isOnline, true),
+        isOjolOrderType(svcType)
+          ? inArray(mitraLocationsTable.serviceType, OJOL_CAPABLE_MITRA)
+          : eq(mitraLocationsTable.serviceType, svcType),
+      ));
 
     // Filter out mitra who already have an active order
     const busyMitra = await db.select({ mitraId: ordersTable.mitraId })

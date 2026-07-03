@@ -130,6 +130,7 @@ const SERVICE_CONFIG: Record<string, {
   gosend:     { emoji: "📦", header: "Ride Kirim",         mulai: "📦 Mulai Pengiriman", selesai: "✅ Paket Terkirim",    foto: "Foto Bukti Pengiriman", jasaLabel: "Biaya Pengiriman",         jasaSub: "Tarif kirim barang",          showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
   goshop:     { emoji: "🛍️", header: "Ride Belanja",       mulai: "🛍️ Mulai Belanja",   selesai: "✅ Belanja Terkirim",  foto: "Foto Bukti Belanja",    jasaLabel: "Biaya Jasa Belanja",       jasaSub: "Ongkos titip belanja",        showSparepart: true,  sparepartLabel: "Biaya Barang",     sparepartSub: "Total belanjaan yang dibeli" },
   gofood:     { emoji: "🍔", header: "Ride Makan",         mulai: "🍔 Mulai Antar",     selesai: "✅ Makanan Terkirim",  foto: "Foto Bukti Pesanan",    jasaLabel: "Biaya Jasa Antar",         jasaSub: "Ongkos kirim makanan",        showSparepart: true,  sparepartLabel: "Biaya Makanan",    sparepartSub: "Total pesanan makanan" },
+  ojol:       { emoji: "🏍️", header: "Ride Ojol",          mulai: "🏍️ Mulai",           selesai: "✅ Selesai",           foto: "Foto Bukti",            jasaLabel: "Biaya Jasa",               jasaSub: "Tarif layanan ojol",          showSparepart: false, sparepartLabel: "",                 sparepartSub: "" },
 };
 
 function getSvcCfg(serviceType?: string | null) {

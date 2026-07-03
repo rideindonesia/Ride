@@ -29,6 +29,12 @@ const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"])
 function isTripService(serviceType: string): boolean {
   return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
+
+// Ojol umbrella: satu mitra motor melayani antar penumpang + kirim + belanja + makan.
+const OJOL_ORDER_TYPES = ["goride", "gosend", "goshop", "gofood"];
+const OJOL_CAPABLE_MITRA = ["ojol", "goride", "gosend", "goshop", "gofood"];
+function normSvc(s: string): string { return s.toLowerCase().replace(/[\s_-]+/g, ""); }
+function isOjolCapableMitra(s: string): boolean { return OJOL_CAPABLE_MITRA.includes(normSvc(s)); }
 const BIAYA_LAYANAN = 2000;
 function serverCalcBiayaPanggilan(serviceType: string, distKm: number): number {
   const key = serviceType.toLowerCase().replace(/[\s_-]+/g, "");
@@ -487,13 +493,16 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
   // Jika mitra offline, tidak tampilkan order baru
   if (!locRow?.isOnline) { res.json({ incoming: null }); return; }
 
-  // Show pending orders that match mitra's serviceType and are unassigned (mitraId IS NULL)
-  // If no serviceType match, fall back to all unassigned pending orders
+  // Show pending orders that match mitra's serviceType and are unassigned (mitraId IS NULL).
+  // Ojol mitra (payung motor) melihat SEMUA order grup: goride/gosend/goshop/gofood.
+  // If no serviceType, fall back to all unassigned pending orders.
   const whereClause = locRow?.serviceType
     ? and(
         eq(ordersTable.status, "pending"),
         sql`${ordersTable.mitraId} IS NULL`,
-        eq(ordersTable.serviceType, locRow.serviceType),
+        isOjolCapableMitra(locRow.serviceType)
+          ? inArray(ordersTable.serviceType, OJOL_ORDER_TYPES)
+          : eq(ordersTable.serviceType, locRow.serviceType),
       )
     : and(
         eq(ordersTable.status, "pending"),
@@ -592,6 +601,32 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   if (existingActive) {
     res.status(409).json({ error: "Kamu masih punya order aktif. Selesaikan terlebih dahulu sebelum menerima order baru." });
     return;
+  }
+
+  // Server-side capability guard: mitra hanya boleh menerima order yang sesuai layanannya.
+  // Mencocokkan matrix yang sama dengan daftar order masuk (mitra ojol payung = 4 layanan;
+  // gocar & layanan on-site = exact match). Mencegah bypass via panggilan API langsung.
+  const [orderRow] = await db.select({ serviceType: ordersTable.serviceType })
+    .from(ordersTable)
+    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")))
+    .limit(1);
+  if (!orderRow) {
+    res.status(404).json({ error: "Order tidak ditemukan atau sudah diambil mitra lain." });
+    return;
+  }
+  const [mLocSvc] = await db.select({ serviceType: mitraLocationsTable.serviceType })
+    .from(mitraLocationsTable)
+    .where(eq(mitraLocationsTable.userId, mitraId))
+    .limit(1);
+  if (mLocSvc?.serviceType) {
+    const orderSvc = normSvc(orderRow.serviceType);
+    const allowed = normSvc(mLocSvc.serviceType) === orderSvc
+      || (isOjolCapableMitra(mLocSvc.serviceType) && OJOL_ORDER_TYPES.includes(orderSvc));
+    if (!allowed) {
+      req.log.warn({ mitraId, mitraServiceType: mLocSvc.serviceType, orderId, orderServiceType: orderRow.serviceType }, "mitra menolak-otomatis: layanan order tidak sesuai");
+      res.status(403).json({ error: "Layanan order ini tidak sesuai dengan layanan mitra Anda." });
+      return;
+    }
   }
 
   // Assign mitraId + set accepted

@@ -12,6 +12,11 @@ import {
 
 export let io: Server;
 
+// Ojol umbrella: mitra motor menerima siaran semua layanan grup (antar/kirim/belanja/makan).
+const OJOL_ORDER_TYPES = ["goride", "gosend", "goshop", "gofood"];
+const OJOL_CAPABLE = new Set(["ojol", "goride", "gosend", "goshop", "gofood"]);
+function normSvc(s: string): string { return s.toLowerCase().replace(/[\s_-]+/g, ""); }
+
 export function initSocket(server: http.Server): Server {
   io = new Server(server, {
     path: "/api/socket.io",
@@ -71,7 +76,13 @@ export function initSocket(server: http.Server): Server {
               svc = app?.serviceType ?? null;
             }
           }
-          if (svc) socket.join(`service:${svc}`);
+          if (svc) {
+            socket.join(`service:${svc}`);
+            // Ojol umbrella mitra ikut room semua layanan grup agar terima order:new + cancel.
+            if (OJOL_CAPABLE.has(normSvc(svc))) {
+              for (const t of OJOL_ORDER_TYPES) socket.join(`service:${t}`);
+            }
+          }
         }
       } catch {
         /* ignore — do not join any service room on lookup failure */

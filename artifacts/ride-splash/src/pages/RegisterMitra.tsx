@@ -29,11 +29,8 @@ const SERVICES = [
   { id: "pangkas", label: "Pangkas Rambut", emoji: "✂️" },
   { id: "cuci_kendaraan", label: "Cuci Kendaraan", emoji: "🚿" },
   { id: "inspeksi", label: "Inspeksi Kendaraan", emoji: "🔍" },
-  { id: "goride", label: "Ride Ojek (Antar Penumpang)", emoji: "🏍️" },
+  { id: "ojol", label: "Ride Ojol (Antar Penumpang, Kirim, Belanja & Makan)", emoji: "🏍️" },
   { id: "gocar", label: "Ride Mobil (Antar Penumpang)", emoji: "🚗" },
-  { id: "gosend", label: "Ride Kirim (Kurir Barang)", emoji: "📦" },
-  { id: "goshop", label: "Ride Belanja (Titip Belanja)", emoji: "🛍️" },
-  { id: "gofood", label: "Ride Makan (Antar Makanan)", emoji: "🍔" },
 ];
 
 const INITIAL_FORM: FormData = {
