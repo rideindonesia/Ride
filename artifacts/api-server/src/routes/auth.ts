@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Request } from "express";
-import { db, usersTable, loginHistoryTable } from "@workspace/db";
+import { db, usersTable, loginHistoryTable, merchantsTable } from "@workspace/db";
 import { eq, and, or } from "drizzle-orm";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import crypto from "crypto";
@@ -39,6 +39,13 @@ router.post("/register", async (req, res) => {
   }
 
   const { name, email, password, role } = parsed.data;
+
+  // Warung/merchant TIDAK boleh dibuat lewat register generik — wajib lewat
+  // POST /api/merchant/apply lalu disetujui admin. Cegah bypass verifikasi.
+  if (role === "merchant") {
+    res.status(403).json({ error: "Pendaftaran warung harus melalui proses pengajuan & persetujuan admin" });
+    return;
+  }
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
   if (existing.length > 0) {
@@ -88,6 +95,20 @@ router.post("/login", async (req, res) => {
   if (!user || user.passwordHash !== hashPassword(password)) {
     res.status(401).json({ error: "Email/No. HP, password, atau peran tidak cocok" });
     return;
+  }
+
+  // Warung/merchant hanya boleh login jika sudah disetujui admin (punya baris
+  // merchants dengan status 'approved'). Cegah login sebelum verifikasi.
+  if (user.role === "merchant") {
+    const [merchant] = await db
+      .select({ status: merchantsTable.status })
+      .from(merchantsTable)
+      .where(eq(merchantsTable.ownerUserId, user.id))
+      .limit(1);
+    if (!merchant || merchant.status !== "approved") {
+      res.status(403).json({ error: "Akun warung belum disetujui admin" });
+      return;
+    }
   }
 
   // Store role-specific ID — does NOT overwrite the other role's session data

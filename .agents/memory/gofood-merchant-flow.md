@@ -1,28 +1,24 @@
 ---
-name: GoFood merchant/warung 3-party flow
-description: How the merchant (warung) role fits into the gofood order state machine and money model
+name: GoFood merchant/warung role — durable decisions
+description: Non-obvious rules & trust boundaries for the merchant (warung) role in the gofood vertical
 ---
 
-# GoFood merchant/warung role
+# GoFood merchant/warung — durable decisions
 
-RIDE gofood has a 4th role: **merchant** (warung). Login role `merchant` → `session.merchantId`; owner user has `role='merchant'` linked to a `merchants` row via `ownerUserId`. Owner auto-joins socket room `user:{ownerUserId}`.
+RIDE gofood has a 4th role: **merchant** (warung). These are the non-obvious rules that are easy to get wrong; mechanics/endpoint names are discoverable in code.
 
-## Order state machine (3 parties)
-- `merchantStatus` column on orders: `menunggu` → `diterima` → `siap` → (`ditolak` cancels).
-- Warung: accept (menunggu→diterima), ready (diterima→siap), reject.
-- **Hard gate (server-enforced in mitra.ts phase endpoint):** ojol/mitra CANNOT advance gofood order to phase `pengerjaan` (mengantar) until `merchantStatus==='siap'` → returns 409. Never rely on frontend-only gating.
-- Events: `merchant:order:new` (to warung on order create), `order:merchant_status` (to pengguna+mitra+order room on accept/ready/reject).
+## Onboarding is admin-gated — enforce server-side (fraud/trust boundary)
+- Warung accounts must go through **apply → pending → admin approve** only. Admin approval is what creates the `merchants` row (status `approved`) linked by `ownerUserId`.
+- **Generic `/api/auth/register` must reject `role=merchant`** (403), and **`/api/auth/login` for a merchant must require an approved `merchants` row** (403 otherwise). A self-registered merchant has no merchants row → login blocked.
+- **Why:** a code review REJECTED the first cut because register/login accepted merchants directly, bypassing verification. Frontend-only gating is insufficient.
 
-## Money model (server-authoritative — do NOT trust client)
-- **`foodTotal` MUST be recomputed from DB `menu_items` at order creation**, matching each item by id (fallback name) for the given merchantId. Ignore client-submitted `orderItems[].price`; reject unknown/unavailable items. **Why:** client can tamper prices to lower the talangan/total — a fraud vector caught in review.
-- Ojol *talangi* (advances) foodTotal; reimbursed by pengguna at payment. payment-data for gofood forces `biayaJasa=0`, `biayaSparepart=foodTotal` (server override, ignores body).
-- `platformFee = round(callFee*feePct) + layanan` — UNCHANGED for gofood.
+## Money is server-authoritative (fraud boundary)
+- **`foodTotal` MUST be recomputed from DB `menu_items`** at order create (match by id, fallback name, for that merchantId). Ignore client `orderItems[].price`; reject unknown/unavailable items. **Why:** client can tamper prices to shrink the ojol *talangan* — caught in review.
+- Ojol *talangi* (advances) foodTotal, reimbursed by pengguna at payment: gofood payment-data forces `biayaJasa=0`, `biayaSparepart=foodTotal` server-side (ignores body). `platformFee` formula UNCHANGED.
 
-## Recovery
-Pengguna `/orders/:id` and `/active-order` must include `merchantStatus`/`foodTotal`/`orderItems` so UI restores warung prep status after refresh/reconnect (socket events alone are not enough).
+## Order state machine gate
+- `orders.merchant_status`: `menunggu`→`diterima`→`siap` (`ditolak` cancels). **Ojol cannot advance a gofood order to delivery phase until `merchant_status='siap'` — enforced server-side (409), not frontend-only.**
+- Pengguna/mitra recovery endpoints must return `merchantStatus`/`foodTotal`/`orderItems` so UI restores warung prep state after refresh (socket events alone insufficient).
 
-## Admin
-`/admin/merchant-applications[/:email][/status]` — approve creates user+merchants row. Strip `passwordHash` from responses.
-
-## ride-admin note
-There is a pre-existing `Merchant.tsx` (menu CRUD) at `/merchant`. The warung *approval* page is separate: `Warung.tsx` at `/warung`.
+## Note
+`merchants.status` column DEFAULTs to `'approved'` in the migration — rely on the login gate (row must exist) rather than the default to keep unapproved accounts out.
