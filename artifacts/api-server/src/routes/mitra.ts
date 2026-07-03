@@ -629,10 +629,18 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
     }
   }
 
-  // Assign mitraId + set accepted
+  // Assign mitraId + set accepted.
+  // ATOMIC anti-double-order: hanya berhasil jika (a) order masih pending DAN (b) mitra ini
+  // belum punya order aktif apa pun (lintas SEMUA layanan — mitra ojol yang menerima ojek
+  // otomatis tidak bisa menerima kirim/belanja/makan). Kondisi NOT EXISTS di level DB menutup
+  // race-condition dua "terima" bersamaan yang bisa lolos dari cek SELECT di atas.
   const [updated] = await db.update(ordersTable)
     .set({ status: "accepted", mitraId, updatedAt: new Date() })
-    .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")))
+    .where(and(
+      eq(ordersTable.id, orderId),
+      eq(ordersTable.status, "pending"),
+      sql`NOT EXISTS (SELECT 1 FROM orders o2 WHERE o2.mitra_id = ${mitraId} AND o2.status IN ('accepted','menuju','tiba','pengerjaan'))`,
+    ))
     .returning({
       penggunaId: ordersTable.penggunaId,
       orderNo: ordersTable.orderNo,
@@ -643,6 +651,13 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
       destLng: ordersTable.destLng,
       tripDistanceKm: ordersTable.tripDistanceKm,
     });
+
+  // Update tidak mengenai baris apa pun → order sudah diambil mitra lain, atau mitra ini
+  // baru saja menerima order lain (race). Jangan balas sukses palsu.
+  if (!updated) {
+    res.status(409).json({ error: "Order sudah diambil mitra lain atau kamu masih punya order aktif." });
+    return;
+  }
 
   try {
     if (updated) {
