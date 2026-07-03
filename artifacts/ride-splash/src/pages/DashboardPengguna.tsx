@@ -2348,7 +2348,7 @@ export default function DashboardPengguna() {
                     onClick={() => { setShowAllServices(false); if (route) navigate(route); }}
                     style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, cursor: route ? "pointer" : "default" }}
                   >
-                    <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>
+                    <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
                       {s.emoji}
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2a3a", textAlign: "center", lineHeight: 1.3 }}>{s.label}</div>
@@ -2368,7 +2368,7 @@ export default function DashboardPengguna() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
               {COMING_SOON_SERVICES.map(s => (
                 <div key={s.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: "#c8d4e0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontSize: 32, position: "relative", overflow: "hidden" }}>
+                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 20, background: "#c8d4e0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontSize: 24, position: "relative", overflow: "hidden" }}>
                     <span style={{ filter: "grayscale(0.4) opacity(0.6)" }}>{s.emoji}</span>
                     <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(80,100,120,0.82)", padding: "5px 0", textAlign: "center" }}>
                       <span style={{ color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>COMING SOON</span>
