@@ -110,6 +110,13 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
   const [detailAlamat, setDetailAlamat] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
 
+  // Step 2 — pencarian alamat (Nominatim search)
+  type SearchResult = { display_name: string; lat: string; lon: string };
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Order lifecycle (step 3)
   type AcceptedMitra = {
     id: number; name: string; lat: number; lng: number; serviceType: string;
@@ -320,11 +327,50 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
   // When switching picking mode, recenter map to that point if set
   const switchMode = (mode: "pickup" | "dest") => {
     setPickingMode(mode);
+    setSearchQuery("");
+    setSearchResults([]);
     const map = leafletMapRef.current;
     if (!map) return;
     const lat = mode === "pickup" ? pickupLat : destLat;
     const lng = mode === "pickup" ? pickupLng : destLng;
     if (lat != null && lng != null) map.setView([lat, lng], map.getZoom(), { animate: true });
+  };
+
+  // Cari alamat via Nominatim (debounced) — hasil dipakai untuk memindahkan pin
+  const runAddressSearch = (q: string) => {
+    setSearchQuery(q);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (q.trim().length < 3) { setSearchResults([]); setIsSearching(false); return; }
+    setIsSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&countrycodes=id&limit=6&accept-language=id`,
+          { headers: { "Accept-Language": "id" } }
+        );
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data : []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+  };
+
+  // Pilih hasil pencarian → set koordinat untuk mode aktif + geser peta
+  const selectSearchResult = (r: SearchResult) => {
+    const lat = parseFloat(r.lat);
+    const lng = parseFloat(r.lon);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+    if (pickingMode === "pickup") {
+      setPickupLat(lat); setPickupLng(lng); setPickupAddress(r.display_name);
+    } else {
+      setDestLat(lat); setDestLng(lng); setDestAddress(r.display_name);
+    }
+    setSearchQuery("");
+    setSearchResults([]);
+    if (leafletMapRef.current) leafletMapRef.current.setView([lat, lng], 16, { animate: true });
   };
 
   // Cleanup map when leaving step 2
@@ -736,6 +782,38 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <button onClick={() => switchMode("pickup")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: pickingMode === "pickup" ? "2px solid #1a7a6a" : "1.5px solid #e0e8f0", background: pickingMode === "pickup" ? "rgba(26,122,106,0.08)" : "#f8fafc", color: pickingMode === "pickup" ? "#1a7a6a" : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📍 Titik Jemput</button>
                 <button onClick={() => switchMode("dest")} style={{ flex: 1, padding: "10px", borderRadius: 12, border: pickingMode === "dest" ? "2px solid #e53e3e" : "1.5px solid #e0e8f0", background: pickingMode === "dest" ? "rgba(229,62,62,0.08)" : "#f8fafc", color: pickingMode === "dest" ? "#e53e3e" : "#7a8a9a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏁 Titik Tujuan</button>
+              </div>
+
+              {/* Search box — ketik alamat tujuan/jemput */}
+              <div style={{ position: "relative", marginBottom: 12 }}>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 15, pointerEvents: "none" }}>🔎</span>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => runAddressSearch(e.target.value)}
+                    placeholder={pickingMode === "pickup" ? "Cari lokasi jemput..." : "Cari lokasi tujuan..."}
+                    style={{ width: "100%", padding: "13px 40px 13px 40px", borderRadius: 14, border: "1.5px solid #e0e8f0", fontSize: 14, color: "#1a2a3a", background: "#f8fafc", outline: "none" }}
+                  />
+                  {searchQuery && (
+                    <button onClick={() => { setSearchQuery(""); setSearchResults([]); }} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, borderRadius: 12, border: "none", background: "#e0e8f0", color: "#5a6a7a", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  )}
+                </div>
+                {(isSearching || searchResults.length > 0) && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", borderRadius: 14, boxShadow: "0 6px 24px rgba(0,0,0,0.14)", border: "1px solid #e8eef4", zIndex: 1500, overflow: "hidden", maxHeight: 260, overflowY: "auto" }}>
+                    {isSearching && <div style={{ padding: "14px 16px", fontSize: 13, color: "#7a8a9a" }}>Mencari...</div>}
+                    {!isSearching && searchResults.map((r, idx) => (
+                      <div
+                        key={`${r.lat}-${r.lon}-${idx}`}
+                        onClick={() => selectSearchResult(r)}
+                        style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "11px 14px", cursor: "pointer", borderBottom: idx < searchResults.length - 1 ? "1px solid #f0f4f8" : "none" }}
+                      >
+                        <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>📍</span>
+                        <div style={{ fontSize: 13, color: "#1a2a3a", lineHeight: 1.4 }}>{r.display_name}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Map with center pin */}
