@@ -51,6 +51,7 @@ const COMING_SOON_SERVICES = [
 
 // Pengelompokan layanan aktif ala Gojek (judul + daftar id layanan)
 const SERVICE_GROUPS: { title: string; ids: string[] }[] = [
+  { title: "Layanan Teratas", ids: ["ride_auto", "ride_service", "ride_goride", "ride_gocar", "ride_gofood"] },
   { title: "Bepergian & Pengiriman", ids: ["ride_goride", "ride_gocar", "ride_gosend"] },
   { title: "Pesan Makan & Belanja", ids: ["ride_gofood", "ride_goshop"] },
   { title: "Jasa Service Panggilan", ids: ["ride_auto", "ride_towing", "ride_service", "ride_barber", "ride_wash", "ride_inspection"] },
