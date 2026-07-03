@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable, platformFeePaymentsTable, merchantsTable, menuItemsTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable, platformFeePaymentsTable, merchantsTable, menuItemsTable, merchantApplicationsTable } from "@workspace/db";
 import { eq, and, or, desc, asc, sql, count, sum, ilike, gte, lte, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
@@ -337,6 +337,115 @@ router.patch("/mitra/:email/suspend", requireAdmin, async (req, res) => {
   );
 
   res.json({ ok: true, isSuspended: newState });
+});
+
+// ── Merchant / Warung Management ──────────────────────────────────────────────
+
+// GET /api/admin/merchant-applications?status=
+router.get("/merchant-applications", requireAdmin, async (req, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : "";
+  const where = status && ["pending", "approved", "rejected"].includes(status)
+    ? eq(merchantApplicationsTable.status, status as "pending" | "approved" | "rejected")
+    : undefined;
+  const apps = await db.select().from(merchantApplicationsTable)
+    .where(where)
+    .orderBy(desc(merchantApplicationsTable.createdAt));
+  const safe = apps.map(({ passwordHash, ...rest }) => rest);
+  res.json({ applications: safe });
+});
+
+// GET /api/admin/merchant-applications/:email
+router.get("/merchant-applications/:email", requireAdmin, async (req, res) => {
+  const email = decodeURIComponent(String(req.params.email));
+  const [app] = await db.select().from(merchantApplicationsTable)
+    .where(eq(merchantApplicationsTable.email, email)).limit(1);
+  if (!app) { res.status(404).json({ error: "Lamaran warung tidak ditemukan" }); return; }
+  const [user] = await db.select({ id: usersTable.id, isSuspended: usersTable.isSuspended })
+    .from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  let merchant = null;
+  if (user) {
+    [merchant] = await db.select().from(merchantsTable)
+      .where(eq(merchantsTable.ownerUserId, user.id)).limit(1);
+  }
+  const { passwordHash, ...appSafe } = app;
+  res.json({ ...appSafe, userId: user?.id, isSuspended: user?.isSuspended ?? false, merchant: merchant ?? null });
+});
+
+// PATCH /api/admin/merchant-applications/:email/status
+router.patch("/merchant-applications/:email/status", requireAdmin, async (req, res) => {
+  const email = decodeURIComponent(String(req.params.email));
+  const { status } = req.body; // "approved" | "rejected" | "pending"
+  if (!["approved", "rejected", "pending"].includes(status)) { res.status(400).json({ error: "Status tidak valid" }); return; }
+
+  const [application] = await db.select().from(merchantApplicationsTable)
+    .where(eq(merchantApplicationsTable.email, email)).limit(1);
+  if (!application) { res.status(404).json({ error: "Lamaran warung tidak ditemukan" }); return; }
+
+  if (status === "approved") {
+    const [existingUser] = await db.select({ id: usersTable.id, role: usersTable.role }).from(usersTable)
+      .where(eq(usersTable.email, application.email)).limit(1);
+    if (existingUser && existingUser.role !== "merchant") {
+      res.status(409).json({ error: "Email sudah dipakai akun non-warung, tidak bisa disetujui sebagai warung" });
+      return;
+    }
+
+    // Atomik: buat akun login warung + baris merchants (toko) + ubah status lamaran.
+    try {
+      await db.transaction(async (tx) => {
+        let ownerUserId = existingUser?.id;
+        if (!ownerUserId) {
+          const [newUser] = await tx.insert(usersTable).values({
+            name: application.ownerName,
+            email: application.email,
+            phone: application.phone,
+            passwordHash: application.passwordHash,
+            role: "merchant",
+          }).returning({ id: usersTable.id });
+          ownerUserId = newUser.id;
+        }
+        const [existingMerchant] = await tx.select({ id: merchantsTable.id }).from(merchantsTable)
+          .where(eq(merchantsTable.ownerUserId, ownerUserId)).limit(1);
+        if (!existingMerchant) {
+          await tx.insert(merchantsTable).values({
+            ownerUserId,
+            name: application.shopName,
+            category: application.category,
+            description: application.description,
+            address: application.address,
+            phone: application.phone,
+            lat: application.lat,
+            lng: application.lng,
+            photoPath: application.shopPhotoPath,
+            operatingCity: application.operatingCity,
+            status: "approved",
+            isOpen: true,
+          });
+        } else {
+          await tx.update(merchantsTable).set({ status: "approved" }).where(eq(merchantsTable.id, existingMerchant.id));
+        }
+        await tx.update(merchantApplicationsTable).set({ status }).where(eq(merchantApplicationsTable.email, email));
+      });
+    } catch (err) {
+      req.log.error({ err, email }, "Gagal membuat akun warung saat approve");
+      res.status(409).json({ error: "Gagal membuat akun warung — email mungkin sudah dipakai" });
+      return;
+    }
+
+    void sendWhatsApp(
+      application.phone,
+      `Halo ${application.ownerName}! 🎉\n\nSelamat, pendaftaran Warung *${application.shopName}* di RIDE telah *DISETUJUI*.\n\nAnda sekarang dapat login sebagai Warung menggunakan email & password yang Anda daftarkan, lalu mulai menambahkan menu. Selamat berjualan bersama RIDE!`,
+    );
+  } else {
+    await db.update(merchantApplicationsTable).set({ status }).where(eq(merchantApplicationsTable.email, email));
+    if (status === "rejected") {
+      void sendWhatsApp(
+        application.phone,
+        `Halo ${application.ownerName},\n\nMohon maaf, pendaftaran Warung *${application.shopName}* di RIDE *belum dapat kami setujui* saat ini.\n\nSilakan hubungi tim RIDE untuk informasi lebih lanjut.`,
+      );
+    }
+  }
+
+  res.json({ ok: true });
 });
 
 // ── Pengguna Management ───────────────────────────────────────────────────────

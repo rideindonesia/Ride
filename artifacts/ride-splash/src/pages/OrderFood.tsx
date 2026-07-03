@@ -159,6 +159,7 @@ export default function OrderFood() {
   const [trackDist, setTrackDist] = useState<number | null>(null);
   const [trackEta, setTrackEta] = useState<number | null>(null);
   const [trackingPhase, setTrackingPhase] = useState<string>("menuju");
+  const [merchantStatus, setMerchantStatus] = useState<string>("menunggu");
   type PaymentData = { biayaJasa: number; biayaSparepart: number; biayaPanggilan: number; biayaLayanan: number; total: number; paymentMethod: string };
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
@@ -252,6 +253,7 @@ export default function OrderFood() {
           photo: data.mitra.profilePhotoPath ?? null,
         });
         setMitraConfirmed(true);
+        if (data.merchantStatus) setMerchantStatus(data.merchantStatus);
         if (data.trackingPhase === "selesai") {
           if (data.paymentData) setPaymentData(data.paymentData);
           setStep(5);
@@ -593,6 +595,7 @@ export default function OrderFood() {
           setTrackEta(Math.ceil(calcEtaSecsLive(dist, data.mitra?.speedKmh) / 60));
         }
         if (data.trackingPhase) setTrackingPhase(data.trackingPhase);
+        if (data.merchantStatus) setMerchantStatus(data.merchantStatus);
         if (data.paymentData) setPaymentData(data.paymentData);
         if (data.trackingPhase === "selesai") setStep(5);
         if (data.paymentConfirmedAt) setPaymentConfirmed(true);
@@ -614,9 +617,15 @@ export default function OrderFood() {
       setOrderStatus("done");
       if (data.totalAmount) setOrderTotal(data.totalAmount);
     };
+    const onMerchantStatus = (data: any) => {
+      if (data.orderId !== orderId) return;
+      if (data.merchantStatus) setMerchantStatus(data.merchantStatus);
+      poll();
+    };
     socket.on("order:phase", onPhase);
     socket.on("order:payment", onPayment);
     socket.on("order:done", onDone);
+    socket.on("order:merchant_status", onMerchantStatus);
 
     poll();
     trackingPollRef.current = setInterval(poll, 4000);
@@ -625,6 +634,7 @@ export default function OrderFood() {
       socket.off("order:phase", onPhase);
       socket.off("order:payment", onPayment);
       socket.off("order:done", onDone);
+      socket.off("order:merchant_status", onMerchantStatus);
     };
   }, [step, orderId, pickupLat, pickupLng]);
 
@@ -1281,6 +1291,48 @@ export default function OrderFood() {
                 </div>
               )}
 
+              {/* ── STATUS WARUNG (gofood) ── */}
+              <div style={{ background: "#fff", border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>🏪 Status Warung</div>
+                {merchantStatus === "ditolak" ? (
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 14px", background: "#fff5f5", border: "1px solid #f5c6c6", borderRadius: 12 }}>
+                    <span style={{ fontSize: 18 }}>❌</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#c0392b" }}>Warung menolak pesanan</div>
+                      <div style={{ fontSize: 12, color: "#a04a44", marginTop: 2, lineHeight: 1.4 }}>Maaf, warung tidak dapat memproses pesanan ini. Pesanan dibatalkan.</div>
+                    </div>
+                  </div>
+                ) : (() => {
+                  const wOrder = ["menunggu", "diterima", "siap"];
+                  const curIdx = wOrder.indexOf(merchantStatus);
+                  return [
+                    { label: "Menunggu konfirmasi warung", key: "menunggu" },
+                    { label: "Warung sedang menyiapkan makanan", key: "diterima" },
+                    { label: "Makanan siap, ojol menuju lokasi", key: "siap" },
+                  ].map((ph, i, arr) => {
+                    const phIdx = wOrder.indexOf(ph.key);
+                    const done = phIdx < curIdx;
+                    const active = phIdx === curIdx;
+                    return (
+                      <div key={ph.key} style={{ display: "flex", gap: 14 }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <div style={{ width: 24, height: 24, borderRadius: 12, flexShrink: 0, background: done ? "#1a7a6a" : active ? "#1a3a5c" : "#e0e8f0", display: "flex", alignItems: "center", justifyContent: "center", border: active ? "2px solid #1a7a6a" : "none" }}>
+                            {done ? <span style={{ color: "#fff", fontSize: 11 }}>✓</span>
+                              : active ? <div style={{ width: 7, height: 7, borderRadius: 4, background: "#1a7a6a" }} />
+                              : <div style={{ width: 6, height: 6, borderRadius: 3, background: "#c0d0dc" }} />}
+                          </div>
+                          {i < arr.length - 1 && <div style={{ width: 2, height: 24, background: "#e0e8f0", margin: "3px 0" }} />}
+                        </div>
+                        <div style={{ paddingBottom: 12 }}>
+                          <div style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? "#1a2a3a" : "#9aa5b4" }}>{ph.label}</div>
+                          {active && <div style={{ fontSize: 11, color: "#1a7a6a", fontWeight: 600, marginTop: 1 }}>• Sekarang</div>}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
               <div style={{ background: "#fff", border: "1.5px solid #e0e8f0", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2a3a", marginBottom: 14 }}>📍 Status Perjalanan</div>
                 {(() => {
@@ -1365,8 +1417,8 @@ export default function OrderFood() {
                       <div style={{ background: "#f8fafc", padding: "10px 16px", fontSize: 11, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1 }}>RINCIAN BIAYA</div>
                       {[
                         { label: "Biaya Panggilan", val: paymentData.biayaPanggilan },
-                        { label: "Biaya Jasa", val: paymentData.biayaJasa },
-                        ...(paymentData.biayaSparepart > 0 ? [{ label: "Biaya Tambahan", val: paymentData.biayaSparepart }] : []),
+                        ...(paymentData.biayaJasa > 0 ? [{ label: "Biaya Jasa", val: paymentData.biayaJasa }] : []),
+                        ...(paymentData.biayaSparepart > 0 ? [{ label: "Harga Makanan (ditalangi ojol)", val: paymentData.biayaSparepart }] : []),
                         { label: "Biaya Layanan & Admin", val: paymentData.biayaLayanan },
                       ].map(row => (
                         <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #f0f4f8" }}>

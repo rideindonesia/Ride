@@ -21,10 +21,12 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
-  const role = (params.get("role") ?? "pengguna") as "pengguna" | "mitra";
+  const role = (params.get("role") ?? "pengguna") as "pengguna" | "mitra" | "merchant";
   const isLogin = mode === "login";
+  const isMerchant = role === "merchant";
 
   const [hp, setHp] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,12 +41,13 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
         try { localStorage.setItem("ride-last-role", userRole); } catch { /* ignore */ }
         setTimeout(() => {
           if (userRole === "pengguna") navigate("/dashboard/pengguna");
+          else if (userRole === "merchant") navigate("/dashboard/merchant");
           else navigate("/dashboard/mitra");
         }, 300);
       },
       onError: (err: unknown) => {
         const e = err as { response?: { data?: { error?: string } } };
-        setError(e?.response?.data?.error ?? "Nomor HP atau password salah");
+        setError(e?.response?.data?.error ?? (isMerchant ? "Email atau password salah" : "Nomor HP atau password salah"));
       },
     },
   });
@@ -52,8 +55,8 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const fullPhone = "+62" + hp.replace(/^0+/, "");
-    loginMutation.mutate({ data: { email: fullPhone, password, role } });
+    const identifier = isMerchant ? email.trim() : "+62" + hp.replace(/^0+/, "");
+    loginMutation.mutate({ data: { email: identifier, password, role } });
   };
 
   const fillDemo = (demoHp: string, demoPass: string) => {
@@ -66,9 +69,15 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
 
   const subtitle = role === "pengguna"
     ? "Cari & pesan layanan jasa favoritmu"
-    : "Terima order & hasilkan uang bersama RIDE";
+    : isMerchant
+      ? "Kelola warung & pesanan makanan"
+      : "Terima order & hasilkan uang bersama RIDE";
 
-  const title = role === "pengguna" ? "Masuk sebagai\nPengguna" : "Masuk sebagai\nMitra";
+  const title = role === "pengguna"
+    ? "Masuk sebagai\nPengguna"
+    : isMerchant
+      ? "Masuk sebagai\nWarung"
+      : "Masuk sebagai\nMitra";
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "linear-gradient(160deg, #0d2137 0%, #1a3a5c 45%, #1c4a5a 100%)", overflow: "hidden" }}>
@@ -100,21 +109,37 @@ export default function AuthForm({ mode }: AuthFormPageProps) {
             */}
 
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* Nomor HP */}
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 8 }}>Nomor HP</label>
-                <div style={{ display: "flex", borderRadius: 12, border: "1.5px solid #d0dce8", background: "#fff", overflow: "hidden" }}>
-                  <div style={{ padding: "14px 14px", background: "#f0f4f8", borderRight: "1.5px solid #d0dce8", fontSize: 15, fontWeight: 600, color: "#1a3a5c", fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>+62</div>
-                  <input
-                    type="tel"
-                    value={hp}
-                    onChange={e => setHp(e.target.value.replace(/\D/g, ""))}
-                    required
-                    placeholder="8xx xxxx xxxx"
-                    style={{ flex: 1, padding: "14px 14px", border: "none", outline: "none", fontSize: 15, fontFamily: "'Inter', sans-serif", color: "#1a2a3a", background: "transparent" }}
-                  />
+              {/* Email (merchant) atau Nomor HP (pengguna/mitra) */}
+              {isMerchant ? (
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 8 }}>Email</label>
+                  <div style={{ display: "flex", borderRadius: 12, border: "1.5px solid #d0dce8", background: "#fff", overflow: "hidden" }}>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                      placeholder="warung@contoh.com"
+                      style={{ flex: 1, padding: "14px 14px", border: "none", outline: "none", fontSize: 15, fontFamily: "'Inter', sans-serif", color: "#1a2a3a", background: "transparent" }}
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a", fontFamily: "'Inter', sans-serif", display: "block", marginBottom: 8 }}>Nomor HP</label>
+                  <div style={{ display: "flex", borderRadius: 12, border: "1.5px solid #d0dce8", background: "#fff", overflow: "hidden" }}>
+                    <div style={{ padding: "14px 14px", background: "#f0f4f8", borderRight: "1.5px solid #d0dce8", fontSize: 15, fontWeight: 600, color: "#1a3a5c", fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>+62</div>
+                    <input
+                      type="tel"
+                      value={hp}
+                      onChange={e => setHp(e.target.value.replace(/\D/g, ""))}
+                      required
+                      placeholder="8xx xxxx xxxx"
+                      style={{ flex: 1, padding: "14px 14px", border: "none", outline: "none", fontSize: 15, fontFamily: "'Inter', sans-serif", color: "#1a2a3a", background: "transparent" }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Password */}
               <div>

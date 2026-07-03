@@ -12,4 +12,5 @@ export type LoginInputRole =
 export const LoginInputRole = {
   pengguna: "pengguna",
   mitra: "mitra",
+  merchant: "merchant",
 } as const;

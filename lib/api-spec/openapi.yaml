@@ -214,7 +214,7 @@ components:
           type: string
         role:
           type: string
-          enum: [pengguna, mitra]
+          enum: [pengguna, mitra, merchant]
       required: [name, email, password, role]
     LoginInput:
       type: object
@@ -225,7 +225,7 @@ components:
           type: string
         role:
           type: string
-          enum: [pengguna, mitra]
+          enum: [pengguna, mitra, merchant]
       required: [email, password, role]
     RegisterPenggunaInput:
       type: object
@@ -289,7 +289,7 @@ components:
           type: string
         role:
           type: string
-          enum: [pengguna, mitra]
+          enum: [pengguna, mitra, merchant]
       required: [id, name, email, role]
     MessageResponse:
       type: object

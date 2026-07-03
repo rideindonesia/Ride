@@ -5,8 +5,10 @@ import RoleSelect from "@/pages/RoleSelect";
 import AuthForm from "@/pages/AuthForm";
 import RegisterPengguna from "@/pages/RegisterPengguna";
 import RegisterMitra from "@/pages/RegisterMitra";
+import RegisterMerchant from "@/pages/RegisterMerchant";
 import DashboardPengguna from "@/pages/DashboardPengguna";
 import DashboardMitra from "@/pages/DashboardMitra";
+import DashboardMerchant from "@/pages/DashboardMerchant";
 import OrderBengkel from "@/pages/OrderBengkel";
 import OrderElektronik from "@/pages/OrderElektronik";
 import OrderCuci from "@/pages/OrderCuci";
@@ -30,6 +32,7 @@ function RegisterFormRouter() {
   const role = new URLSearchParams(search).get("role");
   if (role === "pengguna") return <RegisterPengguna />;
   if (role === "mitra") return <RegisterMitra />;
+  if (role === "merchant") return <RegisterMerchant />;
   return <AuthForm mode="register" />;
 }
 
@@ -49,6 +52,7 @@ function Router() {
       <Route path="/register/form" component={RegisterFormRouter} />
       <Route path="/dashboard/pengguna" component={DashboardPengguna} />
       <Route path="/dashboard/mitra" component={DashboardMitra} />
+      <Route path="/dashboard/merchant" component={DashboardMerchant} />
       <Route path="/order/bengkel" component={OrderBengkel} />
       <Route path="/order/elektronik" component={OrderElektronik} />
       <Route path="/order/cuci" component={OrderCuci} />

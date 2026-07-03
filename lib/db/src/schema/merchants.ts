@@ -7,10 +7,13 @@ export const merchantsTable = pgTable("merchants", {
   category: varchar("category", { length: 30 }).notNull().default("food"),
   description: text("description"),
   address: text("address"),
+  phone: varchar("phone", { length: 30 }),
   lat: doublePrecision("lat"),
   lng: doublePrecision("lng"),
   photoPath: text("photo_path"),
   isOpen: boolean("is_open").notNull().default(true),
+  status: varchar("status", { length: 20 }).notNull().default("approved"),
+  operatingCity: text("operating_city"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

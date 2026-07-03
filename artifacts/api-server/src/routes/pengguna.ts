@@ -353,7 +353,7 @@ router.post("/orders", (req, res, next) => {
   else if (typeof damageCategories === "string") { try { dmgCats = JSON.parse(damageCategories); } catch { dmgCats = []; } }
 
   // orderItems (GoFood/GoShop) bisa string (FormData) atau array (JSON)
-  let items: { name: string; qty: number; price: number; note?: string }[] | null = null;
+  let items: { id?: number; name: string; qty: number; price: number; note?: string }[] | null = null;
   if (Array.isArray(orderItems)) items = orderItems;
   else if (typeof orderItems === "string") { try { items = JSON.parse(orderItems); } catch { items = null; } }
 
@@ -362,6 +362,35 @@ router.post("/orders", (req, res, next) => {
   const dLat = typeof destLat === "number" ? destLat : (destLat ? parseFloat(destLat) : null);
   const dLng = typeof destLng === "number" ? destLng : (destLng ? parseFloat(destLng) : null);
   const merchantIdNum = merchantId != null && merchantId !== "" ? parseInt(String(merchantId)) : null;
+
+  // GoFood: hitung total harga makanan (talangan) dari harga menu saat order dibuat,
+  // dan set status warung awal 'menunggu'. Warung akan konfirmasi & masak.
+  const isGofood = svcType.toLowerCase().replace(/[\s_-]+/g, "") === "gofood";
+  let foodTotal: number | null = null;
+  let merchantStatusInit: string | null = null;
+  if (isGofood && merchantIdNum != null && items && items.length > 0) {
+    // Harga makanan (talangan) HARUS otoritatif dari DB — abaikan harga dari klien
+    // agar tidak bisa dimanipulasi. Cocokkan tiap item ke menu_items milik merchant.
+    const menuRows = await db.select({ id: menuItemsTable.id, name: menuItemsTable.name, price: menuItemsTable.price, isAvailable: menuItemsTable.isAvailable })
+      .from(menuItemsTable).where(eq(menuItemsTable.merchantId, merchantIdNum));
+    const byId = new Map(menuRows.map(m => [m.id, m]));
+    const byName = new Map(menuRows.map(m => [m.name.trim().toLowerCase(), m]));
+    const authItems: { id?: number; name: string; qty: number; price: number; note?: string }[] = [];
+    for (const it of items) {
+      const qty = Math.max(1, Math.floor(Number(it.qty) || 0));
+      const menu = (it.id != null && byId.has(Number(it.id)))
+        ? byId.get(Number(it.id))
+        : byName.get(String(it.name ?? "").trim().toLowerCase());
+      if (!menu || !menu.isAvailable) {
+        res.status(400).json({ error: `Menu "${it.name ?? it.id}" tidak tersedia` });
+        return;
+      }
+      authItems.push({ id: menu.id, name: menu.name, qty, price: menu.price, note: it.note });
+    }
+    items = authItems;
+    foodTotal = authItems.reduce((sum, it) => sum + it.price * it.qty, 0);
+    merchantStatusInit = "menunggu";
+  }
 
   // Trip verticals: precompute pickup→destination distance for the fare (mengikuti jalan via OSRM).
   let tripDistanceKm: number | null = null;
@@ -391,6 +420,8 @@ router.post("/orders", (req, res, next) => {
     itemNote: itemNote ?? null,
     merchantId: merchantIdNum,
     orderItems: items,
+    foodTotal,
+    merchantStatus: merchantStatusInit,
     status: "pending",
     penggunaPhotoPath,
   }).returning({ id: ordersTable.id, orderNo: ordersTable.orderNo });
@@ -455,6 +486,26 @@ router.post("/orders", (req, res, next) => {
     }
     io?.to("room:admin").emit("admin:order_update", { type: "new", orderId: order.id });
 
+    // GoFood: beri tahu warung tujuan (real-time + push) agar segera konfirmasi & masak.
+    if (isGofood && merchantIdNum != null) {
+      const [mch] = await db.select({ ownerUserId: merchantsTable.ownerUserId })
+        .from(merchantsTable).where(eq(merchantsTable.id, merchantIdNum)).limit(1);
+      if (mch?.ownerUserId) {
+        io?.to(`user:${mch.ownerUserId}`).emit("merchant:order:new", {
+          orderId: order.id,
+          orderNo: order.orderNo,
+          orderItems: items,
+          foodTotal,
+          penggunaName: pengguna?.name ?? "",
+        });
+        sendPushToUsers([mch.ownerUserId], {
+          title: "🍽️ Pesanan Makanan Masuk!",
+          body: `${pengguna?.name ?? "Konsumen"} memesan menu Anda. Konfirmasi sekarang!`,
+          url: "/",
+        }, "pesanan");
+      }
+    }
+
     // Push notification ke semua mitra yang tersedia (walau browser ditutup)
     const mitraIds = availableMitra.map(m => m.userId).filter((id): id is number => id !== null);
     if (mitraIds.length > 0) {
@@ -515,6 +566,9 @@ router.get("/orders/:id", async (req, res) => {
     paymentData: order.paymentData ?? null,
     penggunaConfirmed: order.penggunaConfirmed ?? false,
     paymentConfirmedAt: order.paymentConfirmedAt ?? null,
+    merchantStatus: order.merchantStatus ?? null,
+    foodTotal: order.foodTotal ?? null,
+    orderItems: order.orderItems ?? null,
     pickupLat: order.pickupLat,
     pickupLng: order.pickupLng,
     pickupAddress: order.pickupAddress,
@@ -579,6 +633,9 @@ router.get("/active-order", async (req, res) => {
       trackingPhase: order.trackingPhase ?? "menuju",
       paymentData: order.paymentData ?? null,
       penggunaConfirmed: order.penggunaConfirmed ?? false,
+      merchantStatus: order.merchantStatus ?? null,
+      foodTotal: order.foodTotal ?? null,
+      orderItems: order.orderItems ?? null,
       vehicleType: order.vehicleType,
       vehicleModel: order.vehicleModel,
       vehicleYear: order.vehicleYear,
@@ -1243,7 +1300,7 @@ router.post("/chat/:orderId", async (req, res) => {
 // GET /api/pengguna/merchants — daftar merchant (GoFood/GoShop)
 router.get("/merchants", async (req, res) => {
   const category = typeof req.query.category === "string" ? req.query.category : undefined;
-  const conds = [eq(merchantsTable.isOpen, true)];
+  const conds = [eq(merchantsTable.isOpen, true), eq(merchantsTable.status, "approved")];
   if (category) conds.push(eq(merchantsTable.category, category));
   const merchants = await db.select().from(merchantsTable).where(and(...conds)).orderBy(asc(merchantsTable.name));
   res.json({ merchants });

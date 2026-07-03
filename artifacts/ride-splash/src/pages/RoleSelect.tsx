@@ -8,7 +8,7 @@ export default function RoleSelect({ mode }: RoleSelectPageProps) {
   const [, navigate] = useLocation();
   const isLogin = mode === "login";
 
-  const handleSelect = (role: "pengguna" | "mitra") => {
+  const handleSelect = (role: "pengguna" | "mitra" | "merchant") => {
     navigate(`/${mode}/form?role=${role}`);
   };
 
@@ -188,6 +188,48 @@ export default function RoleSelect({ mode }: RoleSelectPageProps) {
             </div>
             <div style={{ marginTop: 3, fontSize: 13, color: "rgba(255,255,255,0.7)", fontFamily: "'Inter', sans-serif" }}>
               Terima order &amp; hasilkan uang
+            </div>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 18 }}>›</div>
+        </button>
+
+        {/* Warung / Merchant card */}
+        <button
+          onClick={() => handleSelect("merchant")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            background: "linear-gradient(135deg, #1a6060 0%, #1a7a6a 100%)",
+            border: "none",
+            borderRadius: 16,
+            padding: "18px 20px",
+            cursor: "pointer",
+            textAlign: "left",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          }}
+        >
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 14,
+              background: "rgba(255,255,255,0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              fontSize: 28,
+            }}
+          >
+            🍽️
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#ffffff", fontFamily: "'Inter', sans-serif" }}>
+              Warung
+            </div>
+            <div style={{ marginTop: 3, fontSize: 13, color: "rgba(255,255,255,0.7)", fontFamily: "'Inter', sans-serif" }}>
+              Kelola warung &amp; terima pesanan makanan
             </div>
           </div>
           <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 18 }}>›</div>

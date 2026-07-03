@@ -12,4 +12,5 @@ export type RegisterInputRole =
 export const RegisterInputRole = {
   pengguna: "pengguna",
   mitra: "mitra",
+  merchant: "merchant",
 } as const;

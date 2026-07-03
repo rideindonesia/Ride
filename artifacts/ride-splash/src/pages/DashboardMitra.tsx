@@ -225,6 +225,8 @@ export default function DashboardMitra() {
   // Mitra order phase: diterima → chat → menuju → tiba → pengerjaan → selesai
   type MitraPhase = "diterima" | "chat" | "menuju" | "tiba" | "pengerjaan" | "selesai";
   const [mitraPhase, setMitraPhase] = useState<MitraPhase>("diterima");
+  const [merchantStatus, setMerchantStatus] = useState<string | null>(null);
+  const [foodTotal, setFoodTotal] = useState<number>(0);
   const [penggunaConfirmed, setPenggunaConfirmed] = useState(false);
   const [paymentConfirmedByUser, setPaymentConfirmedByUser] = useState(false);
   const [paymentInfoFromUser, setPaymentInfoFromUser] = useState<{ method: string; finalTotal: number } | null>(null);
@@ -401,6 +403,8 @@ export default function DashboardMitra() {
           if (prev) { setPenggunaConfirmed(false); setMitraPhase("diterima"); }
           return null;
         });
+        setMerchantStatus(null);
+        setFoodTotal(0);
         return;
       }
       const o = d.order;
@@ -418,6 +422,9 @@ export default function DashboardMitra() {
         // Order berbeda atau pertama kali load — gunakan data server sepenuhnya
         return o;
       });
+      // Restore status warung & talangan makanan (gofood)
+      setMerchantStatus((o as any).merchantStatus ?? null);
+      setFoodTotal((o as any).foodTotal ?? 0);
       // Restore penggunaConfirmed dari DB
       const confirmed = !!o.penggunaConfirmed;
       if (confirmed) setPenggunaConfirmed(true);
@@ -833,11 +840,19 @@ export default function DashboardMitra() {
     };
     socket.on("chat:message", onChat);
 
+    const onMerchantStatus = (data: any) => {
+      if (data.orderId !== orderId) return;
+      if (data.merchantStatus) setMerchantStatus(data.merchantStatus);
+      fetchActiveOrder();
+    };
+    socket.on("order:merchant_status", onMerchantStatus);
+
     return () => {
       leaveOrderRoom(orderId);
       socket.off("chat:message", onChat);
+      socket.off("order:merchant_status", onMerchantStatus);
     };
-  }, [activeOrder?.id]);
+  }, [activeOrder?.id, fetchActiveOrder]);
 
   const sendChat = async () => {
     if (!chatInput.trim() || !activeOrder || chatSending) return;
@@ -1436,6 +1451,24 @@ export default function DashboardMitra() {
 
               <div style={{ padding: "0 10px 16px" }}>
 
+                {/* ── STATUS WARUNG (gofood) ── */}
+                {activeOrder.serviceType === "gofood" && (mitraPhase === "chat" || mitraPhase === "menuju" || mitraPhase === "tiba" || mitraPhase === "pengerjaan") && (() => {
+                  const ws = merchantStatus ?? "menunggu";
+                  const wCfg: Record<string, { label: string; icon: string; bg: string; border: string; color: string }> = {
+                    menunggu: { label: "Menunggu warung", icon: "⏳", bg: "#fff8e1", border: "#f5d78a", color: "#7a5a00" },
+                    diterima: { label: "Warung menyiapkan makanan", icon: "🍳", bg: "#eaf2fb", border: "#b8d4ef", color: "#1a3a5c" },
+                    siap: { label: "Makanan siap — silakan jemput", icon: "✅", bg: "#d4f5ec", border: "#9ee0cc", color: "#1a5a4a" },
+                    ditolak: { label: "Warung menolak pesanan", icon: "❌", bg: "#fff5f5", border: "#f5c6c6", color: "#c0392b" },
+                  };
+                  const c = wCfg[ws] ?? wCfg.menunggu;
+                  return (
+                    <div style={{ background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 14, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 16 }}>{c.icon}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: c.color }}>{c.label}</span>
+                    </div>
+                  );
+                })()}
+
                 {/* ── FASE 1: Diterima ── */}
                 {mitraPhase === "diterima" && (
                   <>
@@ -1584,14 +1617,25 @@ export default function DashboardMitra() {
                 )}
 
                 {/* ── FASE 4: Sudah Tiba ── */}
-                {mitraPhase === "tiba" && (
-                  <button
-                    onClick={async () => { await updatePhase("pengerjaan"); setMitraPhase("pengerjaan"); }}
-                    style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                  >
-                    {svcCfg.mulai}
-                  </button>
-                )}
+                {mitraPhase === "tiba" && (() => {
+                  const foodGated = activeOrder.serviceType === "gofood" && merchantStatus !== "siap";
+                  return (
+                    <>
+                      <button
+                        disabled={foodGated}
+                        onClick={async () => { if (foodGated) return; await updatePhase("pengerjaan"); setMitraPhase("pengerjaan"); }}
+                        style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", background: foodGated ? "#c0d0dc" : "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: foodGated ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                      >
+                        {svcCfg.mulai}
+                      </button>
+                      {foodGated && (
+                        <div style={{ fontSize: 12, color: "#7a8a9a", textAlign: "center", marginTop: 8, fontWeight: 600 }}>
+                          ⏳ Menunggu makanan siap dari warung
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* ── FASE 5: Pengerjaan ── */}
                 {mitraPhase === "pengerjaan" && (
@@ -1606,11 +1650,13 @@ export default function DashboardMitra() {
                 {/* ── FASE 6: Pembayaran Final (inline form) ── */}
                 {mitraPhase === "selesai" && (() => {
                   const jasa = Number(biayaJasa) || 0;
-                  const spare = svcCfg.showSparepart ? (Number(biayaSparepart) || 0) : 0;
+                  const isGofood = activeOrder.serviceType === "gofood";
+                  const jasaFinal = isGofood ? 0 : jasa;
+                  const spare = isGofood ? foodTotal : (svcCfg.showSparepart ? (Number(biayaSparepart) || 0) : 0);
                   const biayaPanggilan = activeOrder.totalAmount ?? 0;
                   const biayaLayanan = BIAYA_LAYANAN;
-                  const total = jasa + spare + biayaPanggilan + biayaLayanan;
-                  const canSend = jasa > 0;
+                  const total = jasaFinal + spare + biayaPanggilan + biayaLayanan;
+                  const canSend = isGofood ? true : jasa > 0;
                   const fmtIdr = (n: number) => n.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
                   const kirimRincian = async () => {
@@ -1627,12 +1673,17 @@ export default function DashboardMitra() {
                       const r = await fetch(`${BASE}/api/mitra/orders/${activeOrder.id}/payment-data`, {
                         method: "PATCH", headers: { "Content-Type": "application/json" },
                         credentials: "include",
-                        body: JSON.stringify({ biayaJasa: jasa, biayaSparepart: spare, biayaPanggilan, biayaLayanan, total, paymentMethod }),
+                        body: JSON.stringify(isGofood
+                          ? { biayaJasa: 0, biayaSparepart: 0, biayaPanggilan, biayaLayanan, total, paymentMethod }
+                          : { biayaJasa: jasa, biayaSparepart: spare, biayaPanggilan, biayaLayanan, total, paymentMethod }),
                       });
                       if (!r.ok) throw new Error("Gagal simpan");
                       // Kirim juga notifikasi via chat
-                      const spareLine = svcCfg.showSparepart && spare > 0 ? `\n• ${svcCfg.sparepartLabel}: ${fmtIdr(spare)}` : "";
-                      const msg = `📋 Rincian Biaya:\n• ${svcCfg.jasaLabel}: ${fmtIdr(jasa)}${spareLine}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
+                      const spareLine = isGofood
+                        ? `\n• Harga Makanan (ditalangi ojol): ${fmtIdr(spare)}`
+                        : (svcCfg.showSparepart && spare > 0 ? `\n• ${svcCfg.sparepartLabel}: ${fmtIdr(spare)}` : "");
+                      const jasaLine = isGofood ? "" : `\n• ${svcCfg.jasaLabel}: ${fmtIdr(jasa)}`;
+                      const msg = `📋 Rincian Biaya:${jasaLine}${spareLine}\n• Biaya Panggilan: ${fmtIdr(biayaPanggilan)}\n• Biaya Layanan & Admin: ${fmtIdr(biayaLayanan)}\n• Total: ${fmtIdr(total)}\nMetode bayar: ${paymentMethod.toUpperCase()}`;
                       await fetch(`${BASE}/api/mitra/chat/${activeOrder.id}`, {
                         method: "POST", headers: { "Content-Type": "application/json" },
                         credentials: "include", body: JSON.stringify({ message: msg }),
@@ -1687,29 +1738,42 @@ export default function DashboardMitra() {
                         </label>
                       </div>
 
-                      {/* Biaya inputs */}
-                      <div style={{ display: "grid", gridTemplateColumns: svcCfg.showSparepart ? "1fr 1fr" : "1fr", gap: 12 }}>
-                        {[
-                          { label: svcCfg.jasaLabel, sub: svcCfg.jasaSub, val: biayaJasa, set: setBiayaJasa, show: true },
-                          { label: svcCfg.sparepartLabel, sub: svcCfg.sparepartSub, val: biayaSparepart, set: setBiayaSparepart, show: svcCfg.showSparepart },
-                        ].filter(f => f.show).map(({ label, sub, val, set }) => (
-                          <div key={label}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a", marginBottom: 2 }}>{label}</div>
-                            <div style={{ fontSize: 10, color: "#9aa5b4", marginBottom: 6 }}>{sub}</div>
-                            <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 10, overflow: "hidden", background: rincianSent ? "#f8fafc" : "#fff", opacity: rincianSent ? 0.7 : 1 }}>
-                              <span style={{ padding: "0 8px", fontSize: 12, color: "#9aa5b4", background: "#f8fafc", borderRight: "1px solid #e0e8f0", alignSelf: "stretch", display: "flex", alignItems: "center" }}>Rp</span>
-                              <input type="text" inputMode="numeric" value={val === "" ? "" : Number(val).toLocaleString("id-ID")} disabled={rincianSent} onChange={e => { if (rincianSent) return; const raw = e.target.value.replace(/\D/g, ""); set(raw); }}
-                                style={{ flex: 1, padding: "10px 8px", border: "none", outline: "none", fontSize: 14, fontWeight: 700, color: "#1a2a3a", width: 0, cursor: rincianSent ? "not-allowed" : "text", background: "transparent" }} />
-                            </div>
+                      {/* Talangan makanan (gofood) — read only */}
+                      {isGofood ? (
+                        <div style={{ background: "#fff8e1", border: "1.5px solid #f5d78a", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#7a5a00" }}>🍔 Talangan Makanan</div>
+                            <div style={{ fontSize: 10, color: "#9a8a5a", marginTop: 2 }}>Dana yang kamu talangi & akan diganti konsumen</div>
                           </div>
-                        ))}
-                      </div>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: "#7a5a00" }}>{fmtRp(foodTotal)}</div>
+                        </div>
+                      ) : (
+                        /* Biaya inputs */
+                        <div style={{ display: "grid", gridTemplateColumns: svcCfg.showSparepart ? "1fr 1fr" : "1fr", gap: 12 }}>
+                          {[
+                            { label: svcCfg.jasaLabel, sub: svcCfg.jasaSub, val: biayaJasa, set: setBiayaJasa, show: true },
+                            { label: svcCfg.sparepartLabel, sub: svcCfg.sparepartSub, val: biayaSparepart, set: setBiayaSparepart, show: svcCfg.showSparepart },
+                          ].filter(f => f.show).map(({ label, sub, val, set }) => (
+                            <div key={label}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#1a2a3a", marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 10, color: "#9aa5b4", marginBottom: 6 }}>{sub}</div>
+                              <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e0e8f0", borderRadius: 10, overflow: "hidden", background: rincianSent ? "#f8fafc" : "#fff", opacity: rincianSent ? 0.7 : 1 }}>
+                                <span style={{ padding: "0 8px", fontSize: 12, color: "#9aa5b4", background: "#f8fafc", borderRight: "1px solid #e0e8f0", alignSelf: "stretch", display: "flex", alignItems: "center" }}>Rp</span>
+                                <input type="text" inputMode="numeric" value={val === "" ? "" : Number(val).toLocaleString("id-ID")} disabled={rincianSent} onChange={e => { if (rincianSent) return; const raw = e.target.value.replace(/\D/g, ""); set(raw); }}
+                                  style={{ flex: 1, padding: "10px 8px", border: "none", outline: "none", fontSize: 14, fontWeight: 700, color: "#1a2a3a", width: 0, cursor: rincianSent ? "not-allowed" : "text", background: "transparent" }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Breakdown */}
                       <div style={{ borderRadius: 12, border: "1px solid #eef2f7", overflow: "hidden" }}>
                         {[
-                          { label: svcCfg.jasaLabel, val: jasa },
-                          ...(svcCfg.showSparepart && spare > 0 ? [{ label: svcCfg.sparepartLabel, val: spare }] : []),
+                          ...(isGofood ? [] : [{ label: svcCfg.jasaLabel, val: jasa }]),
+                          ...(isGofood
+                            ? [{ label: "Harga Makanan (ditalangi ojol)", val: spare }]
+                            : (svcCfg.showSparepart && spare > 0 ? [{ label: svcCfg.sparepartLabel, val: spare }] : [])),
                           { label: "Biaya Panggilan", val: biayaPanggilan },
                           { label: "Biaya Layanan & Admin", val: biayaLayanan },
                         ].map(row => (

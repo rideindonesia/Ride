@@ -7,6 +7,7 @@ import seedRouter from "./seed";
 import chatRouter from "./chat";
 import adminRouter from "./admin";
 import pushRouter from "./push";
+import merchantRouter from "./merchant";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/seed", seedRouter);
 router.use("/chat", chatRouter);
 router.use("/admin", adminRouter);
 router.use("/push", pushRouter);
+router.use("/merchant", merchantRouter);
 
 export default router;

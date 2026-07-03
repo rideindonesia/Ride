@@ -56,6 +56,8 @@ router.post("/register", async (req, res) => {
   // Store role-specific ID in session
   if (user.role === "pengguna") {
     (req.session as Record<string, unknown>).penggunaId = user.id;
+  } else if (user.role === "merchant") {
+    (req.session as Record<string, unknown>).merchantId = user.id;
   } else {
     (req.session as Record<string, unknown>).mitraId = user.id;
   }
@@ -91,6 +93,8 @@ router.post("/login", async (req, res) => {
   // Store role-specific ID — does NOT overwrite the other role's session data
   if (user.role === "pengguna") {
     (req.session as Record<string, unknown>).penggunaId = user.id;
+  } else if (user.role === "merchant") {
+    (req.session as Record<string, unknown>).merchantId = user.id;
   } else {
     (req.session as Record<string, unknown>).mitraId = user.id;
   }
@@ -113,9 +117,11 @@ router.get("/me", async (req, res) => {
     userId = sess.penggunaId as number | undefined;
   } else if (roleParam === "mitra") {
     userId = sess.mitraId as number | undefined;
+  } else if (roleParam === "merchant") {
+    userId = sess.merchantId as number | undefined;
   } else {
     // Legacy: no role param — return whichever is set (prefer pengguna)
-    userId = (sess.penggunaId ?? sess.mitraId) as number | undefined;
+    userId = (sess.penggunaId ?? sess.mitraId ?? sess.merchantId) as number | undefined;
   }
 
   if (!userId) {
@@ -145,6 +151,12 @@ router.post("/logout", (req, res) => {
   } else if (role === "mitra") {
     // Only clear mitra session — pengguna session stays intact
     delete sess.mitraId;
+    req.session.save(() => {
+      res.json({ message: "Berhasil keluar" });
+    });
+  } else if (role === "merchant") {
+    // Only clear merchant session — other role sessions stay intact
+    delete sess.merchantId;
     req.session.save(() => {
       res.json({ message: "Berhasil keluar" });
     });

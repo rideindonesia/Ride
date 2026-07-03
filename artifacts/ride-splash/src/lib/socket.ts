@@ -11,7 +11,7 @@ export const socket = io({
 });
 
 /** Call once after login to identify the user and join relevant rooms */
-export function identifySocket(userId: number, role: "pengguna" | "mitra", serviceType?: string) {
+export function identifySocket(userId: number, role: "pengguna" | "mitra" | "merchant", serviceType?: string) {
   if (!socket.connected) socket.connect();
   socket.emit("identify", { userId, role, serviceType });
 }

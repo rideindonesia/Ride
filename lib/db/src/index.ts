@@ -132,6 +132,36 @@ export async function ensureSchema(): Promise<void> {
   await db.execute(
     sql`CREATE INDEX IF NOT EXISTS menu_items_merchant_idx ON menu_items (merchant_id)`,
   );
+  // Merchant/Warung role (Ride Makan). Add enum value + supporting tables/columns.
+  // ALTER TYPE ... ADD VALUE cannot run inside a transaction; db.execute issues
+  // each statement standalone so this is safe at startup.
+  await db.execute(sql`ALTER TYPE role ADD VALUE IF NOT EXISTS 'merchant'`);
+  await db.execute(sql`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS status varchar(20) NOT NULL DEFAULT 'approved'`);
+  await db.execute(sql`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS phone varchar(30)`);
+  await db.execute(sql`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS operating_city text`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS food_total integer`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS merchant_status varchar(20)`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS merchant_ready_at timestamp`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS merchant_applications (
+      id serial PRIMARY KEY,
+      owner_name text NOT NULL,
+      phone text NOT NULL,
+      email text NOT NULL UNIQUE,
+      password_hash text NOT NULL,
+      shop_name text NOT NULL,
+      category text NOT NULL DEFAULT 'food',
+      description text,
+      address text NOT NULL,
+      lat double precision,
+      lng double precision,
+      operating_city text NOT NULL,
+      ktp_path text,
+      shop_photo_path text,
+      status varchar(20) NOT NULL DEFAULT 'pending',
+      created_at timestamp NOT NULL DEFAULT now()
+    )
+  `);
 }
 
 export * from "./schema";

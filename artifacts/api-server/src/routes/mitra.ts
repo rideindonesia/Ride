@@ -565,6 +565,8 @@ router.get("/active-order", requireMitra, async (req, res) => {
     penggunaConfirmed: ordersTable.penggunaConfirmed,
     paymentConfirmedAt: ordersTable.paymentConfirmedAt,
     paymentData: ordersTable.paymentData,
+    merchantStatus: ordersTable.merchantStatus,
+    foodTotal: ordersTable.foodTotal,
     penggunaName: usersTable.name,
     penggunaProfilePhoto: usersTable.profilePhotoPath,
     penggunaPhotoPath: ordersTable.penggunaPhotoPath,
@@ -804,13 +806,21 @@ router.patch("/orders/:id/phase", requireMitra, async (req, res) => {
 
   // Gate: pengguna harus sudah konfirmasi (PATCH /pengguna/orders/:id/confirm)
   // sebelum mitra boleh mulai bergerak/menjalankan fase.
-  const [cur] = await db.select({ penggunaConfirmed: ordersTable.penggunaConfirmed })
+  const [cur] = await db.select({
+    penggunaConfirmed: ordersTable.penggunaConfirmed,
+    serviceType: ordersTable.serviceType,
+    merchantStatus: ordersTable.merchantStatus,
+  })
     .from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
     .limit(1);
   if (!cur) { res.status(404).json({ error: "Order tidak ditemukan" }); return; }
   if (!cur.penggunaConfirmed) {
     res.status(409).json({ error: "Menunggu konsumen mengonfirmasi sebelum melanjutkan." }); return;
+  }
+  // GoFood: ojol tidak boleh mulai mengantar (fase pengerjaan) sebelum makanan siap dari warung.
+  if (normSvc(cur.serviceType) === "gofood" && phase === "pengerjaan" && cur.merchantStatus !== "siap") {
+    res.status(409).json({ error: "Menunggu warung menyelesaikan pesanan (makanan siap)." }); return;
   }
 
   const [updated] = await db.update(ordersTable)
@@ -852,6 +862,8 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
     paymentData: ordersTable.paymentData,
     status: ordersTable.status,
     totalAmount: ordersTable.totalAmount,
+    serviceType: ordersTable.serviceType,
+    foodTotal: ordersTable.foodTotal,
   })
     .from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.mitraId, mitraId)))
@@ -870,10 +882,15 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   const feePct = (parseFloat(feePctRow?.value ?? "15") || 15) / 100;
 
   // Nilai otoritatif server — bukan dari body request mitra.
-  const callFee = Number(existing.totalAmount) || 0;            // biaya panggilan dari accept
+  const callFee = Number(existing.totalAmount) || 0;            // biaya panggilan (ongkir) dari accept
   const layanan = parseInt(layananRow?.value ?? "2000") || 2000; // biaya layanan & admin dari DB
-  const jasa = Math.max(0, Number(biayaJasa) || 0);
-  const sparepart = Math.max(0, Number(biayaSparepart) || 0);
+  const isGofood = normSvc(existing.serviceType) === "gofood";
+  // GoFood: ojol menalangi harga makanan (foodTotal, otoritatif dari saat order dibuat),
+  // ditagihkan ke pengguna sebagai "biayaSparepart"; tidak ada biaya jasa.
+  const jasa = isGofood ? 0 : Math.max(0, Number(biayaJasa) || 0);
+  const sparepart = isGofood
+    ? (Number(existing.foodTotal) || 0)
+    : Math.max(0, Number(biayaSparepart) || 0);
   const total = jasa + sparepart + callFee + layanan;
   const platformFee = Math.round(callFee * feePct) + layanan;
 

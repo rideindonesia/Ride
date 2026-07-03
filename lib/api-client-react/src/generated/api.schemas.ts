@@ -15,6 +15,7 @@ export type RegisterInputRole =
 export const RegisterInputRole = {
   pengguna: "pengguna",
   mitra: "mitra",
+  merchant: "merchant",
 } as const;
 
 export interface RegisterInput {
@@ -30,6 +31,7 @@ export type LoginInputRole =
 export const LoginInputRole = {
   pengguna: "pengguna",
   mitra: "mitra",
+  merchant: "merchant",
 } as const;
 
 export interface LoginInput {
@@ -68,6 +70,7 @@ export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 export const UserRole = {
   pengguna: "pengguna",
   mitra: "mitra",
+  merchant: "merchant",
 } as const;
 
 export interface User {

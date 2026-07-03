@@ -47,10 +47,13 @@ export function collectVerifiedIds(req: any): Set<number> {
   };
   add(req?.session?.penggunaId);
   add(req?.session?.mitraId);
+  add(req?.session?.merchantId);
   const pUid = req?.signedCookies?.["ride-p-uid"];
   if (pUid && pUid !== false) add(parseInt(pUid));
   const mUid = req?.signedCookies?.["ride-m-uid"];
   if (mUid && mUid !== false) add(parseInt(mUid));
+  const mchUid = req?.signedCookies?.["ride-mch-uid"];
+  if (mchUid && mchUid !== false) add(parseInt(mchUid));
   return ids;
 }
 
@@ -58,6 +61,12 @@ export function hasMitraIdentity(req: any): boolean {
   if (req?.session?.mitraId) return true;
   const mUid = req?.signedCookies?.["ride-m-uid"];
   return !!(mUid && mUid !== false);
+}
+
+export function hasMerchantIdentity(req: any): boolean {
+  if (req?.session?.merchantId) return true;
+  const mchUid = req?.signedCookies?.["ride-mch-uid"];
+  return !!(mchUid && mchUid !== false);
 }
 
 export function isAdminReq(req: any): boolean {

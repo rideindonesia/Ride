@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraLocationsTable, mitraApplicationsTable, systemSettingsTable, merchantsTable, menuItemsTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraLocationsTable, mitraApplicationsTable, systemSettingsTable, merchantsTable, menuItemsTable, merchantApplicationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -31,20 +31,20 @@ const DEMO_MITRA = [
 ];
 
 const DEMO_MERCHANTS = [
-  { name: "Warung Nasi Ibu Sari", category: "food", description: "Masakan rumahan khas Balikpapan", address: "Jl. Ahmad Yani No. 12, Balikpapan", lat: -1.2620, lng: 116.8330, menu: [
+  { name: "Warung Nasi Ibu Sari", ownerName: "Sari Wulandari", ownerEmail: "warung.sari@ride.app", ownerPhone: "+6281222000001", ownerPassword: "merchant1234", category: "food", description: "Masakan rumahan khas Balikpapan", address: "Jl. Ahmad Yani No. 12, Balikpapan", lat: -1.2620, lng: 116.8330, menu: [
     { name: "Nasi Ayam Goreng", price: 22000, category: "Makanan" },
     { name: "Nasi Rendang", price: 27000, category: "Makanan" },
     { name: "Soto Banjar", price: 20000, category: "Makanan" },
     { name: "Es Teh Manis", price: 5000, category: "Minuman" },
     { name: "Es Jeruk", price: 7000, category: "Minuman" },
   ]},
-  { name: "Kedai Kopi Senja", category: "food", description: "Kopi & camilan", address: "Jl. Jenderal Sudirman No. 45, Balikpapan", lat: -1.2680, lng: 116.8280, menu: [
+  { name: "Kedai Kopi Senja", ownerName: "Senja Pratama", ownerEmail: "warung.senja@ride.app", ownerPhone: "+6281222000002", ownerPassword: "merchant1234", category: "food", description: "Kopi & camilan", address: "Jl. Jenderal Sudirman No. 45, Balikpapan", lat: -1.2680, lng: 116.8280, menu: [
     { name: "Kopi Susu Gula Aren", price: 18000, category: "Minuman" },
     { name: "Americano", price: 15000, category: "Minuman" },
     { name: "Croissant Cokelat", price: 20000, category: "Camilan" },
     { name: "Kentang Goreng", price: 17000, category: "Camilan" },
   ]},
-  { name: "Ayam Geprek Mantul", category: "food", description: "Ayam geprek pedas level", address: "Jl. MT Haryono No. 8, Balikpapan", lat: -1.2560, lng: 116.8380, menu: [
+  { name: "Ayam Geprek Mantul", ownerName: "Mantul Wijaya", ownerEmail: "warung.mantul@ride.app", ownerPhone: "+6281222000003", ownerPassword: "merchant1234", category: "food", description: "Ayam geprek pedas level", address: "Jl. MT Haryono No. 8, Balikpapan", lat: -1.2560, lng: 116.8380, menu: [
     { name: "Geprek Original", price: 18000, category: "Makanan" },
     { name: "Geprek Keju", price: 23000, category: "Makanan" },
     { name: "Geprek Sambal Matah", price: 24000, category: "Makanan" },
@@ -147,23 +147,67 @@ router.post("/demo", async (_req, res) => {
     results.push({ name: "Admin RIDE", email: adminEmail, status: "password diperbarui" });
   }
 
-  // Seed demo merchants + menu (untuk GoFood/GoShop)
+  // Seed demo merchants + akun login warung + menu (untuk GoFood)
   for (const m of DEMO_MERCHANTS) {
+    // 1) Akun login warung (role 'merchant')
+    const existingOwner = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(eq(usersTable.email, m.ownerEmail)).limit(1);
+    let ownerUserId: number;
+    if (existingOwner.length > 0) {
+      ownerUserId = existingOwner[0].id;
+      await db.update(usersTable)
+        .set({ passwordHash: hashPassword(m.ownerPassword), phone: m.ownerPhone, role: "merchant" })
+        .where(eq(usersTable.id, ownerUserId));
+    } else {
+      const [insUser] = await db.insert(usersTable).values({
+        name: m.ownerName, email: m.ownerEmail, phone: m.ownerPhone,
+        passwordHash: hashPassword(m.ownerPassword), role: "merchant",
+      }).returning({ id: usersTable.id });
+      ownerUserId = insUser.id;
+    }
+
+    // 2) Baris toko (merchants) — buat jika belum ada, dan pastikan ownerUserId ter-link
     const existingM = await db.select({ id: merchantsTable.id }).from(merchantsTable).where(eq(merchantsTable.name, m.name)).limit(1);
     if (existingM.length > 0) {
-      results.push({ name: m.name, email: "-", status: "merchant sudah ada" });
+      await db.update(merchantsTable)
+        .set({ ownerUserId, phone: m.ownerPhone, operatingCity: "Balikpapan", status: "approved" })
+        .where(eq(merchantsTable.id, existingM[0].id));
+      // Pastikan lamaran warung ada & approved (agar tampil di admin)
+      const existingApp = await db.select({ id: merchantApplicationsTable.id }).from(merchantApplicationsTable)
+        .where(eq(merchantApplicationsTable.email, m.ownerEmail)).limit(1);
+      if (existingApp.length === 0) {
+        await db.insert(merchantApplicationsTable).values({
+          ownerName: m.ownerName, phone: m.ownerPhone, email: m.ownerEmail,
+          passwordHash: hashPassword(m.ownerPassword), shopName: m.name, category: m.category,
+          description: m.description, address: m.address, lat: m.lat, lng: m.lng,
+          operatingCity: "Balikpapan", status: "approved",
+        });
+      }
+      results.push({ name: m.name, email: m.ownerEmail, status: "warung sudah ada (link owner)" });
       continue;
     }
     const [ins] = await db.insert(merchantsTable).values({
-      name: m.name, category: m.category, description: m.description,
-      address: m.address, lat: m.lat, lng: m.lng, isOpen: true,
+      ownerUserId, name: m.name, category: m.category, description: m.description,
+      address: m.address, phone: m.ownerPhone, lat: m.lat, lng: m.lng,
+      operatingCity: "Balikpapan", status: "approved", isOpen: true,
     }).returning({ id: merchantsTable.id });
     for (const item of m.menu) {
       await db.insert(menuItemsTable).values({
         merchantId: ins.id, name: item.name, price: item.price, category: item.category, isAvailable: true,
       });
     }
-    results.push({ name: m.name, email: "-", status: "merchant dibuat" });
+    // Lamaran warung approved (agar admin bisa melihat riwayat)
+    const existingApp = await db.select({ id: merchantApplicationsTable.id }).from(merchantApplicationsTable)
+      .where(eq(merchantApplicationsTable.email, m.ownerEmail)).limit(1);
+    if (existingApp.length === 0) {
+      await db.insert(merchantApplicationsTable).values({
+        ownerName: m.ownerName, phone: m.ownerPhone, email: m.ownerEmail,
+        passwordHash: hashPassword(m.ownerPassword), shopName: m.name, category: m.category,
+        description: m.description, address: m.address, lat: m.lat, lng: m.lng,
+        operatingCity: "Balikpapan", status: "approved",
+      });
+    }
+    results.push({ name: m.name, email: m.ownerEmail, status: "warung + owner dibuat" });
   }
 
   res.json({ message: "Seeding selesai", results });

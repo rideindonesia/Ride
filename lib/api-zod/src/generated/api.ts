@@ -21,7 +21,7 @@ export const RegisterBody = zod.object({
   name: zod.string(),
   email: zod.string(),
   password: zod.string(),
-  role: zod.enum(["pengguna", "mitra"]),
+  role: zod.enum(["pengguna", "mitra", "merchant"]),
 });
 
 /**
@@ -30,7 +30,7 @@ export const RegisterBody = zod.object({
 export const LoginBody = zod.object({
   email: zod.string(),
   password: zod.string(),
-  role: zod.enum(["pengguna", "mitra"]),
+  role: zod.enum(["pengguna", "mitra", "merchant"]),
 });
 
 export const LoginResponse = zod.object({
@@ -39,7 +39,7 @@ export const LoginResponse = zod.object({
     name: zod.string(),
     email: zod.string(),
     phone: zod.string().optional(),
-    role: zod.enum(["pengguna", "mitra"]),
+    role: zod.enum(["pengguna", "mitra", "merchant"]),
   }),
   message: zod.string(),
 });
@@ -52,7 +52,7 @@ export const GetMeResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   phone: zod.string().optional(),
-  role: zod.enum(["pengguna", "mitra"]),
+  role: zod.enum(["pengguna", "mitra", "merchant"]),
 });
 
 /**
