@@ -21,9 +21,9 @@ export const MOTOR_TRIP_SERVICES = new Set(["goride", "gosend", "goshop", "gofoo
 
 // { base = tarif minimum (menutup MOTOR_FREE_KM pertama), perKm = per km berikutnya }
 export let MOTOR_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
-  1: { base: 9250,  perKm: 1850 }, // Zona I  — Sumatra, Jawa (non-Jabodetabek), Bali
-  2: { base: 13000, perKm: 2600 }, // Zona II — Jabodetabek
-  3: { base: 10500, perKm: 2100 }, // Zona III — Kalimantan, Sulawesi, NT, Maluku, Papua
+  1: { base: 8000, perKm: 1600 }, // Zona I  — Sumatra, Jawa (non-Jabodetabek), Bali
+  2: { base: 9000, perKm: 2000 }, // Zona II — Jabodetabek
+  3: { base: 8500, perKm: 1800 }, // Zona III — Kalimantan, Sulawesi, NT, Maluku, Papua
 };
 export let MOTOR_FREE_KM = 4;
 
