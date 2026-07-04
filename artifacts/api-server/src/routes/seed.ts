@@ -364,8 +364,8 @@ router.post("/admin", async (_req, res) => {
     { key: "call_fee_towing_base", value: "75000", label: "Towing — Biaya Dasar (Rp)" },
     { key: "call_fee_towing_per_km", value: "8000", label: "Towing — Per Km Lebih (Rp)" },
     // Mobil (gocar): flat nasional ≈ Maxim Car, sedikit lebih murah.
-    { key: "call_fee_gocar_base", value: "4000", label: "Ride Mobil — Biaya Awal (Rp)" },
-    { key: "call_fee_gocar_per_km", value: "3800", label: "Ride Mobil — Per Km (Rp)" },
+    { key: "call_fee_gocar_base", value: "3000", label: "Ride Mobil — Biaya Awal (Rp)" },
+    { key: "call_fee_gocar_per_km", value: "3600", label: "Ride Mobil — Per Km (Rp)" },
     // Kurir motor (goride/gosend/goshop/gofood) — tarif per zona (batas bawah Kemenhub).
     { key: "motor_zone1_base", value: "8000", label: "Zona I — Tarif Minimum s/d 4 km (Rp)" },
     { key: "motor_zone1_per_km", value: "1600", label: "Zona I — Per Km berikutnya (Rp)" },
