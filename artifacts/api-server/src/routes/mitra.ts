@@ -19,7 +19,7 @@ const CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm: num
   inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
   // Mobil (gocar): tarif flat nasional, biaya awal + per km sejak km 0.
-  gocar:      { base: 3000,  freeKm: 0, perKm: 3600 },
+  gocar:      { base: 4000,  freeKm: 0, perKm: 3800 },
 };
 // Verticals whose fare is based on trip distance (pickup→destination) with no free km.
 const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
