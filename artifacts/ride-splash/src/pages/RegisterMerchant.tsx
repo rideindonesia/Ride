@@ -159,7 +159,10 @@ function Step1({ form, setField, onNext }: { form: FormData; setField: <K extend
   const validate = () => {
     if (!form.ownerName.trim()) return "Nama pemilik wajib diisi";
     if (!form.email.trim()) return "Email wajib diisi";
+    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return "Format email tidak valid";
     if (!form.phone.trim()) return "Nomor HP wajib diisi";
+    // form.phone selalu diawali "+62"; pastikan ada 8–13 digit setelahnya.
+    if (!/^\+62\d{8,13}$/.test(form.phone.trim())) return "Nomor HP tidak valid. Masukkan 8–13 digit setelah +62 (contoh: 81234567890)";
     if (form.password.length < 8) return "Password minimal 8 karakter";
     if (form.password !== form.confirmPassword) return "Password tidak cocok";
     if (!form.agreeTerms) return "Anda harus menyetujui syarat dan ketentuan";

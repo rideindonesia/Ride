@@ -9,6 +9,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { uploadBufferToCloudinary } from "../lib/cloudinary";
+import { normalizePhone, isValidPhone, isPhoneRegistered } from "../lib/phone";
 import { eq, and, or, desc, asc, inArray, sql, count, sum } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
@@ -65,7 +66,6 @@ async function resolveMerchant(ownerUserId: number) {
 router.post("/apply", applyUpload, async (req, res) => {
   const {
     ownerName,
-    phone,
     email,
     password,
     shopName,
@@ -76,13 +76,18 @@ router.post("/apply", applyUpload, async (req, res) => {
     lng,
     operatingCity,
   } = req.body;
+  const phone = normalizePhone(req.body.phone ?? "");
 
-  if (!ownerName || !phone || !email || !password || !shopName || !address || !operatingCity) {
+  if (!ownerName || !req.body.phone || !email || !password || !shopName || !address || !operatingCity) {
     res.status(400).json({ error: "Semua field wajib diisi" });
     return;
   }
   if (password.length < 8) {
     res.status(400).json({ error: "Password minimal 8 karakter" });
+    return;
+  }
+  if (!isValidPhone(phone)) {
+    res.status(400).json({ error: "Nomor HP tidak valid. Contoh: 0812xxxxxxx" });
     return;
   }
 
@@ -102,6 +107,10 @@ router.post("/apply", applyUpload, async (req, res) => {
     .limit(1);
   if (existingUser.length > 0) {
     res.status(409).json({ error: "Email sudah dipakai akun lain" });
+    return;
+  }
+  if (await isPhoneRegistered(phone)) {
+    res.status(409).json({ error: "Nomor HP sudah terdaftar. Satu nomor hanya untuk satu akun." });
     return;
   }
 

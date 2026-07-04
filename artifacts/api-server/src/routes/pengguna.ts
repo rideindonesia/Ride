@@ -9,14 +9,7 @@ import { io } from "../socket";
 import { sendPushToUsers } from "./push";
 import { uploadBufferToCloudinary } from "../lib/cloudinary";
 import { sendWhatsApp } from "../lib/fonnte";
-
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("0")) return "+62" + digits.slice(1);
-  if (digits.startsWith("62")) return "+" + digits;
-  if (digits.startsWith("8")) return "+62" + digits;
-  return "+" + digits;
-}
+import { normalizePhone, isValidPhone, isPhoneRegistered } from "../lib/phone";
 
 async function sendFonnteOtp(phone: string, otpCode: string): Promise<void> {
   const message = `Kode OTP RIDE Anda: *${otpCode}*\n\nBerlaku 5 menit. Jangan bagikan kode ini kepada siapapun.`;
@@ -76,6 +69,11 @@ router.post("/register", async (req, res) => {
     return;
   }
 
+  if (!isValidPhone(phone)) {
+    res.status(400).json({ error: "Nomor HP tidak valid. Contoh: 0812xxxxxxx" });
+    return;
+  }
+
   const existingEmail = await db.select({ id: usersTable.id })
     .from(usersTable)
     .where(eq(usersTable.email, email))
@@ -86,13 +84,8 @@ router.post("/register", async (req, res) => {
     return;
   }
 
-  const existingPhone = await db.select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.phone, phone))
-    .limit(1);
-
-  if (existingPhone.length > 0) {
-    res.status(409).json({ error: "Nomor HP sudah terdaftar" });
+  if (await isPhoneRegistered(phone)) {
+    res.status(409).json({ error: "Nomor HP sudah terdaftar. Satu nomor hanya untuk satu akun." });
     return;
   }
 
@@ -143,10 +136,6 @@ router.post("/verify-otp", async (req, res) => {
     return;
   }
 
-  await db.update(otpCodesTable)
-    .set({ used: true })
-    .where(eq(otpCodesTable.id, otpRecord.id));
-
   const pending = otpRecord.pendingData as {
     name: string;
     phone: string;
@@ -154,26 +143,47 @@ router.post("/verify-otp", async (req, res) => {
     passwordHash: string;
   };
 
-  const [user] = await db.insert(usersTable).values({
-    name: pending.name,
-    email: pending.email,
-    phone: pending.phone,
-    passwordHash: pending.passwordHash,
-    role: "pengguna",
-  }).returning({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    phone: usersTable.phone,
-    role: usersTable.role,
-  });
+  // Tegakkan "1 nomor HP = 1 akun" tepat sebelum membuat akun — mencegah
+  // duplikat bila ada dua permintaan OTP untuk nomor yang sama.
+  if (await isPhoneRegistered(pending.phone)) {
+    res.status(409).json({ error: "Nomor HP sudah terdaftar. Satu nomor hanya untuk satu akun." });
+    return;
+  }
 
-  (req.session as Record<string, unknown>).penggunaId = user.id;
+  await db.update(otpCodesTable)
+    .set({ used: true })
+    .where(eq(otpCodesTable.id, otpRecord.id));
 
-  res.status(201).json({
-    user,
-    message: "Pendaftaran berhasil",
-  });
+  try {
+    const [user] = await db.insert(usersTable).values({
+      name: pending.name,
+      email: pending.email,
+      phone: pending.phone,
+      passwordHash: pending.passwordHash,
+      role: "pengguna",
+    }).returning({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      phone: usersTable.phone,
+      role: usersTable.role,
+    });
+
+    (req.session as Record<string, unknown>).penggunaId = user.id;
+
+    res.status(201).json({
+      user,
+      message: "Pendaftaran berhasil",
+    });
+  } catch (err: any) {
+    // 23505 = unique_violation (nomor HP / email sudah dipakai — jaring pengaman
+    // untuk kondisi balapan yang lolos dari pengecekan di atas).
+    if (err?.code === "23505") {
+      res.status(409).json({ error: "Nomor HP atau email sudah terdaftar." });
+      return;
+    }
+    throw err;
+  }
 });
 
 router.post("/resend-otp", async (req, res) => {

@@ -4,6 +4,7 @@ import { db, usersTable, loginHistoryTable, merchantsTable } from "@workspace/db
 import { eq, and, or, inArray } from "drizzle-orm";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import crypto from "crypto";
+import { normalizePhone } from "../lib/phone";
 
 const router = Router();
 
@@ -21,14 +22,6 @@ function hashPassword(password: string): string {
   const salt = process.env.SESSION_SECRET;
   if (!salt) throw new Error("SESSION_SECRET tidak ditemukan");
   return crypto.createHash("sha256").update(password + salt).digest("hex");
-}
-
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("0")) return "+62" + digits.slice(1);
-  if (digits.startsWith("62")) return "+" + digits;
-  if (digits.startsWith("8")) return "+62" + digits;
-  return "+" + digits;
 }
 
 router.post("/register", async (req, res) => {

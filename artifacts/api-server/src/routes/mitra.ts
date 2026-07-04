@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { db, mitraApplicationsTable, mitraLocationsTable, usersTable, ordersTable, reportsTable, systemSettingsTable, platformFeePaymentsTable, chatMessagesTable, loginHistoryTable } from "@workspace/db";
 import { uploadBufferToCloudinary } from "../lib/cloudinary";
+import { normalizePhone, isValidPhone, isPhoneRegistered } from "../lib/phone";
 import { eq, and, or, gt, gte, desc, asc, sql, avg, count, sum, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { io } from "../socket";
@@ -110,15 +111,21 @@ const uploadFields = upload.fields([
 ]);
 
 router.post("/apply", uploadFields, async (req, res) => {
-  const { name, phone, email, password, serviceType, operatingCity } = req.body;
+  const { name, email, password, serviceType, operatingCity } = req.body;
+  const phone = normalizePhone(req.body.phone ?? "");
 
-  if (!name || !phone || !email || !password || !serviceType || !operatingCity) {
+  if (!name || !req.body.phone || !email || !password || !serviceType || !operatingCity) {
     res.status(400).json({ error: "Semua field wajib diisi" });
     return;
   }
 
   if (password.length < 8) {
     res.status(400).json({ error: "Password minimal 8 karakter" });
+    return;
+  }
+
+  if (!isValidPhone(phone)) {
+    res.status(400).json({ error: "Nomor HP tidak valid. Contoh: 0812xxxxxxx" });
     return;
   }
 
@@ -129,6 +136,11 @@ router.post("/apply", uploadFields, async (req, res) => {
 
   if (existing.length > 0) {
     res.status(409).json({ error: "Email sudah terdaftar" });
+    return;
+  }
+
+  if (await isPhoneRegistered(phone)) {
+    res.status(409).json({ error: "Nomor HP sudah terdaftar. Satu nomor hanya untuk satu akun." });
     return;
   }
 

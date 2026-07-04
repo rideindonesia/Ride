@@ -3,3 +3,4 @@
 - [api-server typecheck debt](api-server-typecheck-debt.md) — ~25 pre-existing leaf typecheck errors (session cast + Express5 req.query/params string|string[]); dev runs via esbuild so not blocking; cast req.params.id with String() in new code.
 - [Trip-vertical billing](trip-vertical-billing.md) — goride/gocar/gosend/goshop/gofood bill pickup→destination distance (freeKm 0), NOT mitra→pickup; keep isTripService sets in sync across pricing.ts/mitra.ts/pengguna.ts.
 - [GoFood merchant flow](gofood-merchant-flow.md) — 4th role warung; merchantStatus menunggu→diterima→siap gates ojol phase server-side; foodTotal MUST be recomputed from DB menu_items (client price is a fraud vector).
+- [Phone uniqueness](phone-uniqueness.md) — "1 HP = 1 akun" needs app-level isPhoneRegistered AT verify-otp (not just register) + DB users_phone_unique; drizzle push is interactive so add constraint via psql.

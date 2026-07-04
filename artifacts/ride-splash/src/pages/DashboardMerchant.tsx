@@ -492,8 +492,15 @@ function MenuTab({ menu, refetch }: { menu: MenuItem[]; refetch: () => void }) {
       </div>
 
       {menu.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#7a8a9a", fontSize: 14, fontFamily: "'Inter', sans-serif", marginTop: 40 }}>
-          Belum ada menu. Tambahkan menu pertama Anda.
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 48, padding: "0 24px" }}>
+          <div style={{ width: 88, height: 88, borderRadius: "50%", background: "#eef3f8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>🍽️</div>
+          <div style={{ marginTop: 18, fontSize: 16, fontWeight: 700, color: "#1a2a3a", fontFamily: "'Inter', sans-serif" }}>Belum ada menu</div>
+          <div style={{ marginTop: 6, fontSize: 14, color: "#7a8a9a", fontFamily: "'Inter', sans-serif", lineHeight: 1.5 }}>
+            Tambahkan menu pertama Anda agar warung bisa mulai menerima pesanan dari pelanggan.
+          </div>
+          <button onClick={openAdd} style={{ marginTop: 20, padding: "13px 24px", borderRadius: 12, border: "none", background: "linear-gradient(135deg, #1a3a5c 0%, #1a7a6a 100%)", color: "#fff", fontWeight: 700, fontSize: 15, fontFamily: "'Inter', sans-serif", cursor: "pointer" }}>
+            + Tambah Menu Pertama
+          </button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
