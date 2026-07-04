@@ -61,6 +61,19 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   } catch { return ""; }
 }
 
+async function searchPlaces(query: string): Promise<{ name: string; lat: number; lng: number }[]> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&accept-language=id&countrycodes=id&limit=6`,
+      { headers: { "Accept-Language": "id" } }
+    );
+    const data = await res.json();
+    return (Array.isArray(data) ? data : [])
+      .map((d: any) => ({ name: String(d.display_name ?? ""), lat: parseFloat(d.lat), lng: parseFloat(d.lon) }))
+      .filter((r: { name: string; lat: number; lng: number }) => r.name && !Number.isNaN(r.lat) && !Number.isNaN(r.lng));
+  } catch { return []; }
+}
+
 function StepProgress({ step }: { step: number }) {
   return (
     <div style={{ display: "flex", alignItems: "center" }}>
@@ -116,6 +129,11 @@ export default function OrderFood() {
   const [destLng, setDestLng] = useState<number | null>(null);
   const [destAddress, setDestAddress] = useState("");
   const [detailAlamat, setDetailAlamat] = useState("");
+  // Pencarian tujuan (forward geocode) — agar user bisa ketik tempat, tak hanya geser peta
+  const [destQuery, setDestQuery] = useState("");
+  const [destResults, setDestResults] = useState<{ name: string; lat: number; lng: number }[]>([]);
+  const [destSearching, setDestSearching] = useState(false);
+  const [destSearchOpen, setDestSearchOpen] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
 
   // Order lifecycle (step 3)
@@ -306,6 +324,37 @@ export default function OrderFood() {
 
     leafletMapRef.current = map;
   }, [step, userLat, userLng]);
+
+  // Debounce pencarian tujuan
+  useEffect(() => {
+    if (step !== 2) return;
+    const q = destQuery.trim();
+    if (q.length < 3) { setDestResults([]); setDestSearching(false); return; }
+    setDestSearching(true);
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const results = await searchPlaces(q);
+      if (cancelled) return; // abaikan hasil basi (query sudah berubah)
+      setDestResults(results);
+      setDestSearching(false);
+    }, 450);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [destQuery, step]);
+
+  // Pilih salah satu hasil pencarian → geser peta ke lokasi (moveend akan set dest + reverse-geocode)
+  function pickDestResult(r: { name: string; lat: number; lng: number }) {
+    setDestSearchOpen(false);
+    setDestQuery("");
+    setDestResults([]);
+    setDestLat(r.lat); setDestLng(r.lng);
+    setDestAddress(r.name.split(",").slice(0, 3).join(",").trim());
+    if (leafletMapRef.current) {
+      leafletMapRef.current.setView([r.lat, r.lng], 17);
+    } else {
+      setIsGeocoding(true);
+      reverseGeocode(r.lat, r.lng).then(addr => { if (addr) setDestAddress(addr); setIsGeocoding(false); });
+    }
+  }
 
   // Update GPS marker as user moves
   useEffect(() => {
@@ -926,6 +975,35 @@ export default function OrderFood() {
           <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 100px" }}>
             <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 14px" }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2a3a", marginBottom: 16 }}>🗺️ Titik Antar</div>
+
+              {/* Cari tujuan */}
+              <div style={{ position: "relative", marginBottom: 12, zIndex: 1200 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", background: "#f8fafc", border: "1.5px solid #e0e8f0", borderRadius: 14 }}>
+                  <span style={{ fontSize: 15 }}>🔍</span>
+                  <input
+                    value={destQuery}
+                    onChange={e => { setDestQuery(e.target.value); setDestSearchOpen(true); }}
+                    onFocus={() => setDestSearchOpen(true)}
+                    placeholder="Cari tujuan (mis. Balikpapan Super Block)"
+                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 14, color: "#1a2a3a" }}
+                  />
+                  {destQuery && <button onClick={() => { setDestQuery(""); setDestResults([]); }} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 14, color: "#9aa5b4", padding: 0 }}>✕</button>}
+                </div>
+                {destSearchOpen && (destSearching || destResults.length > 0 || destQuery.trim().length >= 3) && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.15)", overflow: "hidden", maxHeight: 240, overflowY: "auto", border: "1px solid #eef2f6" }}>
+                    {destSearching && <div style={{ padding: "12px 14px", fontSize: 13, color: "#7a8a9a" }}>Mencari...</div>}
+                    {!destSearching && destResults.length === 0 && destQuery.trim().length >= 3 && (
+                      <div style={{ padding: "12px 14px", fontSize: 13, color: "#7a8a9a" }}>Tempat tidak ditemukan</div>
+                    )}
+                    {!destSearching && destResults.map((r, i) => (
+                      <button key={i} onClick={() => pickDestResult(r)} style={{ display: "flex", gap: 8, alignItems: "flex-start", width: "100%", textAlign: "left", padding: "11px 14px", border: "none", borderBottom: i < destResults.length - 1 ? "1px solid #f0f4f8" : "none", background: "#fff", cursor: "pointer" }}>
+                        <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>📍</span>
+                        <span style={{ fontSize: 13, color: "#1a3a5c", lineHeight: 1.4 }}>{r.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Map with center pin */}
               <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", marginBottom: 16, height: 260 }}>
