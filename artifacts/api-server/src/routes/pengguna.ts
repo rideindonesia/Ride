@@ -378,7 +378,20 @@ router.post("/orders", (req, res, next) => {
   const isGofood = svcType.toLowerCase().replace(/[\s_-]+/g, "") === "gofood";
   let foodTotal: number | null = null;
   let merchantStatusInit: string | null = null;
-  if (isGofood && merchantIdNum != null && items && items.length > 0) {
+  if (isGofood) {
+    // GoFood WAJIB punya warung + minimal 1 item — jangan biarkan order pangan
+    // dibuat tanpa warung/keranjang (akan merusak alur masak & talangan).
+    if (merchantIdNum == null || !items || items.length === 0) {
+      res.status(400).json({ error: "Pesanan makanan harus menyertakan warung dan minimal 1 item menu" });
+      return;
+    }
+    // Warung harus ada, sudah disetujui, dan sedang buka (samakan dgn filter daftar warung).
+    const [mch] = await db.select({ status: merchantsTable.status, isOpen: merchantsTable.isOpen })
+      .from(merchantsTable).where(eq(merchantsTable.id, merchantIdNum)).limit(1);
+    if (!mch || mch.status !== "approved" || !mch.isOpen) {
+      res.status(400).json({ error: "Warung tidak tersedia atau sedang tutup" });
+      return;
+    }
     // Harga makanan (talangan) HARUS otoritatif dari DB — abaikan harga dari klien
     // agar tidak bisa dimanipulasi. Cocokkan tiap item ke menu_items milik merchant.
     const menuRows = await db.select({ id: menuItemsTable.id, name: menuItemsTable.name, price: menuItemsTable.price, isAvailable: menuItemsTable.isAvailable })
