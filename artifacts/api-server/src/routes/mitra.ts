@@ -33,9 +33,9 @@ function isMotorTripService(serviceType: string): boolean {
   return MOTOR_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
 const MOTOR_ZONE_DEFAULT: Record<number, { base: number; perKm: number }> = {
-  1: { base: 9250,  perKm: 1850 },
-  2: { base: 13000, perKm: 2600 },
-  3: { base: 10500, perKm: 2100 },
+  1: { base: 9000,  perKm: 1500 },
+  2: { base: 10000, perKm: 2000 },
+  3: { base: 9000,  perKm: 2000 },
 };
 // Tentukan zona tarif dari koordinat titik jemput (batas geografis Indonesia, konstanta).
 // Mirror artifacts/ride-splash/src/utils/pricing.ts → zoneFromCoords. Keep in sync.
