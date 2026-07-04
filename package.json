@@ -3,12 +3,18 @@
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
+  "packageManager": "pnpm@10.26.1",
+  "engines": {
+    "node": ">=24"
+  },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]
   },
   "scripts": {
     "preinstall": "rm -f package-lock.json yarn.lock",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "build:railway": "pnpm install --prod=false && PORT=3000 BASE_PATH=/ pnpm --filter @workspace/ride-splash run build && PORT=3000 BASE_PATH=/admin/ pnpm --filter @workspace/ride-admin run build && pnpm --filter @workspace/api-server run build && rm -rf public && mkdir -p public/admin && cp -r artifacts/ride-splash/dist/public/. public/ && cp -r artifacts/ride-admin/dist/public/. public/admin/",
+    "start:railway": "node --enable-source-maps artifacts/api-server/dist/index.mjs",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },

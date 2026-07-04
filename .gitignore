@@ -58,3 +58,6 @@ ride_db_backup.sql
 *.tar.gz
 attached_assets/
 uploads/
+
+# Railway single-server assembled frontend (rebuilt by build:railway)
+/public
