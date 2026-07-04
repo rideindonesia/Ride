@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan, calcEtaSecsLive, loadTarif } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaSecsLive, loadTarif, zoneFromCoords } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -179,7 +179,9 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
   const haversineKm = (pickupLat != null && pickupLng != null && destLat != null && destLng != null)
     ? haversineDist(pickupLat, pickupLng, destLat, destLng) : null;
   const tripDistKm = routeDistKm ?? haversineKm;
-  const estFee = tripDistKm != null ? calcBiayaPanggilan(svc, tripDistKm) : null;
+  // Zona tarif kurir motor berdasarkan titik jemput (goride/gosend/goshop; gocar & lainnya abaikan zona).
+  const fareZone = zoneFromCoords(pickupLat, pickupLng);
+  const estFee = tripDistKm != null ? calcBiayaPanggilan(svc, tripDistKm, fareZone) : null;
 
   const canNext1 = meta.needRecipient
     ? (recipientName.trim() && recipientPhone.trim() && itemNote.trim())
@@ -504,7 +506,7 @@ export default function OrderTrip({ svc }: { svc: TripSvc }) {
         const mitraLat = od.mitra.lat ?? 0;
         const mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
-        const callFee = od.totalAmount ?? estFee ?? calcBiayaPanggilan(svc, tripDistKm ?? 0);
+        const callFee = od.totalAmount ?? estFee ?? calcBiayaPanggilan(svc, tripDistKm ?? 0, fareZone);
         const etaMin = Math.ceil(calcEtaSecsLive(dist, od.mitra.speedKmh) / 60);
         setAcceptedMitra({
           id: od.mitra.id,

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan, calcEtaSecsLive, loadTarif } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaSecsLive, loadTarif, zoneFromCoords } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -199,7 +199,9 @@ export default function OrderFood() {
   // Prefer road distance; fall back to straight-line while OSRM is loading/unavailable.
   const tripDistKm = routeDistKm ?? ((pickupLat != null && pickupLng != null && destLat != null && destLng != null)
     ? haversineDist(pickupLat, pickupLng, destLat, destLng) : null);
-  const estFee = tripDistKm != null ? calcBiayaPanggilan(svc, tripDistKm) : null;
+  // Zona tarif ongkir kurir motor berdasarkan lokasi merchant (titik jemput).
+  const fareZone = zoneFromCoords(pickupLat, pickupLng);
+  const estFee = tripDistKm != null ? calcBiayaPanggilan(svc, tripDistKm, fareZone) : null;
 
   const canNext1 = cart.length > 0;
   const canNext2 = pickupLat != null && pickupLng != null && destLat != null && destLng != null && pickupAddress && destAddress;
@@ -533,7 +535,7 @@ export default function OrderFood() {
         const mitraLat = od.mitra.lat ?? 0;
         const mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
-        const callFee = od.totalAmount ?? estFee ?? calcBiayaPanggilan(svc, tripDistKm ?? 0);
+        const callFee = od.totalAmount ?? estFee ?? calcBiayaPanggilan(svc, tripDistKm ?? 0, fareZone);
         const etaMin = Math.ceil(calcEtaSecsLive(dist, od.mitra.speedKmh) / 60);
         setAcceptedMitra({
           id: od.mitra.id,

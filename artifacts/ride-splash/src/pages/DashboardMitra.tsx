@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { socket, identifySocket, joinOrderRoom, leaveOrderRoom } from "../lib/socket";
-import { BIAYA_LAYANAN, PLATFORM_FEE_PCT, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, loadTarif, isTripService } from "../utils/pricing";
+import { BIAYA_LAYANAN, PLATFORM_FEE_PCT, PLATFORM_FEE_PCT_TRIP, calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, loadTarif, isTripService, zoneFromCoords } from "../utils/pricing";
 import { usePushNotification } from "../hooks/usePushNotification";
 import { useRideToast, RideToastContainer } from "../components/RideToast";
 
@@ -219,6 +219,7 @@ export default function DashboardMitra() {
   const [mLaporMessage, setMLaporMessage] = useState("");
   const [mLaporSubmitting, setMLaporSubmitting] = useState(false);
   const [platformFeePct, setPlatformFeePct] = useState(PLATFORM_FEE_PCT);
+  const [platformFeePctTrip, setPlatformFeePctTrip] = useState(PLATFORM_FEE_PCT_TRIP);
   const chatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
@@ -614,7 +615,10 @@ export default function DashboardMitra() {
 
   // Load tarif dinamis dari DB
   useEffect(() => {
-    loadTarif(BASE).then(() => setPlatformFeePct(PLATFORM_FEE_PCT));
+    loadTarif(BASE).then(() => {
+      setPlatformFeePct(PLATFORM_FEE_PCT);
+      setPlatformFeePctTrip(PLATFORM_FEE_PCT_TRIP);
+    });
   }, []);
 
   // Submit laporan masalah dari riwayat order (mitra)
@@ -719,6 +723,8 @@ export default function DashboardMitra() {
     // Trip verticals (goride/gocar/gosend/goshop/gofood) bill the pickup→destination
     // distance, matching the backend. The mitra→pickup distance is only for arrival ETA.
     const trip = isTripService(incoming.serviceType);
+    // Zona tarif kurir motor dari titik jemput order (mengikuti backend accept).
+    const fareZone = zoneFromCoords(incoming.pickupLat, incoming.pickupLng);
     let cancelled = false;
     // Trip: jarak tempuh (pickup→dest) mengikuti jalan; tripDistanceKm dari server sudah OSRM.
     const resolveFareKm = async (): Promise<number | null> => {
@@ -733,7 +739,7 @@ export default function DashboardMitra() {
       // Koordinat belum tersedia — tampilkan base fee sementara, polling akan refresh
       resolveFareKm().then(fareKm => {
         if (cancelled) return;
-        const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
+        const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0, fareZone);
         setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
       });
       return () => { cancelled = true; };
@@ -748,14 +754,14 @@ export default function DashboardMitra() {
         if (cancelled) return;
         const km = haversineKmMitra(mLat, mLng, pLat, pLng); // proximity/ETA display
         const eta = calcEtaMinutes(km);
-        const callFee = calcBiayaPanggilan(incoming.serviceType, feeKm);
+        const callFee = calcBiayaPanggilan(incoming.serviceType, feeKm, fareZone);
         setIncomingDistInfo({ km: Math.round(km * 10) / 10, eta, callFee });
       },
       () => {
         // GPS ditolak — hitung berdasarkan koordinat saja tanpa posisi mitra
         resolveFareKm().then(fareKm => {
           if (cancelled) return;
-          const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0);
+          const callFee = calcBiayaPanggilan(incoming.serviceType, fareKm ?? 0, fareZone);
           setIncomingDistInfo({ km: 0, eta: calcEtaMinutes(0), callFee });
         });
       },
@@ -2231,7 +2237,9 @@ export default function DashboardMitra() {
 
                         {/* RINCIAN PENDAPATAN */}
                         {pd && (() => {
-                          const feePanggilan = Math.round(pd.biayaPanggilan * 0.15);
+                          // Potongan platform: layanan trip (motor/mobil/kurir) 5%, jasa panggilan on-site 15% (dari DB).
+                          const feePct = isTripService(o.serviceType) ? platformFeePctTrip : platformFeePct;
+                          const feePanggilan = Math.round(pd.biayaPanggilan * feePct / 100);
                           const feeLayanan = pd.biayaLayanan;
                           const totalSetoran = feePanggilan + feeLayanan;
                           return (
@@ -2259,10 +2267,10 @@ export default function DashboardMitra() {
                               <div style={{ background: "#fff8f0", borderTop: "1px solid #fde8d0", padding: "14px 16px" }}>
                                 <div style={{ fontSize: 10, fontWeight: 800, color: "#9aa5b4", letterSpacing: 1, marginBottom: 12 }}>PLATFORM FEE KE RIDE</div>
 
-                                {/* Row 1: Biaya Panggilan × 15% */}
+                                {/* Row 1: Biaya Panggilan × fee% (trip 5% / on-site 15%) */}
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                                   <div>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>Biaya Panggilan × {platformFeePct}%</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a" }}>Biaya Panggilan × {feePct}%</div>
                                     <div style={{ fontSize: 11, color: "#ea580c", marginTop: 2 }}>Kontribusi ke platform RIDE</div>
                                   </div>
                                   <span style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>{fmtRp(feePanggilan)}</span>

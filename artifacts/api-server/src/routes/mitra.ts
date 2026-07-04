@@ -18,17 +18,34 @@ const CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm: num
   cuci:       { base: 12000, freeKm: 3, perKm: 2500 },
   inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
-  // Gojek-style verticals: fare over trip distance (pickup→dest), no free km.
-  goride:     { base: 5000,  freeKm: 0, perKm: 2000 },
-  gocar:      { base: 10000, freeKm: 0, perKm: 4000 },
-  gosend:     { base: 6000,  freeKm: 0, perKm: 2500 },
-  goshop:     { base: 8000,  freeKm: 0, perKm: 2500 },
-  gofood:     { base: 6000,  freeKm: 0, perKm: 2500 },
+  // Mobil (gocar): tarif flat nasional, biaya awal + per km sejak km 0.
+  gocar:      { base: 4000,  freeKm: 0, perKm: 3800 },
 };
 // Verticals whose fare is based on trip distance (pickup→destination) with no free km.
 const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
 function isTripService(serviceType: string): boolean {
   return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
+
+// Kurir motor (goride/gosend/goshop/gofood): tarif per ZONA, minimum menutup MOTOR_FREE_KM pertama.
+const MOTOR_TRIP_SERVICES = new Set(["goride", "gosend", "goshop", "gofood"]);
+function isMotorTripService(serviceType: string): boolean {
+  return MOTOR_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
+const MOTOR_ZONE_DEFAULT: Record<number, { base: number; perKm: number }> = {
+  1: { base: 9250,  perKm: 1850 },
+  2: { base: 13000, perKm: 2600 },
+  3: { base: 10500, perKm: 2100 },
+};
+// Tentukan zona tarif dari koordinat titik jemput (batas geografis Indonesia, konstanta).
+// Mirror artifacts/ride-splash/src/utils/pricing.ts → zoneFromCoords. Keep in sync.
+function zoneFromCoords(lat?: number | null, lng?: number | null): number {
+  if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return 3;
+  if (lat >= -6.9 && lat <= -5.9 && lng >= 106.3 && lng <= 107.2) return 2; // Jabodetabek
+  if (lat >= -8.95 && lat <= -8.0 && lng >= 114.4 && lng <= 115.8) return 1; // Bali
+  if (lat >= -8.9 && lat <= -5.8 && lng >= 105.0 && lng <= 114.6) return 1; // Jawa
+  if (lng >= 95.0 && lng <= 106.1 && lat >= -6.2 && lat <= 6.5) return 1; // Sumatra
+  return 3;
 }
 
 // Ojol umbrella: satu mitra motor melayani antar penumpang + kirim + belanja + makan.
@@ -702,11 +719,24 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
       settingsRows.forEach(r => { sMap[r.key] = r.value; });
       const svcKey = updated.serviceType.toLowerCase().replace(/[\s_-]+/g, "");
       const trip = isTripService(svcKey);
-      // Trip verticals charge from km 0; on-site services grant free km.
-      const freeKm = trip ? 0 : (parseFloat(sMap["call_fee_free_km"] ?? "3") || 3);
-      const base = parseInt(sMap[`call_fee_${svcKey}_base`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.base ?? 12000);
-      const perKm = parseInt(sMap[`call_fee_${svcKey}_per_km`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.perKm ?? 2500);
+      const motorTrip = isMotorTripService(svcKey);
       const biayaLayananDB = parseInt(sMap["biaya_layanan_admin"] ?? "2000") || 2000;
+
+      // Zona tarif berdasarkan titik jemput (hanya relevan untuk kurir motor).
+      const zone = zoneFromCoords(updated.pickupLat, updated.pickupLng);
+
+      let base: number, perKm: number, freeKm: number;
+      if (motorTrip) {
+        // Kurir motor (goride/gosend/goshop/gofood): tarif per zona, minimum menutup motor_free_km pertama.
+        base = parseInt(sMap[`motor_zone${zone}_base`] ?? "") || MOTOR_ZONE_DEFAULT[zone].base;
+        perKm = parseInt(sMap[`motor_zone${zone}_per_km`] ?? "") || MOTOR_ZONE_DEFAULT[zone].perKm;
+        freeKm = parseFloat(sMap["motor_free_km"] ?? "4") || 4;
+      } else {
+        // gocar (mobil) charge from km 0; jasa panggilan on-site grant free km.
+        freeKm = trip ? 0 : (parseFloat(sMap["call_fee_free_km"] ?? "3") || 3);
+        base = parseInt(sMap[`call_fee_${svcKey}_base`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.base ?? 12000);
+        perKm = parseInt(sMap[`call_fee_${svcKey}_per_km`] ?? "") || (CALL_FEE_CONFIG[svcKey]?.perKm ?? 2500);
+      }
 
       let distKm = 0;
       if (trip) {
@@ -887,22 +917,38 @@ router.patch("/orders/:id/payment-data", requireMitra, async (req, res) => {
   }
 
   // Baca tarif otoritatif dari DB (platform fee % + biaya layanan & admin).
+  const svcNorm = normSvc(existing.serviceType);
+  const trip = isTripService(svcNorm);
+  // Layanan trip (motor/mobil/kurir) potongan lebih kecil dari jasa panggilan on-site.
+  const feePctKey = trip ? "platform_fee_pct_trip" : "platform_fee_pct";
   const [feePctRow] = await db.select({ value: systemSettingsTable.value })
-    .from(systemSettingsTable).where(eq(systemSettingsTable.key, "platform_fee_pct")).limit(1);
+    .from(systemSettingsTable).where(eq(systemSettingsTable.key, feePctKey)).limit(1);
   const [layananRow] = await db.select({ value: systemSettingsTable.value })
     .from(systemSettingsTable).where(eq(systemSettingsTable.key, "biaya_layanan_admin")).limit(1);
-  const feePct = (parseFloat(feePctRow?.value ?? "15") || 15) / 100;
+  const feePct = (parseFloat(feePctRow?.value ?? (trip ? "5" : "15")) || (trip ? 5 : 15)) / 100;
 
   // Nilai otoritatif server — bukan dari body request mitra.
   const callFee = Number(existing.totalAmount) || 0;            // biaya panggilan (ongkir) dari accept
   const layanan = parseInt(layananRow?.value ?? "2000") || 2000; // biaya layanan & admin dari DB
-  const isGofood = normSvc(existing.serviceType) === "gofood";
+  const isGofood = svcNorm === "gofood";
   // GoFood: ojol menalangi harga makanan (foodTotal, otoritatif dari saat order dibuat),
   // ditagihkan ke pengguna sebagai "biayaSparepart"; tidak ada biaya jasa.
   const jasa = isGofood ? 0 : Math.max(0, Number(biayaJasa) || 0);
   const sparepart = isGofood
     ? (Number(existing.foodTotal) || 0)
     : Math.max(0, Number(biayaSparepart) || 0);
+
+  // Belanja (goshop): batasi talangan mitra agar tidak melebihi batas maksimal (dari DB).
+  if (svcNorm === "goshop") {
+    const [maxRow] = await db.select({ value: systemSettingsTable.value })
+      .from(systemSettingsTable).where(eq(systemSettingsTable.key, "belanja_max_talangan")).limit(1);
+    const maxTalangan = parseInt(maxRow?.value ?? "500000") || 500000;
+    if (sparepart > maxTalangan) {
+      res.status(400).json({ error: `Total belanja melebihi batas talangan Rp${maxTalangan.toLocaleString("id-ID")}.` });
+      return;
+    }
+  }
+
   const total = jasa + sparepart + callFee + layanan;
   const platformFee = Math.round(callFee * feePct) + layanan;
 
