@@ -66,7 +66,7 @@ const TECH = [
   { name: "Socket.io", desc: "Real-time" },
   { name: "Tailwind CSS", desc: "Styling" },
   { name: "Railway", desc: "Cloud Hosting" },
-  { name: "Fonnte", desc: "WhatsApp OTP" },
+  { name: "Fazpass", desc: "OTP Verifikasi" },
 ];
 
 export default function TentangRide() {

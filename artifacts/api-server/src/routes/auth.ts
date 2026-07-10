@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Request } from "express";
-import { db, usersTable, loginHistoryTable, merchantsTable } from "@workspace/db";
+import { db, usersTable, loginHistoryTable, merchantsTable, mitraApplicationsTable, merchantApplicationsTable } from "@workspace/db";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import crypto from "crypto";
@@ -99,6 +99,43 @@ router.post("/login", async (req, res) => {
   const user = candidates.find((u) => u.passwordHash === pwHash);
 
   if (!user) {
+    // Belum ada akun. Jika ini calon mitra/warung, tampilkan status pendaftarannya
+    // agar mereka tahu apakah pendaftaran masih diproses atau sudah ditolak
+    // (mitra/warung yang belum disetujui belum punya akun untuk login).
+    if (role === "mitra") {
+      // Cocokkan berdasarkan identifier + password hash langsung di query agar
+      // deterministik (nomor HP bisa dipakai beberapa lamaran) dan hanya kredensial
+      // yang benar yang mengungkap status pendaftaran.
+      const [mitraApp] = await db
+        .select({ status: mitraApplicationsTable.status })
+        .from(mitraApplicationsTable)
+        .where(and(
+          or(eq(mitraApplicationsTable.email, emailOrPhone), eq(mitraApplicationsTable.phone, emailOrPhone)),
+          eq(mitraApplicationsTable.passwordHash, pwHash),
+        ))
+        .limit(1);
+      const [merchantApp] = await db
+        .select({ status: merchantApplicationsTable.status })
+        .from(merchantApplicationsTable)
+        .where(and(
+          or(eq(merchantApplicationsTable.email, emailOrPhone), eq(merchantApplicationsTable.phone, emailOrPhone)),
+          eq(merchantApplicationsTable.passwordHash, pwHash),
+        ))
+        .limit(1);
+      const app = mitraApp ?? merchantApp;
+      if (app?.status === "pending") {
+        res.status(403).json({
+          error: "Pendaftaran Anda masih dalam proses review. Kami akan memberi tahu begitu ada keputusan.",
+        });
+        return;
+      }
+      if (app?.status === "rejected") {
+        res.status(403).json({
+          error: "Mohon maaf, pendaftaran Anda belum dapat disetujui. Silakan hubungi tim RIDE atau ajukan kembali.",
+        });
+        return;
+      }
+    }
     res.status(401).json({ error: "Email/No. HP, password, atau peran tidak cocok" });
     return;
   }

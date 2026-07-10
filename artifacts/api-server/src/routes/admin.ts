@@ -4,7 +4,6 @@ import { eq, and, or, desc, asc, sql, count, sum, ilike, gte, lte, inArray } fro
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { sendPushToUsers } from "./push";
-import { sendWhatsApp } from "../lib/fonnte";
 import { io } from "../socket";
 
 const router = Router();
@@ -302,18 +301,20 @@ router.patch("/mitra/:email/status", requireAdmin, async (req, res) => {
       return;
     }
 
-    void sendWhatsApp(
-      application.phone,
-      `Halo ${application.name}! 🎉\n\nSelamat, pendaftaran Mitra RIDE Anda telah *DISETUJUI*.\n\nAnda sekarang dapat login menggunakan email & password yang Anda daftarkan. Selamat bergabung dan selamat bekerja bersama RIDE!`,
-    );
+    // Notifikasi dalam aplikasi (lonceng + push) — pengganti WhatsApp Fonnte.
+    const [mitraUser] = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(and(eq(usersTable.email, application.email), eq(usersTable.role, "mitra"))).limit(1);
+    if (mitraUser) {
+      void sendPushToUsers([mitraUser.id], {
+        title: "Pendaftaran Mitra Disetujui",
+        body: "Selamat! Pendaftaran Mitra RIDE Anda telah disetujui. Anda sekarang dapat mulai menerima pesanan.",
+        url: "/dashboard/mitra",
+      });
+    }
   } else {
     await db.update(mitraApplicationsTable).set({ status }).where(eq(mitraApplicationsTable.email, email));
-    if (status === "rejected") {
-      void sendWhatsApp(
-        application.phone,
-        `Halo ${application.name},\n\nMohon maaf, pendaftaran Mitra RIDE Anda *belum dapat kami setujui* saat ini.\n\nSilakan hubungi tim RIDE untuk informasi lebih lanjut atau ajukan kembali dengan dokumen yang sesuai.`,
-      );
-    }
+    // Mitra yang ditolak/pending belum punya akun untuk login, sehingga status
+    // pendaftaran ditampilkan ketika mereka mencoba login (lihat auth.ts).
   }
 
   res.json({ ok: true });
@@ -431,18 +432,20 @@ router.patch("/merchant-applications/:email/status", requireAdmin, async (req, r
       return;
     }
 
-    void sendWhatsApp(
-      application.phone,
-      `Halo ${application.ownerName}! 🎉\n\nSelamat, pendaftaran Warung *${application.shopName}* di RIDE telah *DISETUJUI*.\n\nAnda sekarang dapat login melalui menu *Mitra* menggunakan *nomor HP* & password yang Anda daftarkan, lalu mulai menambahkan menu. Selamat berjualan bersama RIDE!`,
-    );
+    // Notifikasi dalam aplikasi (lonceng + push) — pengganti WhatsApp Fonnte.
+    const [merchantUser] = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(and(eq(usersTable.email, application.email), eq(usersTable.role, "merchant"))).limit(1);
+    if (merchantUser) {
+      void sendPushToUsers([merchantUser.id], {
+        title: "Pendaftaran Warung Disetujui",
+        body: `Selamat! Warung "${application.shopName}" telah disetujui. Anda sekarang dapat mulai menambahkan menu dan berjualan.`,
+        url: "/dashboard/merchant",
+      });
+    }
   } else {
     await db.update(merchantApplicationsTable).set({ status }).where(eq(merchantApplicationsTable.email, email));
-    if (status === "rejected") {
-      void sendWhatsApp(
-        application.phone,
-        `Halo ${application.ownerName},\n\nMohon maaf, pendaftaran Warung *${application.shopName}* di RIDE *belum dapat kami setujui* saat ini.\n\nSilakan hubungi tim RIDE untuk informasi lebih lanjut.`,
-      );
-    }
+    // Warung yang ditolak/pending belum punya akun untuk login, sehingga status
+    // pendaftaran ditampilkan ketika mereka mencoba login (lihat auth.ts).
   }
 
   res.json({ ok: true });

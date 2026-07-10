@@ -65,6 +65,7 @@ function userIdForRole(req: any, role: string | undefined): number | undefined {
   const mCookieId = req.signedCookies?.["ride-m-uid"] ? parseInt(req.signedCookies["ride-m-uid"]) : undefined;
   if (role === "mitra") return session?.mitraId || mCookieId;
   if (role === "pengguna") return session?.penggunaId || pCookieId;
+  if (role === "merchant") return session?.merchantId;
   return undefined;
 }
 
