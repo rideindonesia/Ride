@@ -5,7 +5,14 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+// Only prefer the production Neon database when actually running in production
+// (e.g. Railway). In development (Replit workspace) we always use the local
+// DATABASE_URL so dev work can never touch production data, even if a
+// NEON_DATABASE_URL secret is present for read-only inspection.
+const dbUrl =
+  (process.env.NODE_ENV === "production"
+    ? process.env.NEON_DATABASE_URL
+    : undefined) || process.env.DATABASE_URL;
 
 if (!dbUrl) {
   throw new Error(
@@ -35,6 +42,11 @@ export async function ensureSchema(): Promise<void> {
   );
   await db.execute(
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_prefs jsonb NOT NULL DEFAULT '{}'::jsonb`,
+  );
+  // Track when a user last used the app (updated, throttled, on authenticated
+  // requests) so admins can see a mitra's last activity.
+  await db.execute(
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at timestamp`,
   );
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS notifications (

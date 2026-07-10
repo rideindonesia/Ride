@@ -267,14 +267,14 @@ function Step3({ form, setField, onNext, onBack }: { form: FormData; setField: <
 
   const handleNext = () => {
     if (!form.ktpFile) { setError("Foto KTP wajib diunggah"); return; }
-    if (!form.selfieKtpFile) { setError("Foto selfie + KTP wajib diunggah"); return; }
+    if (!form.selfieKtpFile) { setError("Foto diri wajib diunggah"); return; }
     setError(null);
     onNext();
   };
 
   const docs = [
     { key: "ktpFile" as const, label: "KTP", tag: "ID", desc: "Foto KTP yang jelas", required: true, ref: ktpRef, file: form.ktpFile },
-    { key: "selfieKtpFile" as const, label: "Foto Diri + KTP", tag: "Selfie", desc: "Selfie sambil memegang KTP", required: true, ref: selfieRef, file: form.selfieKtpFile },
+    { key: "selfieKtpFile" as const, label: "Foto Diri", tag: "Selfie", desc: "Foto diri yang jelas", required: true, ref: selfieRef, file: form.selfieKtpFile },
     { key: "simFile" as const, label: "SIM C / SIM A", tag: "SIM", desc: "Jika mendaftar layanan towing", required: false, ref: simRef, file: form.simFile },
     { key: "certFile" as const, label: "Sertifikat Keahlian", tag: "Cert", desc: "Sertifikat pendukung (opsional)", required: false, ref: certRef, file: form.certFile },
   ];

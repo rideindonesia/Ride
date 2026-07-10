@@ -249,7 +249,7 @@ router.get("/mitra/:email", requireAdmin, async (req, res) => {
   const email = decodeURIComponent(req.params.email);
   const [app] = await db.select().from(mitraApplicationsTable).where(eq(mitraApplicationsTable.email, email)).limit(1);
   if (!app) { res.status(404).json({ error: "Mitra tidak ditemukan" }); return; }
-  const [user] = await db.select({ id: usersTable.id, isSuspended: usersTable.isSuspended }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  const [user] = await db.select({ id: usersTable.id, isSuspended: usersTable.isSuspended, lastActiveAt: usersTable.lastActiveAt }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
   let orders: any[] = [];
   let platformFeeTotal = 0;
   let totalOrders = 0;
@@ -260,7 +260,7 @@ router.get("/mitra/:email", requireAdmin, async (req, res) => {
     platformFeeTotal = Number(feeRow.total ?? 0);
     totalOrders = Number(feeRow.cnt ?? 0);
   }
-  res.json({ ...app, userId: user?.id, isSuspended: user?.isSuspended ?? false, orders, platformFeeTotal, totalOrders });
+  res.json({ ...app, userId: user?.id, isSuspended: user?.isSuspended ?? false, lastActiveAt: user?.lastActiveAt ?? null, orders, platformFeeTotal, totalOrders });
 });
 
 // PATCH /api/admin/mitra/:email/status

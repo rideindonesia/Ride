@@ -11,11 +11,10 @@ interface MitraItem {
 }
 
 interface MitraDetail extends MitraItem {
-  userId: number; isSuspended: boolean;
+  userId: number; isSuspended: boolean; lastActiveAt?: string | null;
   orders: { id: number; orderNo: string; serviceType: string; status: string; totalAmount: number; platformFee: number; createdAt: string }[];
   platformFeeTotal: number;
-  vehicleBrands?: string; operatingArea?: string; bankName?: string; bankAccount?: string; bankAccountName?: string;
-  ktpUrl?: string; stnkUrl?: string; photoUrl?: string;
+  ktpPath?: string | null; selfieKtpPath?: string | null; simPath?: string | null; certPath?: string | null;
 }
 
 const STATUS_OPTIONS = [
@@ -180,6 +179,7 @@ export default function Mitra() {
                   ["Kota Operasi", selected.operatingCity],
                   ["No. HP", selected.phone],
                   ["Terdaftar", formatDate(selected.createdAt)],
+                  ["Terakhir Aktif", detail?.lastActiveAt ? formatDate(detail.lastActiveAt) : "Belum pernah"],
                 ].map(([k, v]) => (
                   <div key={k} className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-400 mb-0.5">{k}</p>
@@ -218,6 +218,31 @@ export default function Mitra() {
                   {selected.status === "pending" ? "Menunggu" : selected.status === "approved" ? "Disetujui" : selected.status === "rejected" ? "Ditolak" : selected.status}
                 </span>
                 {detail?.isSuspended && <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Disuspend</span>}
+              </div>
+
+              {/* Dokumen verifikasi */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Dokumen Verifikasi</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {([
+                    ["Foto KTP", detail?.ktpPath],
+                    ["Foto Diri", detail?.selfieKtpPath],
+                    ...(detail?.simPath ? [["SIM", detail.simPath]] as const : []),
+                    ...(detail?.certPath ? [["Sertifikat", detail.certPath]] as const : []),
+                  ] as [string, string | null | undefined][]).map(([label, url]) => (
+                    <div key={label} className="border border-gray-100 rounded-lg overflow-hidden">
+                      <div className="px-2.5 py-1.5 bg-gray-50 text-xs font-medium text-gray-600 border-b border-gray-100">{label}</div>
+                      {url ? (
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
+                          <img src={url} alt={label} className="w-full h-32 object-cover group-hover:opacity-90 transition-opacity"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; (e.currentTarget.parentElement as HTMLElement).innerHTML = '<div class=\"h-32 flex items-center justify-center text-xs text-[#1a3a5c] underline\">Buka dokumen</div>'; }} />
+                        </a>
+                      ) : (
+                        <div className="h-32 flex items-center justify-center text-xs text-gray-300">Tidak ada</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Actions */}

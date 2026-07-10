@@ -5,3 +5,4 @@
 - [GoFood merchant flow](gofood-merchant-flow.md) — 4th role warung; merchantStatus menunggu→diterima→siap gates ojol phase server-side; foodTotal MUST be recomputed from DB menu_items (client price is a fraud vector).
 - [Phone uniqueness](phone-uniqueness.md) — "1 HP = 1 akun" needs app-level isPhoneRegistered AT verify-otp (not just register) + DB users_phone_unique; drizzle push is interactive so add constraint via psql.
 - [Railway single-server deploy](railway-single-server-deploy.md) — api-server already serves ./public + ./public/admin; Railway needs build:railway (--prod=false, per-frontend BASE_PATH) not root build; no backend change.
+- [DB URL env gating](db-url-env-gating.md) — NEON_DATABASE_URL gated behind NODE_ENV==='production' in lib/db + session; else dev workspace hijacks to prod DB. Secrets can't be deleted via deleteEnvVars.

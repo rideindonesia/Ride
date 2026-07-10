@@ -19,7 +19,10 @@ export const cookieParserMw = cookieParser(SESSION_SECRET);
 
 export const sessionMw = session({
   store: new PgSession({
-    conString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL,
+    conString:
+      (process.env.NODE_ENV === "production"
+        ? process.env.NEON_DATABASE_URL
+        : undefined) || process.env.DATABASE_URL,
     tableName: "session",
     createTableIfMissing: true,
   }),

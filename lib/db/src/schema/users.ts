@@ -15,6 +15,7 @@ export const usersTable = pgTable("users", {
   isAdmin: boolean("is_admin").default(false).notNull(),
   isSuspended: boolean("is_suspended").default(false).notNull(),
   notifPrefs: jsonb("notif_prefs").$type<Record<string, boolean>>().default({}).notNull(),
+  lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

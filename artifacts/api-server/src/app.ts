@@ -5,6 +5,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { cookieParserMw, sessionMw } from "./lib/session";
+import { trackLastActive } from "./middlewares/lastActive";
 import path from "path";
 
 if (!process.env.SESSION_SECRET) {
@@ -39,6 +40,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParserMw);
 app.use(sessionMw);
+app.use(trackLastActive);
 
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api/uploads", express.static(path.resolve(process.cwd(), "uploads")));
