@@ -8,7 +8,7 @@ import multer from "multer";
 import { io } from "../socket";
 import { sendPushToUsers } from "./push";
 import { uploadBufferToCloudinary } from "../lib/cloudinary";
-import { sendOtp, verifyOtp } from "../lib/otpid";
+import { sendOtp, verifyOtp } from "../lib/fazpass";
 import { normalizePhone, isValidPhone, isPhoneRegistered } from "../lib/phone";
 
 // All photos use memory storage and upload to Cloudinary
