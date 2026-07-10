@@ -1,0 +1,38 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "BD8dt9UQdQuXrfoP5Oqmu"
+uri = "file://RIDE_backup_20260421.tar.gz"
+type = "unspecified"
+title = "RIDE Backup - 21 April 2026"
+
+[[outputs]]
+id = "n8PIsASpx1mZbfQOhabS5"
+uri = "file://RIDE_backup_20260421_v2.tar.gz"
+type = "unspecified"
+title = "RIDE Backup v2 — 21 April 2026"
+
+[[outputs]]
+id = "SekaLUqj4T-FU3AO1t5yT"
+uri = "file://RIDE_backup_LENGKAP_20260421.tar.gz"
+type = "unspecified"
+title = "RIDE Backup FINAL — 250 file, 768KB"
+
+[[outputs]]
+id = "4igV4_OIn8YLOw3Katwfb"
+uri = "file://RIDE_backup_LENGKAP_20260422.tar.gz"
+type = "unspecified"
+title = "RIDE Backup Lengkap 22 April 2026 (Final)"
+
+[[outputs]]
+id = "RYRtB_BpAwZNoZdrZ51bO"
+uri = "file://branding-assets/ride-icon-1024.png"
+type = "image"
+title = "Ikon Aplikasi RIDE (1024×1024)"
+
+[[outputs]]
+id = "oijf8LutXULn7LE1AC-SB"
+uri = "file://branding-assets/ride-splash-1080x1920.png"
+type = "image"
+title = "Splash Screen RIDE (1080×1920)"
