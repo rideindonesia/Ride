@@ -239,7 +239,7 @@ export default function DashboardPengguna() {
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   // OTP modal
-  const [otpPending, setOtpPending] = useState<{ field: "phone" | "email"; value: string; demoOtp?: string } | null>(null);
+  const [otpPending, setOtpPending] = useState<{ field: "phone" | "email"; value: string } | null>(null);
   const [otpInput, setOtpInput] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpMsg, setOtpMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -538,7 +538,7 @@ export default function DashboardPengguna() {
         const r = await fetch("/api/pengguna/request-profile-otp", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: "phone", value: editPhone.trim() }) });
         const d = await r.json();
         if (!d.ok) { setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal kirim OTP" }); setProfileSaveLoading(false); return; }
-        setOtpPending({ field: "phone", value: editPhone.trim(), demoOtp: d.otpDemo });
+        setOtpPending({ field: "phone", value: editPhone.trim() });
         setOtpInput(""); setOtpMsg(null); setProfileSaveLoading(false); return;
       }
       // Email changed → request OTP
@@ -546,7 +546,7 @@ export default function DashboardPengguna() {
         const r = await fetch("/api/pengguna/request-profile-otp", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: "email", value: editEmail.trim() }) });
         const d = await r.json();
         if (!d.ok) { setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal kirim OTP" }); setProfileSaveLoading(false); return; }
-        setOtpPending({ field: "email", value: editEmail.trim(), demoOtp: d.otpDemo });
+        setOtpPending({ field: "email", value: editEmail.trim() });
         setOtpInput(""); setOtpMsg(null); setProfileSaveLoading(false); return;
       }
       setProfileSaveMsg({ type: "ok", text: "Profil berhasil diperbarui!" });
@@ -1541,12 +1541,6 @@ export default function DashboardPengguna() {
                 <div style={{ fontSize: 13, color: "#7a8a9a", textAlign: "center" as const, marginBottom: 4 }}>
                   Kode dikirim ke <strong>{otpPending.value}</strong>
                 </div>
-                {otpPending.demoOtp && (
-                  <div style={{ background: "#fff9e6", border: "1px solid #f5a623", borderRadius: 10, padding: "8px 12px", marginBottom: 12, textAlign: "center" as const }}>
-                    <div style={{ fontSize: 11, color: "#92400e" }}>Mode Demo — kode OTP Anda:</div>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: "#d97706", letterSpacing: 6 }}>{otpPending.demoOtp}</div>
-                  </div>
-                )}
                 <input value={otpInput} onChange={e => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder="000000" maxLength={6}
                   style={{ width: "100%", border: "2px solid #e0e8ef", borderRadius: 12, padding: "12px 0", fontSize: 24, fontWeight: 800, textAlign: "center" as const, letterSpacing: 8, boxSizing: "border-box" as const, outline: "none", marginBottom: 8 }} />
@@ -1999,7 +1993,7 @@ export default function DashboardPengguna() {
                     const r = await fetch("/api/pengguna/request-profile-otp", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field: "phone", value: editPhone.trim() }) });
                     const d = await r.json();
                     if (!d.ok) { setProfileSaveMsg({ type: "err", text: d.error ?? "Gagal kirim OTP" }); return; }
-                    setOtpPending({ field: "phone", value: editPhone.trim(), demoOtp: d.otpDemo });
+                    setOtpPending({ field: "phone", value: editPhone.trim() });
                     setOtpInput(""); setOtpMsg(null);
                   }} style={{ width: "100%", background: "#1a3a5c", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                     Kirim Kode OTP

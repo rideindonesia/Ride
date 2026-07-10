@@ -8,13 +8,8 @@ import multer from "multer";
 import { io } from "../socket";
 import { sendPushToUsers } from "./push";
 import { uploadBufferToCloudinary } from "../lib/cloudinary";
-import { sendWhatsApp } from "../lib/fonnte";
+import { sendOtp, verifyOtp } from "../lib/otpid";
 import { normalizePhone, isValidPhone, isPhoneRegistered } from "../lib/phone";
-
-async function sendFonnteOtp(phone: string, otpCode: string): Promise<void> {
-  const message = `Kode OTP RIDE Anda: *${otpCode}*\n\nBerlaku 5 menit. Jangan bagikan kode ini kepada siapapun.`;
-  await sendWhatsApp(phone, message);
-}
 
 // All photos use memory storage and upload to Cloudinary
 const memStorage = multer.memoryStorage();
@@ -38,10 +33,6 @@ function hashPassword(password: string): string {
   const salt = process.env.SESSION_SECRET;
   if (!salt) throw new Error("SESSION_SECRET tidak ditemukan");
   return crypto.createHash("sha256").update(password + salt).digest("hex");
-}
-
-function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 router.post("/register", async (req, res) => {
@@ -89,18 +80,22 @@ router.post("/register", async (req, res) => {
     return;
   }
 
-  const otpCode = generateOtp();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  const sent = await sendOtp(phone);
+  if (!sent.ok) {
+    res.status(502).json({ error: sent.error });
+    return;
+  }
 
+  // OTP.id yang menyimpan & mengelola kodenya; kita simpan otp_id (di kolom code)
+  // + data pending pendaftaran agar bisa membuat akun setelah verifikasi.
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await db.insert(otpCodesTable).values({
     phone,
-    code: otpCode,
+    code: sent.otpId,
     pendingData: { name, phone, email, passwordHash: hashPassword(password) },
     expiresAt,
     used: false,
   });
-
-  await sendFonnteOtp(phone, otpCode);
 
   res.json({
     message: "Kode OTP telah dikirim ke WhatsApp Anda",
@@ -118,21 +113,28 @@ router.post("/verify-otp", async (req, res) => {
   const { phone, otp } = parsed.data;
   const now = new Date();
 
+  // Ambil permintaan OTP terakhir untuk nomor ini (belum dipakai & belum kadaluarsa).
   const [otpRecord] = await db.select()
     .from(otpCodesTable)
     .where(
       and(
         eq(otpCodesTable.phone, phone),
-        eq(otpCodesTable.code, otp),
         eq(otpCodesTable.used, false),
         gt(otpCodesTable.expiresAt, now),
       )
     )
-    .orderBy(otpCodesTable.createdAt)
+    .orderBy(desc(otpCodesTable.createdAt))
     .limit(1);
 
   if (!otpRecord) {
-    res.status(400).json({ error: "Kode OTP tidak valid atau sudah kadaluarsa" });
+    res.status(400).json({ error: "Tidak ada permintaan OTP aktif atau sudah kadaluarsa" });
+    return;
+  }
+
+  // Verifikasi kode ke OTP.id menggunakan otp_id yang tersimpan (kolom code).
+  const check = await verifyOtp(otpRecord.code, otp);
+  if (!check.ok) {
+    res.status(400).json({ error: check.error ?? "Kode OTP tidak valid atau sudah kadaluarsa" });
     return;
   }
 
@@ -198,7 +200,7 @@ router.post("/resend-otp", async (req, res) => {
   const [lastOtp] = await db.select()
     .from(otpCodesTable)
     .where(and(eq(otpCodesTable.phone, phone), eq(otpCodesTable.used, false)))
-    .orderBy(otpCodesTable.createdAt)
+    .orderBy(desc(otpCodesTable.createdAt))
     .limit(1);
 
   if (!lastOtp || !lastOtp.pendingData) {
@@ -206,18 +208,20 @@ router.post("/resend-otp", async (req, res) => {
     return;
   }
 
-  const otpCode = generateOtp();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  const sent = await sendOtp(phone);
+  if (!sent.ok) {
+    res.status(502).json({ error: sent.error });
+    return;
+  }
 
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await db.insert(otpCodesTable).values({
     phone,
-    code: otpCode,
+    code: sent.otpId,
     pendingData: lastOtp.pendingData,
     expiresAt,
     used: false,
   });
-
-  await sendFonnteOtp(phone, otpCode);
 
   res.json({
     message: "Kode OTP baru telah dikirim ke WhatsApp Anda",
@@ -1038,10 +1042,29 @@ router.post("/request-profile-otp", async (req, res) => {
   if (existing.length > 0 && existing[0].id !== penggunaId) {
     res.status(409).json({ error: `${field === "email" ? "Email" : "Nomor HP"} sudah digunakan akun lain` }); return;
   }
-  const otp = generateOtp();
-  (req.session as any).profileOtp = { code: otp, field, value, userId: penggunaId, expiresAt: Date.now() + 10 * 60 * 1000 };
-  // Demo mode: return OTP in response
-  res.json({ ok: true, message: `Kode OTP telah dikirim ke ${value}`, otpDemo: otp });
+
+  // Ganti HP: kirim OTP ke nomor BARU (bukti kepemilikan). Ganti email: kirim OTP
+  // ke nomor HP pengguna saat ini (OTP.id mengirim via WhatsApp/SMS, bukan email).
+  let destination = value;
+  if (field === "email") {
+    const [me] = await db.select({ phone: usersTable.phone }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
+    if (!me?.phone) { res.status(400).json({ error: "Nomor HP akun belum diatur, tidak bisa mengirim OTP" }); return; }
+    destination = me.phone;
+  } else if (!isValidPhone(value)) {
+    res.status(400).json({ error: "Nomor HP tidak valid. Contoh: 0812xxxxxxx" }); return;
+  }
+
+  const sent = await sendOtp(field === "phone" ? normalizePhone(value) : destination);
+  if (!sent.ok) { res.status(502).json({ error: sent.error }); return; }
+
+  (req.session as any).profileOtp = {
+    otpId: sent.otpId,
+    field,
+    value: field === "phone" ? normalizePhone(value) : value,
+    userId: penggunaId,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  };
+  res.json({ ok: true, message: `Kode OTP telah dikirim ke ${field === "email" ? destination : normalizePhone(value)}` });
 });
 
 // POST /api/pengguna/verify-profile-otp — verifikasi OTP dan simpan perubahan
@@ -1050,14 +1073,15 @@ router.post("/verify-profile-otp", async (req, res) => {
   if (!penggunaId) { res.status(401).json({ error: "Belum login" }); return; }
   const { otp } = req.body as { otp: string };
   if (!otp) { res.status(400).json({ error: "Kode OTP wajib diisi" }); return; }
-  const pending = (req.session as any).profileOtp as { code: string; field: string; value: string; userId: number; expiresAt: number } | undefined;
+  const pending = (req.session as any).profileOtp as { otpId: string; field: string; value: string; userId: number; expiresAt: number } | undefined;
   if (!pending) { res.status(400).json({ error: "Tidak ada permintaan OTP aktif" }); return; }
   if (pending.userId !== penggunaId) { res.status(403).json({ error: "OTP bukan milik Anda" }); return; }
   if (Date.now() > pending.expiresAt) {
     delete (req.session as any).profileOtp;
     res.status(400).json({ error: "Kode OTP sudah kadaluarsa" }); return;
   }
-  if (otp.trim() !== pending.code) { res.status(400).json({ error: "Kode OTP tidak valid" }); return; }
+  const check = await verifyOtp(pending.otpId, otp.trim());
+  if (!check.ok) { res.status(400).json({ error: check.error ?? "Kode OTP tidak valid" }); return; }
   const update: Record<string, string> = {};
   update[pending.field === "phone" ? "phone" : "email"] = pending.value;
   await db.update(usersTable).set(update as any).where(eq(usersTable.id, penggunaId));
