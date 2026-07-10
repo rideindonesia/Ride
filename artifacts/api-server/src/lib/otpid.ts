@@ -47,10 +47,12 @@ export async function sendOtp(
       }),
     });
     const data: any = await res.json().catch(() => null);
-    const otpId = data?.data?.otp_id ?? data?.otp_id;
-    if (!res.ok || !otpId) {
-      logger.error({ status: res.status, data }, "OTP.id gagal mengirim OTP");
-      return { ok: false, error: data?.message ?? "Gagal mengirim OTP, coba lagi" };
+    // OTP.id: status 1 = sukses, 0 = gagal; pesan error di error_msg.
+    const success = data?.status === 1 || data?.status === "1";
+    const otpId = data?.data?.otp_id ?? data?.otp_id ?? data?.data?.id;
+    if (!res.ok || !success || !otpId) {
+      logger.error({ httpStatus: res.status, data }, "OTP.id gagal mengirim OTP");
+      return { ok: false, error: data?.error_msg ?? data?.message ?? "Gagal mengirim OTP, coba lagi" };
     }
     return { ok: true, otpId: String(otpId) };
   } catch (err) {
@@ -77,22 +79,11 @@ export async function verifyOtp(otpId: string, inputOtp: string): Promise<OtpVer
     });
     const data: any = await res.json().catch(() => null);
 
-    // Deteksi kegagalan eksplisit dari berbagai kemungkinan bentuk respons.
-    const verified =
-      data?.data?.verified === true ||
-      data?.data?.status === "verified" ||
-      data?.verified === true ||
-      data?.success === true ||
-      data?.status === true;
-    const failed =
-      data?.success === false ||
-      data?.status === false ||
-      data?.data?.verified === false ||
-      !!data?.error;
-
-    if (!res.ok || failed || !verified) {
-      logger.warn({ status: res.status, data }, "OTP.id verify: kode ditolak");
-      return { ok: false, error: data?.message ?? "Kode OTP tidak valid atau sudah kadaluarsa" };
+    // OTP.id: status 1 = kode benar/terverifikasi, 0 = gagal; pesan di error_msg.
+    const verified = data?.status === 1 || data?.status === "1";
+    if (!res.ok || !verified) {
+      logger.warn({ httpStatus: res.status, data }, "OTP.id verify: kode ditolak");
+      return { ok: false, error: data?.error_msg ?? data?.message ?? "Kode OTP tidak valid atau sudah kadaluarsa" };
     }
     return { ok: true };
   } catch (err) {
