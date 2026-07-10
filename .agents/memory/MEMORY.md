@@ -6,4 +6,4 @@
 - [Phone uniqueness](phone-uniqueness.md) — "1 HP = 1 akun" needs app-level isPhoneRegistered AT verify-otp (not just register) + DB users_phone_unique; drizzle push is interactive so add constraint via psql.
 - [Railway single-server deploy](railway-single-server-deploy.md) — api-server already serves ./public + ./public/admin; Railway needs build:railway (--prod=false, per-frontend BASE_PATH) not root build; no backend change.
 - [DB URL env gating](db-url-env-gating.md) — NEON_DATABASE_URL gated behind NODE_ENV==='production' in lib/db + session; else dev workspace hijacks to prod DB. Secrets can't be deleted via deleteEnvVars.
-- [OTP.id integration](otpid-integration.md) — OTP send/verify provider; status is int 1/0 (not bool), error_msg field, channels wa-long-number+misscall only; delivery blocked on OTP.id account provisioning.
+- [OTP provider (Fazpass)](otp-provider.md) — OTP send/verify runs on Fazpass (/v1/otp/request+verify, Bearer merchant_key + gateway_key); status is boolean; short expiry → correct code late = HTTP403 "OTP invalid". OTP.id dropped (delivery never worked).
