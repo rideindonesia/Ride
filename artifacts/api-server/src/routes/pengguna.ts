@@ -1033,38 +1033,44 @@ router.post("/request-profile-otp", async (req, res) => {
   if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
     res.status(400).json({ error: "Format email tidak valid" }); return;
   }
+  if (field === "phone" && !isValidPhone(value)) {
+    res.status(400).json({ error: "Nomor HP tidak valid. Contoh: 0812xxxxxxx" }); return;
+  }
+
+  // Nilai final yang akan disimpan (nomor dinormalisasi ke E.164). Uniqueness &
+  // penyimpanan HARUS memakai bentuk yang sama agar duplikat tidak lolos.
+  const finalValue = field === "phone" ? normalizePhone(value) : value;
+
   // Check uniqueness
   const existing = await db.select({ id: usersTable.id })
     .from(usersTable)
-    .where(and(
-      field === "email" ? eq(usersTable.email, value) : eq(usersTable.phone, value),
-    )).limit(1);
+    .where(
+      field === "email" ? eq(usersTable.email, finalValue) : eq(usersTable.phone, finalValue),
+    ).limit(1);
   if (existing.length > 0 && existing[0].id !== penggunaId) {
     res.status(409).json({ error: `${field === "email" ? "Email" : "Nomor HP"} sudah digunakan akun lain` }); return;
   }
 
   // Ganti HP: kirim OTP ke nomor BARU (bukti kepemilikan). Ganti email: kirim OTP
   // ke nomor HP pengguna saat ini (OTP.id mengirim via WhatsApp/SMS, bukan email).
-  let destination = value;
+  let destination = finalValue;
   if (field === "email") {
     const [me] = await db.select({ phone: usersTable.phone }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
     if (!me?.phone) { res.status(400).json({ error: "Nomor HP akun belum diatur, tidak bisa mengirim OTP" }); return; }
     destination = me.phone;
-  } else if (!isValidPhone(value)) {
-    res.status(400).json({ error: "Nomor HP tidak valid. Contoh: 0812xxxxxxx" }); return;
   }
 
-  const sent = await sendOtp(field === "phone" ? normalizePhone(value) : destination);
+  const sent = await sendOtp(destination);
   if (!sent.ok) { res.status(502).json({ error: sent.error }); return; }
 
   (req.session as any).profileOtp = {
     otpId: sent.otpId,
     field,
-    value: field === "phone" ? normalizePhone(value) : value,
+    value: finalValue,
     userId: penggunaId,
     expiresAt: Date.now() + 10 * 60 * 1000,
   };
-  res.json({ ok: true, message: `Kode OTP telah dikirim ke ${field === "email" ? destination : normalizePhone(value)}` });
+  res.json({ ok: true, message: `Kode OTP telah dikirim ke ${destination}` });
 });
 
 // POST /api/pengguna/verify-profile-otp — verifikasi OTP dan simpan perubahan
@@ -1084,7 +1090,16 @@ router.post("/verify-profile-otp", async (req, res) => {
   if (!check.ok) { res.status(400).json({ error: check.error ?? "Kode OTP tidak valid" }); return; }
   const update: Record<string, string> = {};
   update[pending.field === "phone" ? "phone" : "email"] = pending.value;
-  await db.update(usersTable).set(update as any).where(eq(usersTable.id, penggunaId));
+  try {
+    await db.update(usersTable).set(update as any).where(eq(usersTable.id, penggunaId));
+  } catch (err: any) {
+    // Balapan: nilai bisa terpakai akun lain antara precheck dan update ini.
+    if (err?.code === "23505" || /unique|duplicate/i.test(String(err?.message))) {
+      res.status(409).json({ error: `${pending.field === "email" ? "Email" : "Nomor HP"} sudah digunakan akun lain` });
+      return;
+    }
+    throw err;
+  }
   delete (req.session as any).profileOtp;
   res.json({ ok: true, field: pending.field, value: pending.value });
 });
