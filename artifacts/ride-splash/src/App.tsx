@@ -1,0 +1,89 @@
+import { Switch, Route, Router as WouterRouter } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import SplashScreen from "@/pages/SplashScreen";
+import RoleSelect from "@/pages/RoleSelect";
+import AuthForm from "@/pages/AuthForm";
+import RegisterPengguna from "@/pages/RegisterPengguna";
+import RegisterMitra from "@/pages/RegisterMitra";
+import RegisterMerchant from "@/pages/RegisterMerchant";
+import DashboardPengguna from "@/pages/DashboardPengguna";
+import DashboardMitra from "@/pages/DashboardMitra";
+import DashboardMerchant from "@/pages/DashboardMerchant";
+import OrderBengkel from "@/pages/OrderBengkel";
+import OrderElektronik from "@/pages/OrderElektronik";
+import OrderCuci from "@/pages/OrderCuci";
+import OrderBarber from "@/pages/OrderBarber";
+import OrderInspeksi from "@/pages/OrderInspeksi";
+import OrderTowing from "@/pages/OrderTowing";
+import OrderTrip from "@/pages/OrderTrip";
+import OrderFood from "@/pages/OrderFood";
+import ReviewPage from "@/pages/ReviewPage";
+import KebijakanPrivasiPengguna from "@/pages/KebijakanPrivasiPengguna";
+import KebijakanPrivasiMitra from "@/pages/KebijakanPrivasiMitra";
+import SyaratKetentuanPengguna from "@/pages/SyaratKetentuanPengguna";
+import SyaratKetentuanMitra from "@/pages/SyaratKetentuanMitra";
+import TentangRide from "@/pages/TentangRide";
+import KebijakanKomisi from "@/pages/KebijakanKomisi";
+
+const queryClient = new QueryClient();
+
+function RegisterFormRouter() {
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const role = new URLSearchParams(search).get("role");
+  if (role === "pengguna") return <RegisterPengguna />;
+  if (role === "mitra") return <RegisterMitra />;
+  if (role === "merchant") return <RegisterMerchant />;
+  return <AuthForm mode="register" />;
+}
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/" component={SplashScreen} />
+      <Route path="/login">
+        <RoleSelect mode="login" />
+      </Route>
+      <Route path="/register">
+        <RoleSelect mode="register" />
+      </Route>
+      <Route path="/login/form">
+        <AuthForm mode="login" />
+      </Route>
+      <Route path="/register/form" component={RegisterFormRouter} />
+      <Route path="/register/merchant" component={RegisterMerchant} />
+      <Route path="/dashboard/pengguna" component={DashboardPengguna} />
+      <Route path="/dashboard/mitra" component={DashboardMitra} />
+      <Route path="/dashboard/merchant" component={DashboardMerchant} />
+      <Route path="/order/bengkel" component={OrderBengkel} />
+      <Route path="/order/elektronik" component={OrderElektronik} />
+      <Route path="/order/cuci" component={OrderCuci} />
+      <Route path="/order/barber" component={OrderBarber} />
+      <Route path="/order/inspeksi" component={OrderInspeksi} />
+      <Route path="/order/towing" component={OrderTowing} />
+      <Route path="/order/goride" component={() => <OrderTrip svc="goride" />} />
+      <Route path="/order/gocar" component={() => <OrderTrip svc="gocar" />} />
+      <Route path="/order/gosend" component={() => <OrderTrip svc="gosend" />} />
+      <Route path="/order/goshop" component={() => <OrderTrip svc="goshop" />} />
+      <Route path="/order/gofood" component={OrderFood} />
+      <Route path="/review/:orderId" component={ReviewPage} />
+      <Route path="/kebijakan-privasi" component={KebijakanPrivasiPengguna} />
+      <Route path="/kebijakan-privasi-mitra" component={KebijakanPrivasiMitra} />
+      <Route path="/syarat-ketentuan" component={SyaratKetentuanPengguna} />
+      <Route path="/syarat-ketentuan-mitra" component={SyaratKetentuanMitra} />
+      <Route path="/tentang-ride" component={TentangRide} />
+      <Route path="/kebijakan-komisi" component={KebijakanKomisi} />
+    </Switch>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <Router />
+      </WouterRouter>
+    </QueryClientProvider>
+  );
+}
+
+export default App;

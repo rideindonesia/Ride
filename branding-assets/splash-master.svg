@@ -1,0 +1,28 @@
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2137"/>
+      <stop offset="30%" stop-color="#1a3a5c"/>
+      <stop offset="60%" stop-color="#1c4a5a"/>
+      <stop offset="80%" stop-color="#1a6060"/>
+      <stop offset="100%" stop-color="#1a7a6a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <circle cx="980" cy="180" r="360" fill="rgba(255,255,255,0.04)"/>
+  <circle cx="120" cy="1750" r="420" fill="rgba(255,255,255,0.03)"/>
+
+  <polygon points="540,610 664,679 664,841 540,910 416,841 416,679"
+    stroke="rgba(100,200,200,0.7)" stroke-width="7" fill="none" stroke-linejoin="round"/>
+  <polygon points="540,643 634,697 634,823 540,877 446,823 446,697"
+    stroke="rgba(80,180,180,0.5)" stroke-width="5" fill="none" stroke-linejoin="round"/>
+  <text x="540" y="805" text-anchor="middle" fill="rgba(255,255,255,0.92)"
+    font-size="120" font-weight="700" font-family="'Inter','DejaVu Sans',sans-serif">R</text>
+
+  <text x="548" y="1085" text-anchor="middle" fill="#ffffff"
+    font-size="115" font-weight="800" letter-spacing="18"
+    font-family="'Inter','DejaVu Sans',sans-serif">RIDE</text>
+  <text x="540" y="1165" text-anchor="middle" fill="rgba(255,255,255,0.65)"
+    font-size="34" font-weight="400"
+    font-family="'Inter','DejaVu Sans',sans-serif">Super App Jasa Panggilan</text>
+</svg>

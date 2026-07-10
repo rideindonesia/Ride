@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/admin/"
+title = "RIDE Admin Panel"
+version = "1.0.0"
+id = "artifacts/ride-admin"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/admin/" ]
+localPort = 23348
+
+[services.development]
+run = "pnpm --filter @workspace/ride-admin run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ride-admin", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/ride-admin/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23348"
+BASE_PATH = "/admin/"
