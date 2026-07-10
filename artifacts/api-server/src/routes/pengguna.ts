@@ -110,7 +110,8 @@ router.post("/verify-otp", async (req, res) => {
     return;
   }
 
-  const { phone, otp } = parsed.data;
+  const { otp } = parsed.data;
+  const phone = normalizePhone(parsed.data.phone);
   const now = new Date();
 
   // Ambil permintaan OTP terakhir untuk nomor ini (belum dipakai & belum kadaluarsa).
@@ -131,7 +132,7 @@ router.post("/verify-otp", async (req, res) => {
     return;
   }
 
-  // Verifikasi kode ke OTP.id menggunakan otp_id yang tersimpan (kolom code).
+  // Verifikasi kode ke Fazpass menggunakan otp_id yang tersimpan (kolom code).
   const check = await verifyOtp(otpRecord.code, otp);
   if (!check.ok) {
     res.status(400).json({ error: check.error ?? "Kode OTP tidak valid atau sudah kadaluarsa" });
@@ -195,7 +196,7 @@ router.post("/resend-otp", async (req, res) => {
     return;
   }
 
-  const { phone } = parsed.data;
+  const phone = normalizePhone(parsed.data.phone);
 
   const [lastOtp] = await db.select()
     .from(otpCodesTable)

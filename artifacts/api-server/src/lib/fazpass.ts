@@ -28,15 +28,20 @@ export async function sendOtp(
   _opts?: { channel?: string },
 ): Promise<OtpSendResult> {
   const key = process.env.FAZPASS_MERCHANT_KEY;
-  if (!key) {
-    logger.error("FAZPASS_MERCHANT_KEY tidak tersedia — OTP tidak dikirim");
+  const gatewayKey = process.env.FAZPASS_GATEWAY_KEY;
+  if (!key || !gatewayKey) {
+    logger.error(
+      { hasMerchantKey: !!key, hasGatewayKey: !!gatewayKey },
+      "Kredensial Fazpass tidak lengkap — OTP tidak dikirim",
+    );
     return { ok: false, error: "Layanan OTP belum dikonfigurasi. Hubungi admin." };
   }
-  const gatewayKey = process.env.FAZPASS_GATEWAY_KEY;
 
   try {
-    const body: Record<string, unknown> = { phone: toPhone(destination) };
-    if (gatewayKey) body.gateway_key = gatewayKey;
+    const body: Record<string, unknown> = {
+      phone: toPhone(destination),
+      gateway_key: gatewayKey,
+    };
 
     const res = await fetch(`${FAZPASS_URL}/request`, {
       method: "POST",
