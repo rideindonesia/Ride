@@ -36,3 +36,15 @@ id = "oijf8LutXULn7LE1AC-SB"
 uri = "file://branding-assets/ride-splash-1080x1920.png"
 type = "image"
 title = "Splash Screen RIDE (1080×1920)"
+
+[[outputs]]
+id = "ckeub05WEbQcIdd0b8Upa"
+uri = "file://attached_assets/alfin-ktp.jpg"
+type = "image"
+title = "Alfin Reifan — Foto KTP"
+
+[[outputs]]
+id = "mJ9FK6sc0u5ZqVYIcIqpI"
+uri = "file://attached_assets/alfin-foto-diri.jpg"
+type = "image"
+title = "Alfin Reifan — Foto Diri"
