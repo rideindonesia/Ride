@@ -67,6 +67,11 @@ function serverHaversineKm(lat1: number, lng1: number, lat2: number, lng2: numbe
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+// Radius maksimal (km) antara lokasi mitra dan titik jemput order. Mengunci order ke
+// wilayahnya: mitra di luar radius tidak bisa melihat/menerima order tersebut.
+// Harus sama dengan ORDER_RADIUS_KM di routes/pengguna.ts.
+const ORDER_RADIUS_KM = 25;
+
 // Jarak mengikuti jalan (OSRM). Fallback ke haversine jika gagal/timeout, agar fee tetap terhitung.
 async function serverRoadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number, log?: any): Promise<number> {
   const ctrl = new AbortController();
@@ -514,7 +519,7 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
     .limit(1);
   if (busyOrder) { res.json({ incoming: null }); return; }
 
-  const [locRow] = await db.select({ serviceType: mitraLocationsTable.serviceType, isOnline: mitraLocationsTable.isOnline })
+  const [locRow] = await db.select({ serviceType: mitraLocationsTable.serviceType, isOnline: mitraLocationsTable.isOnline, lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
     .from(mitraLocationsTable)
     .where(eq(mitraLocationsTable.userId, mitraId))
     .limit(1);
@@ -525,6 +530,14 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
   // Show pending orders that match mitra's serviceType and are unassigned (mitraId IS NULL).
   // Ojol mitra (payung motor) melihat SEMUA order grup: goride/gosend/goshop/gofood.
   // If no serviceType, fall back to all unassigned pending orders.
+  // Kunci wilayah di level query (bukan setelah limit) agar order terdekat tidak
+  // tersembunyi oleh order jauh yang lebih baru. Hanya order yang titik jemputnya
+  // dalam ORDER_RADIUS_KM dari lokasi mitra. Order tanpa koordinat tetap tampil
+  // (fail-open) — konsisten dengan dispatch & accept.
+  const radiusClause = (locRow.lat != null && locRow.lng != null)
+    ? sql`(${ordersTable.pickupLat} IS NULL OR ${ordersTable.pickupLng} IS NULL OR (6371 * 2 * asin(sqrt(power(sin(radians(${ordersTable.pickupLat} - ${locRow.lat}) / 2), 2) + cos(radians(${locRow.lat})) * cos(radians(${ordersTable.pickupLat})) * power(sin(radians(${ordersTable.pickupLng} - ${locRow.lng}) / 2), 2)))) <= ${ORDER_RADIUS_KM})`
+    : sql`true`;
+
   const whereClause = locRow?.serviceType
     ? and(
         eq(ordersTable.status, "pending"),
@@ -532,10 +545,12 @@ router.get("/incoming-orders", requireMitra, async (req, res) => {
         isOjolCapableMitra(locRow.serviceType)
           ? inArray(ordersTable.serviceType, OJOL_ORDER_TYPES)
           : eq(ordersTable.serviceType, locRow.serviceType),
+        radiusClause,
       )
     : and(
         eq(ordersTable.status, "pending"),
         sql`${ordersTable.mitraId} IS NULL`,
+        radiusClause,
       );
 
   const incoming = await db.select({
@@ -637,7 +652,7 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   // Server-side capability guard: mitra hanya boleh menerima order yang sesuai layanannya.
   // Mencocokkan matrix yang sama dengan daftar order masuk (mitra ojol payung = 4 layanan;
   // gocar & layanan on-site = exact match). Mencegah bypass via panggilan API langsung.
-  const [orderRow] = await db.select({ serviceType: ordersTable.serviceType })
+  const [orderRow] = await db.select({ serviceType: ordersTable.serviceType, pickupLat: ordersTable.pickupLat, pickupLng: ordersTable.pickupLng })
     .from(ordersTable)
     .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "pending")))
     .limit(1);
@@ -648,7 +663,7 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
   // Resolve the mitra's REGISTERED service type (yang didaftarkan saat pendaftaran mitra):
   // mitra_locations dulu (disalin dari aplikasi saat go-online), fallback ke mitra_applications.
   let mitraSvc: string | null = null;
-  const [mLocSvc] = await db.select({ serviceType: mitraLocationsTable.serviceType })
+  const [mLocSvc] = await db.select({ serviceType: mitraLocationsTable.serviceType, lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
     .from(mitraLocationsTable)
     .where(eq(mitraLocationsTable.userId, mitraId))
     .limit(1);
@@ -675,6 +690,18 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
     req.log.warn({ mitraId, mitraServiceType: mitraSvc, orderId, orderServiceType: orderRow.serviceType }, "tolak terima order: layanan tidak sesuai pendaftaran mitra");
     res.status(403).json({ error: "Layanan order ini tidak sesuai dengan layanan yang Anda daftarkan." });
     return;
+  }
+
+  // Kunci wilayah: mitra hanya boleh menerima order dalam radius dari titik jemput.
+  // Menutup bypass via panggilan API langsung (mitra luar kota tidak bisa ambil order).
+  // Jika koordinat tidak lengkap, lewati cek (fallback ke perilaku lama).
+  if (mLocSvc?.lat != null && mLocSvc?.lng != null && orderRow.pickupLat != null && orderRow.pickupLng != null) {
+    const distKm = serverHaversineKm(mLocSvc.lat, mLocSvc.lng, orderRow.pickupLat, orderRow.pickupLng);
+    if (distKm > ORDER_RADIUS_KM) {
+      req.log.warn({ mitraId, orderId, distKm }, "tolak terima order: di luar radius wilayah mitra");
+      res.status(403).json({ error: "Order ini berada di luar area layanan Anda (terlalu jauh dari titik jemput)." });
+      return;
+    }
   }
 
   // Assign mitraId + set accepted.

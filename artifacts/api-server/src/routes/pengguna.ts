@@ -296,6 +296,10 @@ const OJOL_ORDER_TYPES = ["goride", "gosend", "goshop", "gofood"];
 const OJOL_CAPABLE_MITRA = ["ojol", "goride", "gosend", "goshop", "gofood"];
 function normSvc(s: string): string { return s.toLowerCase().replace(/[\s_-]+/g, ""); }
 function isOjolOrderType(s: string): boolean { return OJOL_ORDER_TYPES.includes(normSvc(s)); }
+// Radius maksimal (km) antara titik jemput order dan lokasi mitra agar order bisa
+// disebar/diterima. Mengunci order ke wilayahnya: mitra luar kota tidak kebagian.
+const ORDER_RADIUS_KM = 25;
+
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -459,7 +463,7 @@ router.post("/orders", (req, res, next) => {
     const [pengguna] = await db.select({ name: usersTable.name, profilePhotoPath: usersTable.profilePhotoPath }).from(usersTable).where(eq(usersTable.id, penggunaId)).limit(1);
 
     // Get all online mitra for this service type
-    const onlineMitra = await db.select({ userId: mitraLocationsTable.userId })
+    const onlineMitra = await db.select({ userId: mitraLocationsTable.userId, lat: mitraLocationsTable.lat, lng: mitraLocationsTable.lng })
       .from(mitraLocationsTable)
       .where(and(
         eq(mitraLocationsTable.isOnline, true),
@@ -477,7 +481,13 @@ router.post("/orders", (req, res, next) => {
       ));
     const busyIds = new Set(busyMitra.map(b => b.mitraId));
 
-    const availableMitra = onlineMitra.filter(m => m.userId !== null && !busyIds.has(m.userId));
+    const availableMitra = onlineMitra.filter(m => {
+      if (m.userId === null || busyIds.has(m.userId)) return false;
+      // Kunci wilayah: hanya mitra dalam radius dari titik jemput yang menerima order.
+      // Jika koordinat tidak lengkap, jangan blokir (fallback ke perilaku lama).
+      if (pLat == null || pLng == null || m.lat == null || m.lng == null) return true;
+      return haversineKm(pLat, pLng, m.lat, m.lng) <= ORDER_RADIUS_KM;
+    });
 
     const payload = {
       id: order.id,
