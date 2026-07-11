@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, roadDistanceKm } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -145,6 +145,7 @@ export default function OrderBarber() {
       if (data.status !== "accepted" || !data.mitra) return;
       const pLat: number = data.pickupLat ?? 0, pLng: number = data.pickupLng ?? 0;
       const dist = haversineDist(data.mitra.lat, data.mitra.lng, pLat, pLng);
+      { const _mid = data.mitra.id, _mlat = data.mitra.lat, _mlng = data.mitra.lng; roadDistanceKm(_mlat, _mlng, pLat, pLng).then(km => setAcceptedMitra(prev => prev && prev.id === _mid ? { ...prev, dist: km, etaMin: Math.ceil(calcEtaSecsLive(km) / 60) } : prev)); }
       setOrderId(data.id); setOrderNo(data.orderNo); setOrderStatus("accepted");
       setPinLat(pLat); setPinLng(pLng); setAutoAddress(data.pickupAddress || "");
       setAcceptedMitra({ id: data.mitra.id, name: data.mitra.name, lat: data.mitra.lat, lng: data.mitra.lng, serviceType: data.mitra.serviceType || "", rating: data.mitra.rating ?? null, totalOrders: data.mitra.totalOrders ?? 0, dist, callFee: data.totalAmount ?? 0, etaMin: Math.ceil(calcEtaSecsLive(dist, data.mitra?.speedKmh) / 60) });
@@ -200,6 +201,7 @@ export default function OrderBarber() {
       if (od.status === "accepted" && od.mitra) {
         if (orderPollRef.current) clearInterval(orderPollRef.current);
         const dist = calcDist(lat, lng, od.mitra.lat ?? 0, od.mitra.lng ?? 0);
+        { const _mid = od.mitra.id, _mlat = od.mitra.lat ?? 0, _mlng = od.mitra.lng ?? 0; roadDistanceKm(_mlat, _mlng, lat, lng).then(km => setAcceptedMitra(prev => prev && prev.id === _mid ? { ...prev, dist: km, etaMin: Math.ceil(calcEtaSecsLive(km) / 60) } : prev)); }
         setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: od.mitra.lat ?? 0, lng: od.mitra.lng ?? 0, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: od.totalAmount ?? calcBiayaPanggilan("barber", dist), etaMin: Math.ceil(calcEtaSecsLive(dist, od.mitra?.speedKmh) / 60) });
         setOrderStatus("accepted");
       } else if (od.status === "cancelled") { if (orderPollRef.current) clearInterval(orderPollRef.current); setOrderStatus("cancelled"); }

@@ -4,6 +4,7 @@
 - [Admin account deletion](admin-account-deletion.md) — hard-delete pengguna(=must delete orders, notNull FK) & mitra(=null orders.mitraId); chat_messages FK must go before orders/user or txn rolls back; role-guarded.
 - [Order geo-locking](order-geo-locking.md) — orders locked to 25km radius (pickup↔mitra) at dispatch + polling(SQL, pre-limit) + accept guard; fail-open on missing coords; ORDER_RADIUS_KM duplicated in pengguna.ts & mitra.ts.
 - [Trip-vertical billing](trip-vertical-billing.md) — goride/gocar/gosend/goshop/gofood bill pickup→destination distance (freeKm 0), NOT mitra→pickup; keep isTripService sets in sync across pricing.ts/mitra.ts/pengguna.ts.
+- [Road distance (OSRM)](road-distance-osrm.md) — all fares & shown travel distances must use OSRM road distance (haversine only for geofence + live per-tick tracking); shared roadDistanceKm() in utils/pricing.ts.
 - [GoFood merchant flow](gofood-merchant-flow.md) — 4th role warung; merchantStatus menunggu→diterima→siap gates ojol phase server-side; foodTotal MUST be recomputed from DB menu_items (client price is a fraud vector).
 - [Phone uniqueness](phone-uniqueness.md) — "1 HP = 1 akun" needs app-level isPhoneRegistered AT verify-otp (not just register) + DB users_phone_unique; drizzle push is interactive so add constraint via psql.
 - [Railway single-server deploy](railway-single-server-deploy.md) — api-server already serves ./public + ./public/admin; Railway needs build:railway (--prod=false, per-frontend BASE_PATH) not root build; no backend change.

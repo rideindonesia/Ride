@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, roadDistanceKm } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -188,6 +188,7 @@ export default function OrderBengkel() {
         const pLat: number = data.pickupLat ?? 0;
         const pLng: number = data.pickupLng ?? 0;
         const dist = haversineDist(data.mitra.lat, data.mitra.lng, pLat, pLng);
+        { const _mid = data.mitra.id, _mlat = data.mitra.lat, _mlng = data.mitra.lng; roadDistanceKm(_mlat, _mlng, pLat, pLng).then(km => setAcceptedMitra(prev => prev && prev.id === _mid ? { ...prev, dist: km, etaMin: Math.ceil(calcEtaSecsLive(km) / 60) } : prev)); }
         const etaMin = Math.ceil(calcEtaSecsLive(dist, data.mitra.speedKmh) / 60);
         setOrderId(data.id);
         setOrderNo(data.orderNo);
@@ -366,6 +367,7 @@ export default function OrderBengkel() {
         const mitraLat = od.mitra.lat ?? 0;
         const mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
+        { const _mid = od.mitra.id; roadDistanceKm(mitraLat, mitraLng, lat, lng).then(km => setAcceptedMitra(prev => prev && prev.id === _mid ? { ...prev, dist: km, etaMin: Math.ceil(calcEtaSecsLive(km) / 60) } : prev)); }
         const callFee = od.totalAmount ?? calcBiayaPanggilan("bengkel", dist);
         const etaMin = Math.ceil(calcEtaSecsLive(dist, od.mitra.speedKmh) / 60);
         setAcceptedMitra({

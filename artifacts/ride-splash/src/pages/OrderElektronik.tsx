@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive } from "../utils/pricing";
+import { calcBiayaPanggilan, calcEtaMinutes, calcEtaSecsLive, roadDistanceKm } from "../utils/pricing";
 import { useLocation } from "wouter";
 import ReviewModal from "@/components/ReviewModal";
 import L from "leaflet";
@@ -174,6 +174,7 @@ export default function OrderElektronik() {
         const pLat: number = data.pickupLat ?? 0;
         const pLng: number = data.pickupLng ?? 0;
         const dist = haversineDist(data.mitra.lat, data.mitra.lng, pLat, pLng);
+        { const _mid = data.mitra.id, _mlat = data.mitra.lat, _mlng = data.mitra.lng; roadDistanceKm(_mlat, _mlng, pLat, pLng).then(km => setAcceptedMitra(prev => prev && prev.id === _mid ? { ...prev, dist: km, etaMin: Math.ceil(calcEtaSecsLive(km) / 60) } : prev)); }
         setOrderId(data.id); setOrderNo(data.orderNo); setOrderStatus("accepted");
         setPinLat(pLat); setPinLng(pLng); setAutoAddress(data.pickupAddress || "");
         setMerekPerangkat(data.vehicleModel || "");
@@ -247,6 +248,7 @@ export default function OrderElektronik() {
         if (orderPollRef.current) clearInterval(orderPollRef.current);
         const mitraLat = od.mitra.lat ?? 0, mitraLng = od.mitra.lng ?? 0;
         const dist = calcDist(lat, lng, mitraLat, mitraLng);
+        { const _mid = od.mitra.id; roadDistanceKm(mitraLat, mitraLng, lat, lng).then(km => setAcceptedMitra(prev => prev && prev.id === _mid ? { ...prev, dist: km, etaMin: Math.ceil(calcEtaSecsLive(km) / 60) } : prev)); }
         setAcceptedMitra({ id: od.mitra.id, name: od.mitra.name, lat: mitraLat, lng: mitraLng, serviceType: od.mitra.serviceType, rating: od.mitra.rating ?? null, totalOrders: od.mitra.totalOrders ?? 0, dist, callFee: od.totalAmount ?? calcBiayaPanggilan("elektronik", dist), etaMin: Math.ceil(calcEtaSecsLive(dist, od.mitra?.speedKmh) / 60) });
         setOrderStatus("accepted");
       } else if (od.status === "cancelled") {
