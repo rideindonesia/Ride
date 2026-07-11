@@ -308,24 +308,33 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Jarak mengikuti jalan (OSRM). Fallback ke haversine jika gagal, agar order tetap bisa dibuat.
+// Faktor "belok-belokan" jalan. Dipakai HANYA sebagai jaring pengaman saat OSRM benar-benar
+// gagal — supaya jarak (dan biaya driver) tidak pernah memakai garis lurus mentah yang lebih
+// pendek dari jalan sebenarnya (merugikan driver). Estimasi jalan = garis lurus × faktor.
+const ROAD_DETOUR_FACTOR = 1.4;
+
+// Jarak mengikuti jalan (OSRM), dengan sekali percobaan ulang bila gagal. Kalau OSRM tetap
+// tidak bisa dihubungi, pakai estimasi jalan (garis lurus × faktor belok) — TIDAK PERNAH
+// garis lurus mentah.
 async function roadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number, log?: any): Promise<number> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 6000);
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (res.ok) {
-      const data: any = await res.json();
-      const meters = data?.routes?.[0]?.distance;
-      if (typeof meters === "number" && meters > 0) return meters / 1000;
+  const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (res.ok) {
+        const data: any = await res.json();
+        const meters = data?.routes?.[0]?.distance;
+        if (typeof meters === "number" && meters > 0) return meters / 1000;
+      }
+    } catch (err) {
+      if (attempt === 1) log?.warn?.({ err }, "OSRM gagal setelah retry — pakai estimasi jalan (garis lurus × faktor belok)");
+    } finally {
+      clearTimeout(timer);
     }
-  } catch (err) {
-    log?.warn?.({ err }, "OSRM road distance gagal, fallback ke haversine");
-  } finally {
-    clearTimeout(timer);
   }
-  return haversineKm(lat1, lng1, lat2, lng2);
+  return haversineKm(lat1, lng1, lat2, lng2) * ROAD_DETOUR_FACTOR;
 }
 
 // POST /api/pengguna/orders — buat order baru (multipart/form-data, foto opsional)

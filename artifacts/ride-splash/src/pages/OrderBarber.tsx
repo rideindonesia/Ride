@@ -32,11 +32,14 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   } catch { return ""; }
 }
 
+// Faktor "belok-belokan" jalan: estimasi jalan = garis lurus × faktor, supaya jarak
+// yang dipakai/ditampilkan tidak pernah garis lurus mentah (lebih pendek dari jalan).
+const ROAD_DETOUR_FACTOR = 1.4;
 function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * ROAD_DETOUR_FACTOR;
 }
 
 function StepProgress({ step }: { step: number }) {
@@ -175,9 +178,7 @@ export default function OrderBarber() {
   useEffect(() => { return () => { if (step === 2 && leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; gpsMarkerRef.current = null; } }; }, [step]);
 
   function calcDist(lat1: number, lng1: number, lat2: number, lng2: number) {
-    const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return haversineDist(lat1, lng1, lat2, lng2); // ikut faktor belok jalan (bukan garis lurus mentah)
   }
 
   useEffect(() => {

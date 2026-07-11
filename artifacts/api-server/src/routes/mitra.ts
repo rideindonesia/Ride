@@ -72,24 +72,31 @@ function serverHaversineKm(lat1: number, lng1: number, lat2: number, lng2: numbe
 // Harus sama dengan ORDER_RADIUS_KM di routes/pengguna.ts.
 const ORDER_RADIUS_KM = 25;
 
-// Jarak mengikuti jalan (OSRM). Fallback ke haversine jika gagal/timeout, agar fee tetap terhitung.
+// Faktor "belok-belokan" jalan. Jaring pengaman saat OSRM gagal — supaya fee driver tidak
+// pernah memakai garis lurus mentah (lebih pendek dari jalan → merugikan driver).
+const ROAD_DETOUR_FACTOR = 1.4;
+
+// Jarak mengikuti jalan (OSRM), dengan sekali percobaan ulang. Bila OSRM tetap gagal, pakai
+// estimasi jalan (garis lurus × faktor belok), TIDAK PERNAH garis lurus mentah.
 async function serverRoadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number, log?: any): Promise<number> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 6000);
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (res.ok) {
-      const data: any = await res.json();
-      const meters = data?.routes?.[0]?.distance;
-      if (typeof meters === "number" && meters > 0) return meters / 1000;
+  const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (res.ok) {
+        const data: any = await res.json();
+        const meters = data?.routes?.[0]?.distance;
+        if (typeof meters === "number" && meters > 0) return meters / 1000;
+      }
+    } catch (err) {
+      if (attempt === 1) log?.warn?.({ err }, "OSRM gagal setelah retry — pakai estimasi jalan (garis lurus × faktor belok)");
+    } finally {
+      clearTimeout(timer);
     }
-  } catch (err) {
-    log?.warn?.({ err }, "OSRM road distance gagal, fallback ke haversine");
-  } finally {
-    clearTimeout(timer);
   }
-  return serverHaversineKm(lat1, lng1, lat2, lng2);
+  return serverHaversineKm(lat1, lng1, lat2, lng2) * ROAD_DETOUR_FACTOR;
 }
 
 // Semua upload pakai memory storage dan dikirim ke Cloudinary

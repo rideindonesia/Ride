@@ -5,12 +5,16 @@ import { BIAYA_LAYANAN, PLATFORM_FEE_PCT, PLATFORM_FEE_PCT_TRIP, calcBiayaPanggi
 import { usePushNotification } from "../hooks/usePushNotification";
 import { useRideToast, RideToastContainer } from "../components/RideToast";
 
+// Faktor "belok-belokan" jalan: estimasi jalan = garis lurus × faktor, supaya angka jarak
+// yang tampil ke driver tidak pernah garis lurus mentah (lebih pendek dari jalan).
+const ROAD_DETOUR_FACTOR = 1.4;
+
 function haversineKmMitra(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * ROAD_DETOUR_FACTOR;
 }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -142,22 +146,26 @@ function haversineDist(lat1: number, lng1: number, lat2: number, lng2: number): 
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * ROAD_DETOUR_FACTOR;
 }
 
-// Jarak mengikuti jalan (OSRM) untuk preview fee. Fallback ke haversine bila gagal/timeout.
+// Jarak mengikuti jalan (OSRM) untuk preview fee, dengan retry. Bila OSRM tetap gagal →
+// estimasi jalan (haversineDist sudah × faktor belok), bukan garis lurus mentah.
 async function roadKm(lat1: number, lng1: number, lat2: number, lng2: number): Promise<number> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 6000);
-  try {
-    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`, { signal: ctrl.signal });
-    if (res.ok) {
-      const data = await res.json();
-      const meters = data?.routes?.[0]?.distance;
-      if (typeof meters === "number" && meters > 0) return meters / 1000;
+  const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (res.ok) {
+        const data = await res.json();
+        const meters = data?.routes?.[0]?.distance;
+        if (typeof meters === "number" && meters > 0) return meters / 1000;
+      }
+    } catch { /* retry lalu estimasi */ } finally {
+      clearTimeout(timer);
     }
-  } catch { /* fallback */ } finally {
-    clearTimeout(timer);
   }
   return haversineDist(lat1, lng1, lat2, lng2);
 }

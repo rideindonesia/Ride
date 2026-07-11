@@ -129,37 +129,49 @@ function haversineKmLocal(lat1: number, lng1: number, lat2: number, lng2: number
 const _roadCache = new Map<string, { km: number; at: number }>();
 const ROAD_CACHE_TTL_MS = 60_000;
 
+// Faktor "belok-belokan" jalan. Dipakai saat OSRM gagal supaya jarak yang dipakai untuk
+// biaya/ETA/tampilan tidak pernah garis lurus mentah (yang lebih pendek dari jalan).
+export const ROAD_DETOUR_FACTOR = 1.4;
+
+// Estimasi jalan sinkron (garis lurus × faktor belok) — untuk fallback & placeholder,
+// bukan garis lurus mentah.
+export function roadEstimateKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  return haversineKmLocal(lat1, lng1, lat2, lng2) * ROAD_DETOUR_FACTOR;
+}
+
 export async function roadDistanceKm(
   lat1: number, lng1: number, lat2: number, lng2: number,
 ): Promise<number> {
-  // Koordinat tidak valid → jangan lempar; kembalikan haversine (0 jika benar-benar kosong).
+  // Koordinat tidak valid → jangan lempar; pakai estimasi jalan (0 jika benar-benar kosong).
   if (![lat1, lng1, lat2, lng2].every(n => typeof n === "number" && Number.isFinite(n))) {
-    return haversineKmLocal(lat1 || 0, lng1 || 0, lat2 || 0, lng2 || 0);
+    return roadEstimateKm(lat1 || 0, lng1 || 0, lat2 || 0, lng2 || 0);
   }
   const key = `${lat1.toFixed(4)},${lng1.toFixed(4)};${lat2.toFixed(4)},${lng2.toFixed(4)}`;
   const cached = _roadCache.get(key);
   const now = Date.now();
   if (cached && now - cached.at < ROAD_CACHE_TTL_MS) return cached.km;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 7000);
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (res.ok) {
-      const data: any = await res.json();
-      const meters = data?.routes?.[0]?.distance;
-      if (typeof meters === "number" && meters > 0) {
-        const km = meters / 1000;
-        _roadCache.set(key, { km, at: now });
-        return km;
+  const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (res.ok) {
+        const data: any = await res.json();
+        const meters = data?.routes?.[0]?.distance;
+        if (typeof meters === "number" && meters > 0) {
+          const km = meters / 1000;
+          _roadCache.set(key, { km, at: now });
+          return km;
+        }
       }
+    } catch {
+      /* retry lalu estimasi jalan */
+    } finally {
+      clearTimeout(timer);
     }
-  } catch {
-    /* fallback haversine */
-  } finally {
-    clearTimeout(timer);
   }
-  return haversineKmLocal(lat1, lng1, lat2, lng2);
+  return roadEstimateKm(lat1, lng1, lat2, lng2);
 }
 
 export function trafficSpeedKmh(): number {
