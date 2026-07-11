@@ -1,6 +1,7 @@
 - [Session table on fresh DB](session-table-bundling.md) — connect-pg-simple's createTableIfMissing silently fails under esbuild bundle; create the `session` table in ensureSchema() instead.
 - [Seed settings gotcha](seed-settings-gotcha.md) — system_settings tarif upsert must run on EVERY /seed/admin call, not just admin-create branch, or tarif ends up empty & frontend falls back to hardcode.
 - [api-server typecheck debt](api-server-typecheck-debt.md) — ~25 pre-existing leaf typecheck errors (session cast + Express5 req.query/params string|string[]); dev runs via esbuild so not blocking; cast req.params.id with String() in new code.
+- [Admin account deletion](admin-account-deletion.md) — hard-delete pengguna(=must delete orders, notNull FK) & mitra(=null orders.mitraId); chat_messages FK must go before orders/user or txn rolls back; role-guarded.
 - [Order geo-locking](order-geo-locking.md) — orders locked to 25km radius (pickup↔mitra) at dispatch + polling(SQL, pre-limit) + accept guard; fail-open on missing coords; ORDER_RADIUS_KM duplicated in pengguna.ts & mitra.ts.
 - [Trip-vertical billing](trip-vertical-billing.md) — goride/gocar/gosend/goshop/gofood bill pickup→destination distance (freeKm 0), NOT mitra→pickup; keep isTripService sets in sync across pricing.ts/mitra.ts/pengguna.ts.
 - [GoFood merchant flow](gofood-merchant-flow.md) — 4th role warung; merchantStatus menunggu→diterima→siap gates ojol phase server-side; foodTotal MUST be recomputed from DB menu_items (client price is a fraud vector).

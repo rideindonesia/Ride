@@ -102,7 +102,7 @@ export default function Settings() {
   // Broadcast notifikasi
   const [bcTitle, setBcTitle] = useState("");
   const [bcBody, setBcBody] = useState("");
-  const [bcTarget, setBcTarget] = useState<"all" | "mitra" | "pengguna">("all");
+  const [bcTarget, setBcTarget] = useState<"all" | "mitra" | "pengguna" | "merchant">("all");
   const [bcResult, setBcResult] = useState<{ sent: number } | null>(null);
   const broadcastMut = useMutation({
     mutationFn: () => api.post("/admin/broadcast", { title: bcTitle, body: bcBody, target: bcTarget }),
@@ -220,7 +220,7 @@ export default function Settings() {
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Target Penerima</label>
             <div className="flex gap-2">
-              {[{ v: "all", l: "Semua" }, { v: "pengguna", l: "Konsumen" }, { v: "mitra", l: "Mitra" }].map(t => (
+              {[{ v: "all", l: "Semua" }, { v: "pengguna", l: "Konsumen" }, { v: "mitra", l: "Mitra" }, { v: "merchant", l: "Merchant" }].map(t => (
                 <button key={t.v} onClick={() => setBcTarget(t.v as any)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${bcTarget === t.v ? "bg-[#1a3a5c] text-white border-[#1a3a5c]" : "bg-white text-gray-600 border-gray-200 hover:border-[#1a3a5c]"}`}>
                   {t.l}

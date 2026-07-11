@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable, platformFeePaymentsTable, merchantsTable, menuItemsTable, merchantApplicationsTable } from "@workspace/db";
+import { db, usersTable, ordersTable, mitraApplicationsTable, mitraLocationsTable, systemSettingsTable, vouchersTable, reportsTable, platformFeePaymentsTable, merchantsTable, menuItemsTable, merchantApplicationsTable, chatMessagesTable, userAddressesTable, voucherUsageTable, notificationsTable, pushSubscriptionsTable, loginHistoryTable } from "@workspace/db";
 import { eq, and, or, desc, asc, sql, count, sum, ilike, gte, lte, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
@@ -340,6 +340,34 @@ router.patch("/mitra/:email/suspend", requireAdmin, async (req, res) => {
   res.json({ ok: true, isSuspended: newState });
 });
 
+// DELETE /api/admin/mitra/:email — hapus permanen akun mitra.
+// Riwayat order pengguna DIPERTAHANKAN (orders.mitraId di-set null), tapi lokasi,
+// tagihan platform fee, chat, & aplikasi mitra ikut dihapus. Aksi tidak bisa dibatalkan.
+router.delete("/mitra/:email", requireAdmin, async (req, res) => {
+  const email = decodeURIComponent(req.params.email);
+  const [user] = await db.select({ id: usersTable.id, isAdmin: usersTable.isAdmin, role: usersTable.role })
+    .from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  if (!user) { res.status(404).json({ error: "Mitra tidak ditemukan" }); return; }
+  if (user.isAdmin) { res.status(400).json({ error: "Akun admin tidak dapat dihapus dari sini" }); return; }
+  if (user.role !== "mitra") { res.status(400).json({ error: "Akun ini bukan mitra. Gunakan menu yang sesuai." }); return; }
+  const id = user.id;
+
+  await db.transaction(async (tx) => {
+    // Lepas keterkaitan order agar riwayat & keuangan pengguna tetap utuh
+    await tx.update(ordersTable).set({ mitraId: null }).where(eq(ordersTable.mitraId, id));
+    await tx.delete(chatMessagesTable).where(eq(chatMessagesTable.senderId, id));
+    await tx.delete(platformFeePaymentsTable).where(eq(platformFeePaymentsTable.mitraId, id));
+    await tx.delete(mitraLocationsTable).where(eq(mitraLocationsTable.userId, id));
+    await tx.delete(mitraApplicationsTable).where(eq(mitraApplicationsTable.email, email));
+    await tx.delete(reportsTable).where(eq(reportsTable.userId, id));
+    await tx.delete(notificationsTable).where(eq(notificationsTable.userId, id));
+    await tx.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.userId, id));
+    await tx.delete(loginHistoryTable).where(eq(loginHistoryTable.userId, id));
+    await tx.delete(usersTable).where(eq(usersTable.id, id));
+  });
+  res.json({ ok: true });
+});
+
 // ── Merchant / Warung Management ──────────────────────────────────────────────
 
 // GET /api/admin/merchant-applications?status=
@@ -504,6 +532,39 @@ router.patch("/pengguna/:id/suspend", requireAdmin, async (req, res) => {
   }
   await db.update(usersTable).set({ isSuspended: !!suspended }).where(eq(usersTable.id, id));
   res.json({ ok: true, isSuspended: !!suspended });
+});
+
+// DELETE /api/admin/pengguna/:id — hapus permanen akun pengguna + seluruh datanya.
+// PERINGATAN: orders.penggunaId adalah FK notNull, jadi menghapus pengguna WAJIB
+// menghapus seluruh riwayat order mereka (tidak bisa disisakan). Aksi tidak bisa dibatalkan.
+router.delete("/pengguna/:id", requireAdmin, async (req, res) => {
+  const id = parseInt(String(req.params.id));
+  const [user] = await db.select({ id: usersTable.id, isAdmin: usersTable.isAdmin, role: usersTable.role })
+    .from(usersTable).where(eq(usersTable.id, id)).limit(1);
+  if (!user) { res.status(404).json({ error: "Pengguna tidak ditemukan" }); return; }
+  if (user.isAdmin) { res.status(400).json({ error: "Akun admin tidak dapat dihapus dari sini" }); return; }
+  if (user.role !== "pengguna") { res.status(400).json({ error: "Akun ini bukan pengguna. Gunakan menu yang sesuai." }); return; }
+
+  await db.transaction(async (tx) => {
+    const userOrders = await tx.select({ id: ordersTable.id }).from(ordersTable).where(eq(ordersTable.penggunaId, id));
+    const orderIds = userOrders.map(o => o.id);
+    // Chat pada order milik pengguna (dari sisi manapun) + chat yang dia kirim
+    if (orderIds.length > 0) {
+      await tx.delete(chatMessagesTable).where(inArray(chatMessagesTable.orderId, orderIds as [number, ...number[]]));
+    }
+    await tx.delete(chatMessagesTable).where(eq(chatMessagesTable.senderId, id));
+    // orders (FK notNull) — harus dihapus
+    await tx.delete(ordersTable).where(eq(ordersTable.penggunaId, id));
+    // Data non-FK
+    await tx.delete(userAddressesTable).where(eq(userAddressesTable.penggunaId, id));
+    await tx.delete(voucherUsageTable).where(eq(voucherUsageTable.penggunaId, id));
+    await tx.delete(reportsTable).where(eq(reportsTable.userId, id));
+    await tx.delete(notificationsTable).where(eq(notificationsTable.userId, id));
+    await tx.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.userId, id));
+    await tx.delete(loginHistoryTable).where(eq(loginHistoryTable.userId, id));
+    await tx.delete(usersTable).where(eq(usersTable.id, id));
+  });
+  res.json({ ok: true });
 });
 
 // ── Orders Monitoring ─────────────────────────────────────────────────────────
@@ -1063,6 +1124,7 @@ router.post("/broadcast", requireAdmin, async (req, res) => {
   if (!title || !body) { res.status(400).json({ error: "title dan body wajib diisi" }); return; }
 
   const roleCondition = target === "mitra" ? eq(usersTable.role, "mitra")
+    : target === "merchant" ? eq(usersTable.role, "merchant")
     : target === "pengguna" ? eq(usersTable.role, "pengguna") : null;
   const whereClause = roleCondition
     ? and(eq(usersTable.isSuspended, false), roleCondition)
