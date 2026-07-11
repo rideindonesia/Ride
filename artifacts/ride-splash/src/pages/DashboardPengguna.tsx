@@ -30,14 +30,14 @@ L.Icon.Default.mergeOptions({
 });
 
 const ACTIVE_SERVICES = [
+  { id: "ride_auto", label: "Ride Auto", emoji: "🔧", color: "#1a3a5c" },
+  { id: "ride_service", label: "Ride Service", emoji: "💡", color: "#2a3a7c" },
   { id: "ride_goride", label: "Ride Ojek", emoji: "🏍️", color: "#0a6b3d" },
-  { id: "ride_gocar", label: "Ride Mobil", emoji: "🚗", color: "#0a5c6b" },
   { id: "ride_gofood", label: "Ride Makan", emoji: "🍔", color: "#a83214" },
+  { id: "ride_gocar", label: "Ride Mobil", emoji: "🚗", color: "#0a5c6b" },
   { id: "ride_gosend", label: "Ride Kirim", emoji: "📦", color: "#6b4a0a" },
   { id: "ride_goshop", label: "Ride Belanja", emoji: "🛍️", color: "#6b0a4a" },
-  { id: "ride_auto", label: "Ride Auto", emoji: "🔧", color: "#1a3a5c" },
   { id: "ride_towing", label: "Ride Towing", emoji: "🚛", color: "#1a4a7c" },
-  { id: "ride_service", label: "Ride Service", emoji: "💡", color: "#2a3a7c" },
   { id: "ride_barber", label: "Ride Barber", emoji: "✂️", color: "#7c2a2a" },
   { id: "ride_wash", label: "Ride Wash", emoji: "🚿", color: "#1a5c7c" },
   { id: "ride_inspection", label: "Ride Inspection", emoji: "🔍", color: "#2a5c2a" },
