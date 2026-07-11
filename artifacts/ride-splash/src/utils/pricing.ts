@@ -5,9 +5,9 @@ export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm
   cuci:       { base: 12000, freeKm: 3, perKm: 2500 },
   inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
-  // Mobil (gocar): tarif flat nasional ≈ Maxim Car, sedikit lebih murah.
-  // Biaya awal Rp4.000 + Rp3.800/km sejak km 0 (freeKm: 0).
-  gocar:      { base: 4000,  freeKm: 0, perKm: 3800 },
+  // Mobil (gocar): tarif flat nasional ≈ Maxim Car, sedikit lebih murah (~Rp1-2rb).
+  // Biaya awal Rp5.000 + Rp4.500/km sejak km 0 (freeKm: 0).
+  gocar:      { base: 5000,  freeKm: 0, perKm: 4500 },
 };
 
 // Verticals whose fare is based on the trip distance (pickup → destination),
