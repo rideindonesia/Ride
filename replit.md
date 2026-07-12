@@ -220,9 +220,9 @@ Dibulatkan ke kelipatan Rp 500 terdekat
 ```
 | Biaya Awal | Per Km |
 |---|---|
-| Rp 7.500 | Rp 4.500/km |
+| Rp 9.150 | Rp 4.290/km |
 
-> Naik dari Rp 5.000 (12/07/2026) agar selisih ~Rp 1.000–1.200 lebih murah dari Maxim Car (sebelumnya terlalu murah, contoh 6,4 km: RIDE Rp 34.000 vs Maxim Rp 37.700).
+> Naik dari Rp 5.000 (12/07/2026) lalu dikalibrasi ULANG (12/07/2026, hari yang sama) dari 2 data trip nyata — nilai perantara Rp7.500/Rp4.500/km (hasil 1 titik data 6,4km Balikpapan) ternyata jadi lebih MAHAL dari Maxim di trip jarak menengah (32,7 km Halim→Bogor: RIDE Rp154.500 vs Maxim Rp150.600, selisih -Rp3.900). Base & per-km disolve dari 2 titik data sekaligus: 6,4 km Balikpapan → RIDE Rp 36.500 vs Maxim Car Rp 37.700 (selisih Rp 1.200); 32,7 km Halim→Bogor → RIDE Rp 149.500 vs Maxim Car Rp 150.600 (selisih Rp 1.100).
 > Sumber: `CALL_FEE_CONFIG.gocar` di `pricing.ts` (frontend), `CALL_FEE_CONFIG.gocar` di `mitra.ts` (backend fallback), seed `call_fee_gocar_base`/`call_fee_gocar_per_km` di `system_settings`
 
 **Tarif RIDE Kirim (gosend) — TERPISAH dari tarif Ride Motor, per zona, minimum menutup 4 km pertama:**

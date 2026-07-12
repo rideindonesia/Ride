@@ -19,8 +19,8 @@ const CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm: num
   inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
   // Mobil (gocar): tarif flat nasional, biaya awal + per km sejak km 0.
-  // Selisih target ~Rp1.000-1.200 lebih murah dari Maxim Car.
-  gocar:      { base: 7500,  freeKm: 0, perKm: 4500 },
+  // Dikalibrasi ulang 12/07/2026 dari 2 data trip nyata (lihat pricing.ts).
+  gocar:      { base: 9150,  freeKm: 0, perKm: 4290 },
 };
 // Verticals whose fare is based on trip distance (pickup→destination) with no free km.
 const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);

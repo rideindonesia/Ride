@@ -6,8 +6,10 @@ export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm
   inspeksi:   { base: 20000, freeKm: 3, perKm: 3000 },
   towing:     { base: 75000, freeKm: 3, perKm: 8000 },
   // Mobil (gocar): tarif flat nasional, selisih ~Rp1.000-1.200 lebih murah dari Maxim Car.
-  // Biaya awal Rp7.500 + Rp4.500/km sejak km 0 (freeKm: 0).
-  gocar:      { base: 7500,  freeKm: 0, perKm: 4500 },
+  // Dikalibrasi ulang 12/07/2026 dari 2 data trip nyata (6,4km Balikpapan & 32,7km Halim→
+  // Bogor) — nilai lama (7500/4500, hasil 1 titik data pendek) jadi lebih MAHAL dari Maxim
+  // di trip jarak menengah. Biaya awal Rp9.150 + Rp4.290/km sejak km 0 (freeKm: 0).
+  gocar:      { base: 9150,  freeKm: 0, perKm: 4290 },
 };
 
 // Verticals whose fare is based on the trip distance (pickup → destination),
