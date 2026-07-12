@@ -392,6 +392,15 @@ router.post("/admin", async (_req, res) => {
     { key: "belanja_zone3_base", value: "9000", label: "RIDE Belanja — Zona III — Tarif Minimum s/d 4 km (Rp)" },
     { key: "belanja_zone3_per_km", value: "2000", label: "RIDE Belanja — Zona III — Per Km berikutnya (Rp)" },
     { key: "belanja_free_km", value: "4", label: "RIDE Belanja — KM tercakup tarif minimum" },
+    // RIDE Makan (gofood): tarif zona sendiri — target ~Rp1.000 lebih MAHAL dari Maxim Delivery
+    // (instruksi pemilik 12/07/2026).
+    { key: "food_zone1_base", value: "11700", label: "RIDE Makan — Zona I — Tarif Minimum s/d 4 km (Rp)" },
+    { key: "food_zone1_per_km", value: "1500", label: "RIDE Makan — Zona I — Per Km berikutnya (Rp)" },
+    { key: "food_zone2_base", value: "12900", label: "RIDE Makan — Zona II (Jabodetabek) — Tarif Minimum s/d 4 km (Rp)" },
+    { key: "food_zone2_per_km", value: "2000", label: "RIDE Makan — Zona II (Jabodetabek) — Per Km berikutnya (Rp)" },
+    { key: "food_zone3_base", value: "11700", label: "RIDE Makan — Zona III — Tarif Minimum s/d 4 km (Rp)" },
+    { key: "food_zone3_per_km", value: "2000", label: "RIDE Makan — Zona III — Per Km berikutnya (Rp)" },
+    { key: "food_free_km", value: "4", label: "RIDE Makan — KM tercakup tarif minimum" },
     { key: "call_fee_free_km", value: "3", label: "Jarak Gratis Jasa Panggilan (km)" },
     { key: "biaya_layanan_admin", value: "2000", label: "Biaya Layanan & Admin (Rp)" },
     { key: "platform_fee_pct", value: "15", label: "Platform Fee Jasa Panggilan (%)" },

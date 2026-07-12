@@ -28,10 +28,10 @@ function isTripService(serviceType: string): boolean {
   return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
 
-// Kurir motor (goride/gofood): tarif per ZONA, minimum menutup MOTOR_FREE_KM pertama.
-// gosend (RIDE Kirim) & goshop (RIDE Belanja) punya tarif zona sendiri masing² — sengaja
-// tidak ikut naik, target lebih MAHAL dari Maxim (instruksi pemilik 12/07/2026).
-const MOTOR_TRIP_SERVICES = new Set(["goride", "gofood"]);
+// Kurir motor (goride): tarif per ZONA, minimum menutup MOTOR_FREE_KM pertama.
+// gosend (RIDE Kirim), goshop (RIDE Belanja) & gofood (RIDE Makan) punya tarif zona sendiri
+// masing² — sengaja tidak ikut naik, target lebih MAHAL dari Maxim (instruksi pemilik 12/07/2026).
+const MOTOR_TRIP_SERVICES = new Set(["goride"]);
 function isMotorTripService(serviceType: string): boolean {
   return MOTOR_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
@@ -57,6 +57,15 @@ const BELANJA_ZONE_DEFAULT: Record<number, { base: number; perKm: number }> = {
   1: { base: 9000,  perKm: 1500 },
   2: { base: 10000, perKm: 2000 },
   3: { base: 9000,  perKm: 2000 },
+};
+const FOOD_TRIP_SERVICES = new Set(["gofood"]);
+function isFoodTripService(serviceType: string): boolean {
+  return FOOD_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
+const FOOD_ZONE_DEFAULT: Record<number, { base: number; perKm: number }> = {
+  1: { base: 11700, perKm: 1500 },
+  2: { base: 12900, perKm: 2000 },
+  3: { base: 11700, perKm: 2000 },
 };
 // Tentukan zona tarif dari koordinat titik jemput (batas geografis Indonesia, konstanta).
 // Mirror artifacts/ride-splash/src/utils/pricing.ts → zoneFromCoords. Keep in sync.
@@ -777,9 +786,10 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
       const motorTrip = isMotorTripService(svcKey);
       const kirimTrip = isKirimTripService(svcKey);
       const belanjaTrip = isBelanjaTripService(svcKey);
+      const foodTrip = isFoodTripService(svcKey);
       const biayaLayananDB = parseInt(sMap["biaya_layanan_admin"] ?? "2000") || 2000;
 
-      // Zona tarif berdasarkan titik jemput (hanya relevan untuk kurir motor/kirim/belanja).
+      // Zona tarif berdasarkan titik jemput (hanya relevan untuk kurir motor/kirim/belanja/makan).
       const zone = zoneFromCoords(updated.pickupLat, updated.pickupLng);
 
       let base: number, perKm: number, freeKm: number;
@@ -793,6 +803,11 @@ router.patch("/orders/:id/accept", requireMitra, async (req, res) => {
         base = parseInt(sMap[`belanja_zone${zone}_base`] ?? "") || BELANJA_ZONE_DEFAULT[zone].base;
         perKm = parseInt(sMap[`belanja_zone${zone}_per_km`] ?? "") || BELANJA_ZONE_DEFAULT[zone].perKm;
         freeKm = parseFloat(sMap["belanja_free_km"] ?? "4") || 4;
+      } else if (foodTrip) {
+        // RIDE Makan (gofood): tarif zona sendiri, minimum menutup food_free_km pertama.
+        base = parseInt(sMap[`food_zone${zone}_base`] ?? "") || FOOD_ZONE_DEFAULT[zone].base;
+        perKm = parseInt(sMap[`food_zone${zone}_per_km`] ?? "") || FOOD_ZONE_DEFAULT[zone].perKm;
+        freeKm = parseFloat(sMap["food_free_km"] ?? "4") || 4;
       } else if (motorTrip) {
         // Kurir motor (goride/goshop/gofood): tarif per zona, minimum menutup motor_free_km pertama.
         base = parseInt(sMap[`motor_zone${zone}_base`] ?? "") || MOTOR_ZONE_DEFAULT[zone].base;

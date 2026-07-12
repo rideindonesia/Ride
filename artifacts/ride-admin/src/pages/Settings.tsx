@@ -42,6 +42,13 @@ const KEY_LABELS: Record<string, string> = {
   belanja_zone3_base: "RIDE Belanja — Zona III — Tarif Minimum s/d 4 km (Rp)",
   belanja_zone3_per_km: "RIDE Belanja — Zona III — Per KM berikutnya (Rp)",
   belanja_free_km: "RIDE Belanja — KM tercakup tarif minimum",
+  food_zone1_base: "RIDE Makan — Zona I — Tarif Minimum s/d 4 km (Rp)",
+  food_zone1_per_km: "RIDE Makan — Zona I — Per KM berikutnya (Rp)",
+  food_zone2_base: "RIDE Makan — Zona II (Jabodetabek) — Tarif Minimum s/d 4 km (Rp)",
+  food_zone2_per_km: "RIDE Makan — Zona II (Jabodetabek) — Per KM berikutnya (Rp)",
+  food_zone3_base: "RIDE Makan — Zona III — Tarif Minimum s/d 4 km (Rp)",
+  food_zone3_per_km: "RIDE Makan — Zona III — Per KM berikutnya (Rp)",
+  food_free_km: "RIDE Makan — KM tercakup tarif minimum",
   call_fee_free_km: "KM Gratis Jasa Panggilan (tidak ada biaya per km sebelum jarak ini)",
   biaya_layanan_admin: "Biaya Admin/Layanan Tetap (Rp)",
   platform_fee_pct: "Platform Fee Jasa Panggilan (%)",
@@ -62,7 +69,7 @@ const SETTING_GROUPS = [
     ],
   },
   {
-    label: "Ride Motor per Zona (Ojek / Makan)",
+    label: "Ride Motor per Zona (Ojek)",
     keys: [
       "motor_zone1_base", "motor_zone1_per_km",
       "motor_zone2_base", "motor_zone2_per_km",
@@ -86,6 +93,15 @@ const SETTING_GROUPS = [
       "belanja_zone2_base", "belanja_zone2_per_km",
       "belanja_zone3_base", "belanja_zone3_per_km",
       "belanja_free_km",
+    ],
+  },
+  {
+    label: "RIDE Makan per Zona (tarif terpisah dari Ride Motor)",
+    keys: [
+      "food_zone1_base", "food_zone1_per_km",
+      "food_zone2_base", "food_zone2_per_km",
+      "food_zone3_base", "food_zone3_per_km",
+      "food_free_km",
     ],
   },
   {

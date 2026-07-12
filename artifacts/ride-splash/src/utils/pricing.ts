@@ -15,11 +15,11 @@ export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm
 export const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
 
 // Layanan berbasis kurir motor: tarif per ZONA (batas bawah Kemenhub KP 564/2022).
-// goride (ride motor), gofood (antar makanan ongkir).
-// gosend (kirim) & goshop (belanja) punya tarif sendiri masing² — lihat KIRIM_ZONE_CONFIG
-// & BELANJA_ZONE_CONFIG di bawah, karena kebijakan harganya beda (boleh lebih mahal dari
-// Maxim, bukan lebih murah).
-export const MOTOR_TRIP_SERVICES = new Set(["goride", "gofood"]);
+// goride (ride motor) — kebijakan lebih murah dari Maxim.
+// gosend (kirim), goshop (belanja) & gofood (makan) punya tarif sendiri masing² — lihat
+// KIRIM_ZONE_CONFIG / BELANJA_ZONE_CONFIG / FOOD_ZONE_CONFIG di bawah, karena kebijakan
+// harganya beda (boleh lebih mahal dari Maxim, bukan lebih murah).
+export const MOTOR_TRIP_SERVICES = new Set(["goride"]);
 
 // { base = tarif minimum (menutup MOTOR_FREE_KM pertama), perKm = per km berikutnya }
 export let MOTOR_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
@@ -51,6 +51,17 @@ export let BELANJA_ZONE_CONFIG: Record<number, { base: number; perKm: number }> 
 };
 export let BELANJA_FREE_KM = 4;
 
+// RIDE Makan (gofood): tarif per zona sendiri — target ~Rp1.000 lebih MAHAL dari Maxim
+// Delivery (instruksi pemilik 12/07/2026). Base dinaikkan dari tarif motor standar agar
+// pas di rounding Rp500 terdekat (Zona III 6,4km Balikpapan: Rp16.500 vs Maxim Rp15.400).
+export const FOOD_TRIP_SERVICES = new Set(["gofood"]);
+export let FOOD_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
+  1: { base: 11700, perKm: 1500 },
+  2: { base: 12900, perKm: 2000 },
+  3: { base: 11700, perKm: 2000 },
+};
+export let FOOD_FREE_KM = 4;
+
 export function isTripService(serviceType: string): boolean {
   return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
@@ -65,6 +76,10 @@ export function isKirimTripService(serviceType: string): boolean {
 
 export function isBelanjaTripService(serviceType: string): boolean {
   return BELANJA_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
+
+export function isFoodTripService(serviceType: string): boolean {
+  return FOOD_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
 
 // Tentukan zona tarif dari koordinat titik jemput. Batas geografis Indonesia (konstanta,
@@ -146,6 +161,17 @@ export async function loadTarif(apiBase: string = ""): Promise<void> {
     const bFree = parseFloat(tarif["belanja_free_km"] ?? "4");
     if (!isNaN(bFree)) BELANJA_FREE_KM = bFree;
 
+    // RIDE Makan (gofood) pakai tarif zona sendiri, terpisah dari motor/kirim/belanja.
+    const newFoodZone: typeof FOOD_ZONE_CONFIG = { ...FOOD_ZONE_CONFIG };
+    for (const z of [1, 2, 3]) {
+      const base = parseInt(tarif[`food_zone${z}_base`] ?? "");
+      const perKm = parseInt(tarif[`food_zone${z}_per_km`] ?? "");
+      if (!isNaN(base) && !isNaN(perKm)) newFoodZone[z] = { base, perKm };
+    }
+    FOOD_ZONE_CONFIG = newFoodZone;
+    const fFree = parseFloat(tarif["food_free_km"] ?? "4");
+    if (!isNaN(fFree)) FOOD_FREE_KM = fFree;
+
     BIAYA_LAYANAN = biayaLayanan;
     _tarifLoaded = true;
   } catch {
@@ -163,6 +189,10 @@ export function calcBiayaPanggilan(serviceType: string, distKm: number, zone: nu
     // RIDE Belanja: tarif per zona sendiri, minimum menutup BELANJA_FREE_KM pertama.
     const cfg = BELANJA_ZONE_CONFIG[zone] ?? BELANJA_ZONE_CONFIG[3];
     raw = cfg.base + Math.max(0, distKm - BELANJA_FREE_KM) * cfg.perKm;
+  } else if (FOOD_TRIP_SERVICES.has(key)) {
+    // RIDE Makan: tarif per zona sendiri, minimum menutup FOOD_FREE_KM pertama.
+    const cfg = FOOD_ZONE_CONFIG[zone] ?? FOOD_ZONE_CONFIG[3];
+    raw = cfg.base + Math.max(0, distKm - FOOD_FREE_KM) * cfg.perKm;
   } else if (MOTOR_TRIP_SERVICES.has(key)) {
     // Kurir motor: tarif per zona, minimum menutup MOTOR_FREE_KM pertama.
     const cfg = MOTOR_ZONE_CONFIG[zone] ?? MOTOR_ZONE_CONFIG[3];
