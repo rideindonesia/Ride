@@ -374,6 +374,15 @@ router.post("/admin", async (_req, res) => {
     { key: "motor_zone3_base", value: "11000", label: "Zona III — Tarif Minimum s/d 4 km (Rp)" },
     { key: "motor_zone3_per_km", value: "2000", label: "Zona III — Per Km berikutnya (Rp)" },
     { key: "motor_free_km", value: "4", label: "Kurir Motor — KM tercakup tarif minimum" },
+    // RIDE Kirim (gosend): tarif zona sendiri, sengaja lebih murah daripada tarif motor lain —
+    // target ~Rp1.100 lebih MAHAL dari Maxim Delivery (instruksi pemilik 12/07/2026).
+    { key: "kirim_zone1_base", value: "9000", label: "RIDE Kirim — Zona I — Tarif Minimum s/d 4 km (Rp)" },
+    { key: "kirim_zone1_per_km", value: "1500", label: "RIDE Kirim — Zona I — Per Km berikutnya (Rp)" },
+    { key: "kirim_zone2_base", value: "10000", label: "RIDE Kirim — Zona II (Jabodetabek) — Tarif Minimum s/d 4 km (Rp)" },
+    { key: "kirim_zone2_per_km", value: "2000", label: "RIDE Kirim — Zona II (Jabodetabek) — Per Km berikutnya (Rp)" },
+    { key: "kirim_zone3_base", value: "9000", label: "RIDE Kirim — Zona III — Tarif Minimum s/d 4 km (Rp)" },
+    { key: "kirim_zone3_per_km", value: "2000", label: "RIDE Kirim — Zona III — Per Km berikutnya (Rp)" },
+    { key: "kirim_free_km", value: "4", label: "RIDE Kirim — KM tercakup tarif minimum" },
     { key: "call_fee_free_km", value: "3", label: "Jarak Gratis Jasa Panggilan (km)" },
     { key: "biaya_layanan_admin", value: "2000", label: "Biaya Layanan & Admin (Rp)" },
     { key: "platform_fee_pct", value: "15", label: "Platform Fee Jasa Panggilan (%)" },

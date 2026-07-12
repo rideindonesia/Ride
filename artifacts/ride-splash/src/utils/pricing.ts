@@ -15,9 +15,10 @@ export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm
 export const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
 
 // Layanan berbasis kurir motor: tarif per ZONA (batas bawah Kemenhub KP 564/2022).
-// goride (ride motor), gosend (antar barang), goshop (belanja ongkir), gofood (antar makanan ongkir).
-// Semuanya berbagi satu tarif per zona; minimum menutup 4 km pertama (MOTOR_FREE_KM).
-export const MOTOR_TRIP_SERVICES = new Set(["goride", "gosend", "goshop", "gofood"]);
+// goride (ride motor), goshop (belanja ongkir), gofood (antar makanan ongkir).
+// gosend (kirim barang) punya tarif sendiri — lihat KIRIM_ZONE_CONFIG di bawah, karena
+// kebijakan harganya beda (RIDE Kirim boleh lebih mahal dari Maxim, bukan lebih murah).
+export const MOTOR_TRIP_SERVICES = new Set(["goride", "goshop", "gofood"]);
 
 // { base = tarif minimum (menutup MOTOR_FREE_KM pertama), perKm = per km berikutnya }
 export let MOTOR_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
@@ -27,12 +28,27 @@ export let MOTOR_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = 
 };
 export let MOTOR_FREE_KM = 4;
 
+// RIDE Kirim (gosend): tarif per zona sendiri, sengaja TIDAK ikut naik seperti goride —
+// target ~Rp1.100 lebih MAHAL dari Maxim Delivery (bukan lebih murah), sesuai instruksi
+// pemilik (12/07/2026). Nilai sama seperti tarif motor lama sebelum kenaikan 12/07/2026.
+export const KIRIM_TRIP_SERVICES = new Set(["gosend"]);
+export let KIRIM_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
+  1: { base: 9000,  perKm: 1500 },
+  2: { base: 10000, perKm: 2000 },
+  3: { base: 9000,  perKm: 2000 },
+};
+export let KIRIM_FREE_KM = 4;
+
 export function isTripService(serviceType: string): boolean {
   return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
 
 export function isMotorTripService(serviceType: string): boolean {
   return MOTOR_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
+
+export function isKirimTripService(serviceType: string): boolean {
+  return KIRIM_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
 
 // Tentukan zona tarif dari koordinat titik jemput. Batas geografis Indonesia (konstanta,
@@ -92,6 +108,17 @@ export async function loadTarif(apiBase: string = ""): Promise<void> {
     const mFree = parseFloat(tarif["motor_free_km"] ?? "4");
     if (!isNaN(mFree)) MOTOR_FREE_KM = mFree;
 
+    // RIDE Kirim (gosend) pakai tarif zona sendiri, terpisah dari motor.
+    const newKirimZone: typeof KIRIM_ZONE_CONFIG = { ...KIRIM_ZONE_CONFIG };
+    for (const z of [1, 2, 3]) {
+      const base = parseInt(tarif[`kirim_zone${z}_base`] ?? "");
+      const perKm = parseInt(tarif[`kirim_zone${z}_per_km`] ?? "");
+      if (!isNaN(base) && !isNaN(perKm)) newKirimZone[z] = { base, perKm };
+    }
+    KIRIM_ZONE_CONFIG = newKirimZone;
+    const kFree = parseFloat(tarif["kirim_free_km"] ?? "4");
+    if (!isNaN(kFree)) KIRIM_FREE_KM = kFree;
+
     BIAYA_LAYANAN = biayaLayanan;
     _tarifLoaded = true;
   } catch {
@@ -101,7 +128,11 @@ export async function loadTarif(apiBase: string = ""): Promise<void> {
 export function calcBiayaPanggilan(serviceType: string, distKm: number, zone: number = 3): number {
   const key = serviceType.toLowerCase().replace(/[\s_-]+/g, "");
   let raw: number;
-  if (MOTOR_TRIP_SERVICES.has(key)) {
+  if (KIRIM_TRIP_SERVICES.has(key)) {
+    // RIDE Kirim: tarif per zona sendiri, minimum menutup KIRIM_FREE_KM pertama.
+    const cfg = KIRIM_ZONE_CONFIG[zone] ?? KIRIM_ZONE_CONFIG[3];
+    raw = cfg.base + Math.max(0, distKm - KIRIM_FREE_KM) * cfg.perKm;
+  } else if (MOTOR_TRIP_SERVICES.has(key)) {
     // Kurir motor: tarif per zona, minimum menutup MOTOR_FREE_KM pertama.
     const cfg = MOTOR_ZONE_CONFIG[zone] ?? MOTOR_ZONE_CONFIG[3];
     raw = cfg.base + Math.max(0, distKm - MOTOR_FREE_KM) * cfg.perKm;

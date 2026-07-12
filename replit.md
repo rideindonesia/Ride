@@ -224,6 +224,20 @@ Dibulatkan ke kelipatan Rp 500 terdekat
 > Naik dari Rp 5.000 (12/07/2026) agar selisih ~Rp 1.000–1.200 lebih murah dari Maxim Car (sebelumnya terlalu murah, contoh 6,4 km: RIDE Rp 34.000 vs Maxim Rp 37.700).
 > Sumber: `CALL_FEE_CONFIG.gocar` di `pricing.ts` (frontend), `CALL_FEE_CONFIG.gocar` di `mitra.ts` (backend fallback), seed `call_fee_gocar_base`/`call_fee_gocar_per_km` di `system_settings`
 
+**Tarif RIDE Kirim (gosend) — TERPISAH dari tarif Ride Motor, per zona, minimum menutup 4 km pertama:**
+```
+Tarif = Tarif Minimum + Per Km × max(0, jarak - 4 km)
+Dibulatkan ke kelipatan Rp 500 terdekat
+```
+| Zona | Tarif Minimum (s/d 4km) | Per Km berikutnya |
+|---|---|---|
+| Zona I (Sumatra, Jawa non-Jabodetabek, Bali) | Rp 9.000 | Rp 1.500/km |
+| Zona II (Jabodetabek) | Rp 10.000 | Rp 2.000/km |
+| Zona III (Kalimantan, Sulawesi, NT, Maluku, Papua) | Rp 9.000 | Rp 2.000/km |
+
+> KRUSIAL — jangan disamakan dengan tarif Ride Motor di atas. Kebijakan RIDE Kirim SENGAJA dibuat berbeda: pemilik OK jika RIDE Kirim lebih MAHAL ~Rp1.100 daripada Maxim Delivery (bukan lebih murah), karena itu tarifnya sengaja tidak dinaikkan bersamaan dengan tarif motor pada 12/07/2026. Contoh terverifikasi: 6,4 km Balikpapan → RIDE Kirim Rp 14.000 vs Maxim Delivery Rp 12.900 (selisih Rp 1.100, sesuai target, 12/07/2026).
+> Sumber: `KIRIM_ZONE_CONFIG` di `pricing.ts` (frontend), `KIRIM_ZONE_DEFAULT` di `mitra.ts` (backend fallback), seed `kirim_zone*_base`/`kirim_zone*_per_km`/`kirim_free_km` di `system_settings` (bisa diedit admin di Pengaturan, grup terpisah dari Ride Motor)
+
 ### Alur Pembayaran (Payment Flow)
 - **Mitra side**: Form rincian biaya (biaya jasa + sparepart) di fase "selesai"; tombol "Kirim Rincian" → `PATCH /api/mitra/orders/:id/payment-data` + chat message; "Konfirmasi Pembayaran Selesai" → `PATCH /api/mitra/orders/:id/done`
 - **Pengguna side (Step 5)**: 3 state: (1) Menunggu — paymentData null; (2) Rincian diterima — breakdown + kode voucher (RIDE10/RIDE20/GRATIS) + pilih metode bayar cash/transfer/QRIS + "Konfirmasi Pembayaran"; (3) Berhasil — Struk + Beri Ulasan
