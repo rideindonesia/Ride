@@ -1,13 +1,4 @@
-- [Session table on fresh DB](session-table-bundling.md) — connect-pg-simple's createTableIfMissing silently fails under esbuild bundle; create the `session` table in ensureSchema() instead.
-- [Seed settings gotcha](seed-settings-gotcha.md) — system_settings tarif upsert must run on EVERY /seed/admin call, not just admin-create branch, or tarif ends up empty & frontend falls back to hardcode.
-- [api-server typecheck debt](api-server-typecheck-debt.md) — ~25 pre-existing leaf typecheck errors (session cast + Express5 req.query/params string|string[]); dev runs via esbuild so not blocking; cast req.params.id with String() in new code.
-- [Admin account deletion](admin-account-deletion.md) — hard-delete pengguna(=must delete orders, notNull FK) & mitra(=null orders.mitraId); chat_messages FK must go before orders/user or txn rolls back; role-guarded.
-- [Order geo-locking](order-geo-locking.md) — orders locked to 25km radius (pickup↔mitra) at dispatch + polling(SQL, pre-limit) + accept guard; fail-open on missing coords; ORDER_RADIUS_KM duplicated in pengguna.ts & mitra.ts.
-- [Trip-vertical billing](trip-vertical-billing.md) — goride/gocar/gosend/goshop/gofood bill pickup→destination distance (freeKm 0), NOT mitra→pickup; keep isTripService sets in sync across pricing.ts/mitra.ts/pengguna.ts.
-- [Road distance (OSRM)](road-distance-osrm.md) — all fares & shown travel distances must use OSRM road distance (haversine only for geofence + live per-tick tracking); shared roadDistanceKm() in utils/pricing.ts.
-- [GoFood merchant flow](gofood-merchant-flow.md) — 4th role warung; merchantStatus menunggu→diterima→siap gates ojol phase server-side; foodTotal MUST be recomputed from DB menu_items (client price is a fraud vector).
-- [Phone uniqueness](phone-uniqueness.md) — "1 HP = 1 akun" needs app-level isPhoneRegistered AT verify-otp (not just register) + DB users_phone_unique; drizzle push is interactive so add constraint via psql.
-- [Railway single-server deploy](railway-single-server-deploy.md) — api-server already serves ./public + ./public/admin; Railway needs build:railway (--prod=false, per-frontend BASE_PATH) not root build; no backend change.
-- [DB URL env gating](db-url-env-gating.md) — NEON_DATABASE_URL gated behind NODE_ENV==='production' in lib/db + session; else dev workspace hijacks to prod DB. Secrets can't be deleted via deleteEnvVars.
-- [Notification role delivery](notification-role-resolution.md) — bell feed works for pengguna/mitra; warung (DashboardMerchant) has NO bell UI; warung logs in via mitra form but session.merchantId; reject status surfaced at login (no account).
-- [OTP provider (Fazpass)](otp-provider.md) — OTP send/verify runs on Fazpass (/v1/otp/request+verify, Bearer merchant_key + gateway_key); status is boolean; short expiry → correct code late = HTTP403 "OTP invalid". OTP.id dropped (delivery never worked).
+# Memory Index
+
+- [Importing an existing multi-artifact repo from GitHub](importing-existing-multiartifact-repo.md) — how to bring in a repo that already has multiple artifacts and register the missing ones.
+- [Ride app secrets](ride-app-optional-secrets.md) — which optional integrations are wired in code but have no secret set yet.
