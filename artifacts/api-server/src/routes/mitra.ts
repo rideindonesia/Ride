@@ -39,7 +39,8 @@ const MOTOR_ZONE_DEFAULT: Record<number, { base: number; perKm: number }> = {
   1: { base: 11000, perKm: 1500 },
   // Zona II — Jabodetabek. Dikalibrasi ulang 12/07/2026 dari 2 data trip nyata (lihat pricing.ts).
   2: { base: 13400, perKm: 2840 },
-  3: { base: 11000, perKm: 2000 },
+  // Zona III — Kalimantan dkk. Dikalibrasi ulang 12/07/2026 dari 2 data trip nyata (lihat pricing.ts).
+  3: { base: 9150, perKm: 2750 },
 };
 const KIRIM_TRIP_SERVICES = new Set(["gosend"]);
 function isKirimTripService(serviceType: string): boolean {

@@ -30,7 +30,10 @@ export let MOTOR_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = 
   // 33,2km & Halim→Bandung 171,8km) karena base/perKm lama (12200/2000) terlalu murah untuk
   // trip jarak menengah-jauh di Jabodetabek.
   2: { base: 13400, perKm: 2840 },
-  3: { base: 11000, perKm: 2000 }, // Zona III — Kalimantan, Sulawesi, NT, Maluku, Papua
+  // Zona III — Kalimantan, Sulawesi, NT, Maluku, Papua. Dikalibrasi ulang 12/07/2026 dari
+  // 2 data trip nyata Balikpapan (6,4km & 10,5km) karena base/perKm lama (11000/2000) sudah
+  // pas di trip pendek tapi jadi terlalu murah (selisih Rp3.900) di trip 10,5km.
+  3: { base: 9150, perKm: 2750 },
 };
 export let MOTOR_FREE_KM = 4;
 
