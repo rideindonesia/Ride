@@ -206,10 +206,11 @@ Dibulatkan ke kelipatan Rp 500 terdekat
 | Zona | Cakupan | Tarif Minimum s/d 4 km | Per Km Lebih |
 |---|---|---|---|
 | I | Sumatra, Jawa (non-Jabodetabek), Bali | Rp 11.000 | Rp 1.500/km |
-| II | Jabodetabek | Rp 12.200 | Rp 2.000/km |
+| II | Jabodetabek | Rp 13.400 | Rp 2.840/km |
 | III | Kalimantan, Sulawesi, NT, Maluku, Papua | Rp 11.000 | Rp 2.000/km |
 
 > Naik dari Rp 9.000/Rp 9.000/Rp 10.000 (12/07/2026) agar bersaing sehat dengan Maxim (selisih ~Rp 1.000–1.200 lebih murah dari Maxim, bukan jauh di bawahnya) — sebelumnya terlalu murah dan merugikan mitra ojek/kurir.
+> Zona II dikalibrasi ULANG (12/07/2026) dari 2 data trip nyata Jabodetabek — nilai awal (Rp12.200 base/Rp2.000 per km, hasil ekstrapolasi Zona III) ternyata terlalu murah untuk trip jarak menengah-jauh. Base & per-km disolve dari 2 titik data sekaligus: Halim→Bogor (Jalan Tegar Beriman) 33,2 km → RIDE Rp 96.500 vs Maxim Bike Rp 97.400 (selisih Rp 900); Halim→Bandung 171,8 km → RIDE Rp 490.000 vs Maxim Bike Rp 491.100 (selisih Rp 1.100). Zona I & III belum punya data pembanding, masih estimasi.
 > Sumber: `MOTOR_ZONE_CONFIG` di `pricing.ts` (frontend), `MOTOR_ZONE_DEFAULT` di `mitra.ts` (backend fallback), seed `motor_zone*_base`/`motor_zone*_per_km` di `system_settings` (bisa diedit admin di Pengaturan)
 
 **Tarif Ride Mobil (gocar) — flat nasional, charge sejak km 0:**

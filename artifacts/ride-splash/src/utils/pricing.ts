@@ -24,7 +24,10 @@ export const MOTOR_TRIP_SERVICES = new Set(["goride"]);
 // { base = tarif minimum (menutup MOTOR_FREE_KM pertama), perKm = per km berikutnya }
 export let MOTOR_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
   1: { base: 11000, perKm: 1500 }, // Zona I  — Sumatra, Jawa (non-Jabodetabek), Bali
-  2: { base: 12200, perKm: 2000 }, // Zona II — Jabodetabek
+  // Zona II — Jabodetabek. Dikalibrasi ulang 12/07/2026 dari 2 data trip nyata (Halim→Bogor
+  // 33,2km & Halim→Bandung 171,8km) karena base/perKm lama (12200/2000) terlalu murah untuk
+  // trip jarak menengah-jauh di Jabodetabek.
+  2: { base: 13400, perKm: 2840 },
   3: { base: 11000, perKm: 2000 }, // Zona III — Kalimantan, Sulawesi, NT, Maluku, Papua
 };
 export let MOTOR_FREE_KM = 4;

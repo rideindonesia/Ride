@@ -369,8 +369,8 @@ router.post("/admin", async (_req, res) => {
     // Kurir motor (goride/gosend/goshop/gofood) — tarif per zona (batas bawah Kemenhub).
     { key: "motor_zone1_base", value: "11000", label: "Zona I — Tarif Minimum s/d 4 km (Rp)" },
     { key: "motor_zone1_per_km", value: "1500", label: "Zona I — Per Km berikutnya (Rp)" },
-    { key: "motor_zone2_base", value: "12200", label: "Zona II (Jabodetabek) — Tarif Minimum s/d 4 km (Rp)" },
-    { key: "motor_zone2_per_km", value: "2000", label: "Zona II (Jabodetabek) — Per Km berikutnya (Rp)" },
+    { key: "motor_zone2_base", value: "13400", label: "Zona II (Jabodetabek) — Tarif Minimum s/d 4 km (Rp)" },
+    { key: "motor_zone2_per_km", value: "2840", label: "Zona II (Jabodetabek) — Per Km berikutnya (Rp)" },
     { key: "motor_zone3_base", value: "11000", label: "Zona III — Tarif Minimum s/d 4 km (Rp)" },
     { key: "motor_zone3_per_km", value: "2000", label: "Zona III — Per Km berikutnya (Rp)" },
     { key: "motor_free_km", value: "4", label: "Kurir Motor — KM tercakup tarif minimum" },
