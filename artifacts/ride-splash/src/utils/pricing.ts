@@ -15,10 +15,11 @@ export let CALL_FEE_CONFIG: Record<string, { base: number; freeKm: number; perKm
 export const TRIP_SERVICES = new Set(["goride", "gocar", "gosend", "goshop", "gofood"]);
 
 // Layanan berbasis kurir motor: tarif per ZONA (batas bawah Kemenhub KP 564/2022).
-// goride (ride motor), goshop (belanja ongkir), gofood (antar makanan ongkir).
-// gosend (kirim barang) punya tarif sendiri — lihat KIRIM_ZONE_CONFIG di bawah, karena
-// kebijakan harganya beda (RIDE Kirim boleh lebih mahal dari Maxim, bukan lebih murah).
-export const MOTOR_TRIP_SERVICES = new Set(["goride", "goshop", "gofood"]);
+// goride (ride motor), gofood (antar makanan ongkir).
+// gosend (kirim) & goshop (belanja) punya tarif sendiri masing² — lihat KIRIM_ZONE_CONFIG
+// & BELANJA_ZONE_CONFIG di bawah, karena kebijakan harganya beda (boleh lebih mahal dari
+// Maxim, bukan lebih murah).
+export const MOTOR_TRIP_SERVICES = new Set(["goride", "gofood"]);
 
 // { base = tarif minimum (menutup MOTOR_FREE_KM pertama), perKm = per km berikutnya }
 export let MOTOR_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
@@ -39,6 +40,17 @@ export let KIRIM_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = 
 };
 export let KIRIM_FREE_KM = 4;
 
+// RIDE Belanja (goshop): tarif per zona sendiri, sama alasannya dengan RIDE Kirim —
+// target ~Rp900 lebih MAHAL dari Maxim Delivery (bukan lebih murah), instruksi pemilik
+// (12/07/2026). Nilai sama seperti tarif motor lama sebelum kenaikan 12/07/2026.
+export const BELANJA_TRIP_SERVICES = new Set(["goshop"]);
+export let BELANJA_ZONE_CONFIG: Record<number, { base: number; perKm: number }> = {
+  1: { base: 9000,  perKm: 1500 },
+  2: { base: 10000, perKm: 2000 },
+  3: { base: 9000,  perKm: 2000 },
+};
+export let BELANJA_FREE_KM = 4;
+
 export function isTripService(serviceType: string): boolean {
   return TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
@@ -49,6 +61,10 @@ export function isMotorTripService(serviceType: string): boolean {
 
 export function isKirimTripService(serviceType: string): boolean {
   return KIRIM_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
+}
+
+export function isBelanjaTripService(serviceType: string): boolean {
+  return BELANJA_TRIP_SERVICES.has(serviceType.toLowerCase().replace(/[\s_-]+/g, ""));
 }
 
 // Tentukan zona tarif dari koordinat titik jemput. Batas geografis Indonesia (konstanta,
@@ -119,6 +135,17 @@ export async function loadTarif(apiBase: string = ""): Promise<void> {
     const kFree = parseFloat(tarif["kirim_free_km"] ?? "4");
     if (!isNaN(kFree)) KIRIM_FREE_KM = kFree;
 
+    // RIDE Belanja (goshop) pakai tarif zona sendiri, terpisah dari motor & kirim.
+    const newBelanjaZone: typeof BELANJA_ZONE_CONFIG = { ...BELANJA_ZONE_CONFIG };
+    for (const z of [1, 2, 3]) {
+      const base = parseInt(tarif[`belanja_zone${z}_base`] ?? "");
+      const perKm = parseInt(tarif[`belanja_zone${z}_per_km`] ?? "");
+      if (!isNaN(base) && !isNaN(perKm)) newBelanjaZone[z] = { base, perKm };
+    }
+    BELANJA_ZONE_CONFIG = newBelanjaZone;
+    const bFree = parseFloat(tarif["belanja_free_km"] ?? "4");
+    if (!isNaN(bFree)) BELANJA_FREE_KM = bFree;
+
     BIAYA_LAYANAN = biayaLayanan;
     _tarifLoaded = true;
   } catch {
@@ -132,6 +159,10 @@ export function calcBiayaPanggilan(serviceType: string, distKm: number, zone: nu
     // RIDE Kirim: tarif per zona sendiri, minimum menutup KIRIM_FREE_KM pertama.
     const cfg = KIRIM_ZONE_CONFIG[zone] ?? KIRIM_ZONE_CONFIG[3];
     raw = cfg.base + Math.max(0, distKm - KIRIM_FREE_KM) * cfg.perKm;
+  } else if (BELANJA_TRIP_SERVICES.has(key)) {
+    // RIDE Belanja: tarif per zona sendiri, minimum menutup BELANJA_FREE_KM pertama.
+    const cfg = BELANJA_ZONE_CONFIG[zone] ?? BELANJA_ZONE_CONFIG[3];
+    raw = cfg.base + Math.max(0, distKm - BELANJA_FREE_KM) * cfg.perKm;
   } else if (MOTOR_TRIP_SERVICES.has(key)) {
     // Kurir motor: tarif per zona, minimum menutup MOTOR_FREE_KM pertama.
     const cfg = MOTOR_ZONE_CONFIG[zone] ?? MOTOR_ZONE_CONFIG[3];

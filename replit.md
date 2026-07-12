@@ -238,6 +238,20 @@ Dibulatkan ke kelipatan Rp 500 terdekat
 > KRUSIAL — jangan disamakan dengan tarif Ride Motor di atas. Kebijakan RIDE Kirim SENGAJA dibuat berbeda: pemilik OK jika RIDE Kirim lebih MAHAL ~Rp1.100 daripada Maxim Delivery (bukan lebih murah), karena itu tarifnya sengaja tidak dinaikkan bersamaan dengan tarif motor pada 12/07/2026. Contoh terverifikasi: 6,4 km Balikpapan → RIDE Kirim Rp 14.000 vs Maxim Delivery Rp 12.900 (selisih Rp 1.100, sesuai target, 12/07/2026).
 > Sumber: `KIRIM_ZONE_CONFIG` di `pricing.ts` (frontend), `KIRIM_ZONE_DEFAULT` di `mitra.ts` (backend fallback), seed `kirim_zone*_base`/`kirim_zone*_per_km`/`kirim_free_km` di `system_settings` (bisa diedit admin di Pengaturan, grup terpisah dari Ride Motor)
 
+**Tarif RIDE Belanja (goshop) — TERPISAH dari tarif Ride Motor, per zona, minimum menutup 4 km pertama:**
+```
+Tarif = Tarif Minimum + Per Km × max(0, jarak - 4 km)
+Dibulatkan ke kelipatan Rp 500 terdekat
+```
+| Zona | Tarif Minimum (s/d 4km) | Per Km berikutnya |
+|---|---|---|
+| Zona I (Sumatra, Jawa non-Jabodetabek, Bali) | Rp 9.000 | Rp 1.500/km |
+| Zona II (Jabodetabek) | Rp 10.000 | Rp 2.000/km |
+| Zona III (Kalimantan, Sulawesi, NT, Maluku, Papua) | Rp 9.000 | Rp 2.000/km |
+
+> KRUSIAL — jangan disamakan dengan tarif Ride Motor. Sama seperti RIDE Kirim, kebijakan RIDE Belanja SENGAJA dibuat berbeda: pemilik OK jika RIDE Belanja lebih MAHAL ~Rp900 daripada Maxim Delivery (bukan lebih murah), karena itu tarifnya sengaja tidak dinaikkan bersamaan dengan tarif motor pada 12/07/2026. Contoh terverifikasi: 6,4 km Balikpapan → RIDE Belanja Rp 14.000 vs Maxim Delivery Rp 13.100 (selisih Rp 900, sesuai target, 12/07/2026).
+> Sumber: `BELANJA_ZONE_CONFIG` di `pricing.ts` (frontend), `BELANJA_ZONE_DEFAULT` di `mitra.ts` (backend fallback), seed `belanja_zone*_base`/`belanja_zone*_per_km`/`belanja_free_km` di `system_settings` (bisa diedit admin di Pengaturan, grup terpisah dari Ride Motor)
+
 ### Alur Pembayaran (Payment Flow)
 - **Mitra side**: Form rincian biaya (biaya jasa + sparepart) di fase "selesai"; tombol "Kirim Rincian" → `PATCH /api/mitra/orders/:id/payment-data` + chat message; "Konfirmasi Pembayaran Selesai" → `PATCH /api/mitra/orders/:id/done`
 - **Pengguna side (Step 5)**: 3 state: (1) Menunggu — paymentData null; (2) Rincian diterima — breakdown + kode voucher (RIDE10/RIDE20/GRATIS) + pilih metode bayar cash/transfer/QRIS + "Konfirmasi Pembayaran"; (3) Berhasil — Struk + Beri Ulasan
