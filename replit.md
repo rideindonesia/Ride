@@ -198,6 +198,20 @@ Contoh: Bengkel jarak 5 km → Panggilan = Rp 12.000 + (2×Rp 2.500) = Rp 17.000
 > Implementasi: `PATCH /api/mitra/orders/:id/payment-data` → `platformFee = Math.round(callFee * 0.15) + layanan`
 > Sumber tarif: `artifacts/ride-splash/src/utils/pricing.ts` (frontend) dan fungsi `serverCalcBiayaPanggilan` di `mitra.ts` (backend)
 
+**Tarif Ride Motor & Kurir per Zona (goride/gosend/goshop/gofood):**
+```
+Tarif = Tarif Minimum (menutup 4 km pertama) + Per Km × (jarak - 4 km), jika jarak > 4 km
+Dibulatkan ke kelipatan Rp 500 terdekat
+```
+| Zona | Cakupan | Tarif Minimum s/d 4 km | Per Km Lebih |
+|---|---|---|---|
+| I | Sumatra, Jawa (non-Jabodetabek), Bali | Rp 11.000 | Rp 1.500/km |
+| II | Jabodetabek | Rp 12.200 | Rp 2.000/km |
+| III | Kalimantan, Sulawesi, NT, Maluku, Papua | Rp 11.000 | Rp 2.000/km |
+
+> Naik dari Rp 9.000/Rp 9.000/Rp 10.000 (12/07/2026) agar bersaing sehat dengan Maxim (selisih ~Rp 1.000–1.200 lebih murah dari Maxim, bukan jauh di bawahnya) — sebelumnya terlalu murah dan merugikan mitra ojek/kurir.
+> Sumber: `MOTOR_ZONE_CONFIG` di `pricing.ts` (frontend), `MOTOR_ZONE_DEFAULT` di `mitra.ts` (backend fallback), seed `motor_zone*_base`/`motor_zone*_per_km` di `system_settings` (bisa diedit admin di Pengaturan)
+
 ### Alur Pembayaran (Payment Flow)
 - **Mitra side**: Form rincian biaya (biaya jasa + sparepart) di fase "selesai"; tombol "Kirim Rincian" → `PATCH /api/mitra/orders/:id/payment-data` + chat message; "Konfirmasi Pembayaran Selesai" → `PATCH /api/mitra/orders/:id/done`
 - **Pengguna side (Step 5)**: 3 state: (1) Menunggu — paymentData null; (2) Rincian diterima — breakdown + kode voucher (RIDE10/RIDE20/GRATIS) + pilih metode bayar cash/transfer/QRIS + "Konfirmasi Pembayaran"; (3) Berhasil — Struk + Beri Ulasan
