@@ -15,3 +15,7 @@ Current base fees (as of 2026-07-12): Zone I Rp11,000, Zone II (Jabodetabek) Rp1
 3. `artifacts/api-server/src/routes/seed.ts` — `motor_zone*_base`/`motor_zone*_per_km` seed rows (what a fresh DB seed writes into `system_settings`, which the admin panel's Pengaturan page then edits)
 
 If `system_settings` already has rows for these keys (check via SQL before assuming seed.ts is authoritative), those DB values win at runtime — update them directly too, not just the code defaults.
+
+Same policy + same 3-file sync pattern applies to `gocar` (Ride Mobil), which uses `CALL_FEE_CONFIG.gocar` (flat national rate, no free km) instead of the zone table. Base fee raised Rp5,000 → Rp7,500 (2026-07-12) on the same single-data-point method (6.4km Balikpapan: RIDE Rp34,000 vs Maxim Car Rp37,700 → target Rp1,000-1,200 cheaper). Synced files: `pricing.ts` `CALL_FEE_CONFIG.gocar`, `mitra.ts` `CALL_FEE_CONFIG.gocar`, `seed.ts` `call_fee_gocar_base`.
+
+General lesson: RIDE has separate tariff configs per vertical (on-site services like bengkel/barber in `CALL_FEE_CONFIG`, motor/courier zones in `MOTOR_ZONE_CONFIG`, gocar flat rate also in `CALL_FEE_CONFIG`) — when the owner reports "tarif kemurahan dibanding Maxim" for one service, check which config that service actually uses before assuming it's the zone table.

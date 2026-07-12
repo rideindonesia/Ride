@@ -212,6 +212,18 @@ Dibulatkan ke kelipatan Rp 500 terdekat
 > Naik dari Rp 9.000/Rp 9.000/Rp 10.000 (12/07/2026) agar bersaing sehat dengan Maxim (selisih ~Rp 1.000–1.200 lebih murah dari Maxim, bukan jauh di bawahnya) — sebelumnya terlalu murah dan merugikan mitra ojek/kurir.
 > Sumber: `MOTOR_ZONE_CONFIG` di `pricing.ts` (frontend), `MOTOR_ZONE_DEFAULT` di `mitra.ts` (backend fallback), seed `motor_zone*_base`/`motor_zone*_per_km` di `system_settings` (bisa diedit admin di Pengaturan)
 
+**Tarif Ride Mobil (gocar) — flat nasional, charge sejak km 0:**
+```
+Tarif = Biaya Awal + Per Km × jarak
+Dibulatkan ke kelipatan Rp 500 terdekat
+```
+| Biaya Awal | Per Km |
+|---|---|
+| Rp 7.500 | Rp 4.500/km |
+
+> Naik dari Rp 5.000 (12/07/2026) agar selisih ~Rp 1.000–1.200 lebih murah dari Maxim Car (sebelumnya terlalu murah, contoh 6,4 km: RIDE Rp 34.000 vs Maxim Rp 37.700).
+> Sumber: `CALL_FEE_CONFIG.gocar` di `pricing.ts` (frontend), `CALL_FEE_CONFIG.gocar` di `mitra.ts` (backend fallback), seed `call_fee_gocar_base`/`call_fee_gocar_per_km` di `system_settings`
+
 ### Alur Pembayaran (Payment Flow)
 - **Mitra side**: Form rincian biaya (biaya jasa + sparepart) di fase "selesai"; tombol "Kirim Rincian" → `PATCH /api/mitra/orders/:id/payment-data` + chat message; "Konfirmasi Pembayaran Selesai" → `PATCH /api/mitra/orders/:id/done`
 - **Pengguna side (Step 5)**: 3 state: (1) Menunggu — paymentData null; (2) Rincian diterima — breakdown + kode voucher (RIDE10/RIDE20/GRATIS) + pilih metode bayar cash/transfer/QRIS + "Konfirmasi Pembayaran"; (3) Berhasil — Struk + Beri Ulasan
